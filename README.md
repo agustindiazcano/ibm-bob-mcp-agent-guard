@@ -34,17 +34,19 @@
 
 | demo-repo | Before | After |
 |---|---|---|
-| Tests | 5 | TBD |
-| Line coverage | 65.1% | TBD |
-| **Bugs caught (mutation score)** | **20.25%** (16/79) | TBD |
-| API endpoints with tests | 2 of 8 | TBD |
+| Tests | 5 | 71 |
+| Line coverage | 65.1% | 100% |
+| **Bugs caught (mutation score)** | **20.25%** (16/79) | **89.87%** (71/79) |
+| API endpoints with tests | 1 of 7 | 7 of 7 |
 | Visual regression | baseline saved | catches a button color change |
 
-The demo's tests covered 65.1% of the lines but caught roughly 1 in 5 injected bugs.
-Measured with RepoGuard's own AST mutation engine (see `AGENTS.md §7`); the earlier
-figures on this page came from an interim `mutmut`-based engine and are superseded.
-"After" will be measured with the reference tests in [`docs/expected-after-tests/`](docs/expected-after-tests/)
-once that pass is re-run against the new engine — not yet done, so left as TBD rather than guessed.
+The demo's tests covered 65.1% of the lines but caught roughly 1 in 5 injected bugs;
+the reference tests in [`docs/expected-after-tests/`](docs/expected-after-tests/) catch
+9 in 10. Both measured with RepoGuard's own AST mutation engine (see `AGENTS.md §7`);
+the earlier figures on this page came from an interim `mutmut`-based engine and are
+superseded. The 8 mutants still surviving after "After" are equivalent mutants, not
+gaps: an `is_member` field `api.py` never reads, and `round(x, 2)` precision changes
+that don't affect the tested inputs — see `AGENTS.md §9`.
 
 ## What it does
 
@@ -195,7 +197,7 @@ ibm-bob-mcp-agent-guard/
 │   ├── pytest.ini
 │   ├── shop/
 │   │   ├── __init__.py
-│   │   ├── api.py                  FastAPI routes (8 endpoints)
+│   │   ├── api.py                  FastAPI routes (7 endpoints)
 │   │   ├── cart.py                 Cart logic
 │   │   ├── inventory.py            Inventory management
 │   │   └── pricing.py              Pricing and discount rules

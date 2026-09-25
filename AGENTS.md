@@ -66,13 +66,13 @@ ibm-bob-mcp-agent-guard/
 │   ├── pytest.ini
 │   ├── shop/
 │   │   ├── __init__.py
-│   │   ├── api.py            FastAPI routes (8 endpoints)
+│   │   ├── api.py            FastAPI routes (7 endpoints)
 │   │   ├── cart.py           Cart logic
 │   │   ├── inventory.py      Inventory management
 │   │   └── pricing.py        Pricing and discount rules
 │   ├── tests/
 │   │   ├── __init__.py
-│   │   ├── test_api.py       Weak baseline (2 of 8 endpoints covered)
+│   │   ├── test_api.py       Weak baseline (1 of 7 endpoints covered)
 │   │   ├── test_cart.py      Weak baseline
 │   │   └── test_pricing.py   Weak baseline
 │   └── web/index.html        Shop UI for visual checks
@@ -110,7 +110,7 @@ Expected results on a clean copy of `demo-repo/` (delete `demo-repo/repoguard-ou
 | Full measure | `repoguard analyze ./demo-repo` | coverage 65.1%, mutation 20.25% (16/79), 4 files with coverage gaps |
 | Determinism | run `run_mutation` twice | identical results (20.25%, 16/79 both times) |
 | Visual | run `visual_check` twice with no changes | 0.0% diff |
-| After (reference) | copy `docs/expected-after-tests/*.py` into `demo-repo/tests/`, re-measure | TBD — re-measure after reference tests are validated |
+| After (reference) | copy `docs/expected-after-tests/*.py` into `demo-repo/tests/`, re-measure | 71 passed, coverage 100%, mutation 89.87% (71/79) |
 
 Never leave the reference tests inside `demo-repo/tests/` after verifying.
 
