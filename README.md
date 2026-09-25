@@ -337,3 +337,15 @@ Skills live in `.bob/skills/` — procedures Bob must follow for this repo's ris
 - Equivalent mutants (changes with no observable effect) are reported, not filtered out automatically.
 - The accessibility check is basic. Use axe-core for a full audit.
 - `repoguard fix` and the Bob button in the web UI need Bob Shell (`bob run`). Without it, use the Bob IDE.
+
+## Author
+
+Agustin Diaz-Cano
+
+## Team
+
+Argentina Team
+
+## IBM Bob 2.0 Hackathon - 25 September 2026 at 11:00 GMT-4
+
+https://developer.ibm.com/events/ibm-bob-20-hackathon/
