@@ -186,11 +186,21 @@ This is what gets recorded for the demo: it's the proof that the system works as
 
 | Deliverable | Description | Status |
 |---|---|---|
-| `Dockerfile` + `.dockerignore` | Single-container image serving both `repoguard serve`'s API and static dashboard | 🔴 |
-| `cli.py` Cloud Run readiness | `serve` binds `0.0.0.0` and respects `$PORT`, not just the `127.0.0.1:8000` CLI defaults | 🔴 |
-| CI workflow | GitHub Actions: install, `repoguard gate demo-repo`, run on every PR/push | 🔴 |
-| CD workflow | GitHub Actions: build image, push to a registry, deploy to Cloud Run on merge to `main` | 🔴 |
-| GCP setup doc | One-time steps a human must do (project, Artifact Registry, service account or Workload Identity Federation, GitHub secrets) — Claude can't create GCP resources from here | 🔴 |
+| `Dockerfile` + `.dockerignore` | Single-container image serving both `repoguard serve`'s API and static dashboard; bundles `demo-repo/` so the live URL is demoable out of the box | 🟢 |
+| Cloud Run readiness | Handled in the Dockerfile's `CMD` (`--host 0.0.0.0 --port ${PORT:-8080}`) rather than changing `cli.py`'s locally-safe defaults | 🟢 |
+| CI workflow | `.github/workflows/ci.yml` — `verify.py phase0/phase7`, demo-repo pytest, `repoguard gate demo-repo --threshold 60` on every push/PR; mutation determinism (`phase3`) as its own slower job | 🟢 |
+| CD workflow | `.github/workflows/cd.yml` — builds the image, pushes to Artifact Registry, deploys to Cloud Run on push to `main` (or manual dispatch) | 🟢 |
+| GCP setup doc | `docs/DEPLOY.md` — one-time steps a human with GCP access must do (project, Artifact Registry, service account, GitHub secrets/vars) | 🟢 |
+
+Verified locally before marking done: `docker`'s daemon isn't reachable from
+this sandbox (nested containerization blocked), so the `docker build` itself
+is unverified — but the exact command the image's `CMD` runs was tested
+directly (`repoguard serve --host 0.0.0.0 --port $PORT`, confirmed serving
+and `/api/analyze?repo_path=demo-repo` returning real numbers), and
+`repoguard gate demo-repo --threshold 60` — the CI job's actual check —
+passed for real (65.1% ≥ 60%, exit 0). Both workflow YAML files parse
+successfully. The first real `docker build` should happen in CI itself or
+on a machine with Docker access before trusting the image blindly.
 
 Deploying itself (the `gcloud`/console steps, granting the service account,
 adding repo secrets) needs a human with GCP access — Claude can write and
@@ -208,7 +218,7 @@ cloud resources or hold real cloud credentials.
 - [x] **Add `.gitattributes`** — normalize line endings (CRLF warnings on every commit)
 - [ ] **Populate `bob-evidence/`** — export first real Bob session to `bob-evidence/01-initial-build.md`
 - [ ] **Populate `docs/img/`** — `README.md` references `results-en-dark.png` and `results-en-light.png`; these don't exist yet
-- [ ] **CI workflow** — superseded by Phase 13 above (kept here as history; don't do both)
+- [x] **CI workflow** — done as part of Phase 13 above (`.github/workflows/ci.yml`), not the standalone `gate.yml` originally sketched in `RUNBOOK.md §7`
 - [ ] **Write the missing `docs/expected-after-tests/*.py` reference tests** — `docs/expected-after-tests/README.md` describes 4 files (`test_pricing_complete.py`, `test_cart_complete.py`, `test_inventory_complete.py`, `test_api_complete.py`) as the demo's Plan B fallback, but none of them exist yet. This blocks the README's "After" column and, now that Bob can't author code, is a Claude task, not a Bob one.
 
 ---

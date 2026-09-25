@@ -141,13 +141,36 @@ Two concrete gaps surfaced and got queued as a result:
 - Don't rewrite `.bob/custom_modes.yaml` or the rules/skills — the swarm design is still correct, it's just temporarily not the thing writing code. Reverting or diluting that design would be the wrong fix for a credits problem.
 - Docker/CI-CD is scoped honestly: Claude can produce and locally test the artifacts, but actual cloud deployment (creating GCP resources, holding credentials) is a human step — said explicitly in `PENDING.md` rather than implied.
 
+### Session 7 — Phase 13: Dockerfile + CI/CD workflows + GCP deploy doc
+
+All Claude-side Phase 13 deliverables written on `feat/13-dockerize` (rebased
+on top of the still-unmerged `docs/claude-authors-code-and-cicd-plan`, to
+avoid duplicating the Phase 13 table it already added to `PENDING.md`).
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | `Dockerfile` — python:3.11-slim, installs the package, bundles `demo-repo/` so the deployed URL has something real to analyze immediately | `Dockerfile` |
+| 2 | `.dockerignore` — excludes `.git`, `.bob/`, `bob-evidence/`, docs, caches, and every `repoguard-out/`/coverage artifact pattern | `.dockerignore` |
+| 3 | Cloud Run port binding handled in the image's `CMD` (`--host 0.0.0.0 --port ${PORT:-8080}`) rather than changing `cli.py`'s locally-safe defaults | `Dockerfile` |
+| 4 | `.github/workflows/ci.yml` — phase0/phase7 verify, demo-repo pytest, `repoguard gate demo-repo --threshold 60` (fast job) + `phase3` mutation determinism (separate slower job) | `.github/workflows/ci.yml` |
+| 5 | `.github/workflows/cd.yml` — build image → push to Artifact Registry → `deploy-cloudrun` action, on push to `main` or manual dispatch | `.github/workflows/cd.yml` |
+| 6 | `docs/DEPLOY.md` — full one-time GCP setup a human must run (project, APIs, Artifact Registry, service account + IAM roles, GitHub secrets/variables) | `docs/DEPLOY.md` |
+| 7 | Marked all Phase 13 rows 🟢 in `PENDING.md`, with an honest note on what was and wasn't actually verified | `PENDING.md` |
+
+### Key decisions (Session 7)
+
+- **`docker build` itself is unverified** — this sandbox has no reachable Docker daemon (nested containerization blocked: `ulimit`/cgroup permission errors on `service docker start`). What *is* verified: the exact command the image's `CMD` runs (`repoguard serve --host 0.0.0.0 --port $PORT`) was run directly and confirmed serving, and `repoguard gate demo-repo --threshold 60` — the CI job's real check — passed for real (65.1% ≥ 60%). Both workflow YAMLs parse. The actual image build should happen once in CI (which has Docker) before anyone trusts it fully.
+- Threshold set to 60, not the 80 in `RUNBOOK.md`'s old sketch — the real measured baseline is 65.1%, so 80 would fail CI immediately on unrelated work; 60 catches a real regression without being permanently red.
+- Chose a static service-account-key secret over Workload Identity Federation for the GCP auth — faster to set up before a hackathon deadline; `docs/DEPLOY.md` flags WIF as the follow-up hardening step.
+- `--allow-unauthenticated` on the Cloud Run deploy — a judge should never hit a login wall; flagged in `docs/DEPLOY.md` as a thing to revisit if the deployment outlives the hackathon.
+
 ---
 
 ## Current repo state
 
-- Branch: `docs/claude-authors-code-and-cicd-plan` (on top of `main` at `fd6655c`)
+- Branch: `feat/13-dockerize` (rebased on `docs/claude-authors-code-and-cicd-plan`, on top of `main` at `fd6655c`)
 - Phase 0: 🟢 · Phase 3: 🟢 · Phase 7: 🟢 · Phase 8: 🟢 (all complete)
-- Phase 13 (Containerization & CI/CD): 🔴 just added, not started
+- Phase 13 (Containerization & CI/CD): 🟢 all Claude-side deliverables done; actual `docker build` and first live deploy still need a human/CI runner with Docker + GCP access
 - Remaining 🔴 critical-path items: `repoguard fix` (Phase 9), Phase 11 full run
 - Bob: execution/demo only until credits for code authoring are restored
 
@@ -157,6 +180,8 @@ Two concrete gaps surfaced and got queued as a result:
 
 1. Read `PENDING.md` for the task list.
 2. Run `python scripts/verify.py phase0`, `phase3`, `phase7` to confirm baseline holds.
-3. Phase 13 (Docker + CI/CD) is next up for Claude — Dockerfile first, then CI workflow, then CD workflow, then hand the GCP setup steps to a human.
-4. Separately: write `docs/expected-after-tests/*.py` (4 files) to unblock the README's "After" column without needing a live Bob run.
-5. Still waiting on Bob credits: `repoguard fix` (Phase 9), Phase 11 first full end-to-end demo run.
+3. Merge `docs/claude-authors-code-and-cicd-plan` (PR #7) then `feat/13-dockerize`, in that order, to avoid a `PENDING.md` conflict.
+4. Once merged, let CI run once on `main` to get the first real `docker build` (this sandbox can't run one) — fix anything that surfaces there before trusting the image.
+5. A human follows `docs/DEPLOY.md` to do the one-time GCP setup and add the GitHub secrets/variables; then the CD workflow deploys on every push to `main`.
+6. Separately: write `docs/expected-after-tests/*.py` (4 files) to unblock the README's "After" column without needing a live Bob run.
+7. Still waiting on Bob credits: `repoguard fix` (Phase 9), Phase 11 first full end-to-end demo run.

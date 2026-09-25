@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install repoguard
+        run: pip install -e .
+
+      - name: Verify phase0 (package installs, CLI works)
+        run: python scripts/verify.py phase0
+
+      - name: Verify phase7 (MCP compact responses)
+        run: python scripts/verify.py phase7
+
+      - name: Demo-repo test suite
+        run: |
+          cd demo-repo
+          python -m pytest -q
+
+      - name: Coverage gate on demo-repo
+        # Current measured baseline is 65.1% (AGENTS.md §7) — the threshold is
+        # set just under that, not at an aspirational 80%, so this gate fails
+        # on a real regression instead of always failing or never firing.
+        run: repoguard gate demo-repo --threshold 60
+
+  mutation-determinism:
+    runs-on: ubuntu-latest
+    # Two full mutation runs on demo-repo (~79 mutants each); slower than the
+    # rest of CI, kept as its own job so a slow run doesn't block the fast
+    # feedback from quality-gate above.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install repoguard
+        run: pip install -e .
+
+      - name: Verify phase3 (mutation engine determinism)
+        run: python scripts/verify.py phase3
