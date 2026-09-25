@@ -175,7 +175,7 @@ This is what gets recorded for the demo: it's the proof that the system works as
 
 | Deliverable | Description | Status |
 |---|---|---|
-| README | What it is, measured results, how to use it | 🟡 |
+| README | What it is, measured results, how to use it | 🟢 (before/after both real now; badge images in `docs/img/` still missing) |
 | ARCHITECTURE.md | Diagrams, data contract, MCP tools | 🟡 |
 | DEMO.md | 3-minute script with the real numbers from phase 11 | 🔴 |
 
@@ -219,7 +219,7 @@ cloud resources or hold real cloud credentials.
 - [ ] **Populate `bob-evidence/`** — export first real Bob session to `bob-evidence/01-initial-build.md`
 - [ ] **Populate `docs/img/`** — `README.md` references `results-en-dark.png` and `results-en-light.png`; these don't exist yet
 - [x] **CI workflow** — done as part of Phase 13 above (`.github/workflows/ci.yml`), not the standalone `gate.yml` originally sketched in `RUNBOOK.md §7`
-- [ ] **Write the missing `docs/expected-after-tests/*.py` reference tests** — `docs/expected-after-tests/README.md` describes 4 files (`test_pricing_complete.py`, `test_cart_complete.py`, `test_inventory_complete.py`, `test_api_complete.py`) as the demo's Plan B fallback, but none of them exist yet. This blocks the README's "After" column and, now that Bob can't author code, is a Claude task, not a Bob one.
+- [x] **Write the missing `docs/expected-after-tests/*.py` reference tests** — all 4 files written (`test_pricing_complete.py`, `test_cart_complete.py`, `test_inventory_complete.py`, `test_api_complete.py`). Measured against the real engine: 71 passed, 100% coverage, 89.87% mutation (71/79), 7 of 7 API endpoints tested. Never left inside `demo-repo/tests/` after measuring, per AGENTS.md §7. Also corrected a pre-existing doc error found along the way: `api.py` has 7 endpoints, not the 8 documented everywhere (README, AGENTS.md's directory tree and old baseline table).
 
 ---
 

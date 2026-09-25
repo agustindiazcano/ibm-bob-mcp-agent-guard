@@ -164,15 +164,63 @@ avoid duplicating the Phase 13 table it already added to `PENDING.md`).
 - Chose a static service-account-key secret over Workload Identity Federation for the GCP auth — faster to set up before a hackathon deadline; `docs/DEPLOY.md` flags WIF as the follow-up hardening step.
 - `--allow-unauthenticated` on the Cloud Run deploy — a judge should never hit a login wall; flagged in `docs/DEPLOY.md` as a thing to revisit if the deployment outlives the hackathon.
 
+### Session 8 — Wrote the missing reference tests; README "After" column is real now
+
+PR #7 and #8/#9 confirmed merged to `main` (PR #8 had landed on the wrong base
+branch — opened a follow-up PR #9 to actually get it onto `main`; see prior
+session). With Docker/CI-CD in place, moved to the other standalone gap:
+`docs/expected-after-tests/*.py` was documented as the demo's Plan B but the
+four files never existed.
+
+Wrote all four, ran them for real, then iterated on the surviving mutants
+rather than accepting the first number: for each of the initial 14 survivors,
+diffed the actual mutated source against the original to see exactly which
+line changed, not just its category. That turned up 3 genuinely closeable
+gaps (a `price < 0` / `stock < 0` boundary never tested at exactly 0, an
+`is_member` default never exercised by omission, and two `raise` statements
+whose custom exception message was never asserted — only their type, so a
+`raise -> pass` mutant survived by relying on Python's own dict lookup
+raising the same exception type incidentally). Fixed all three with targeted
+boundary/message assertions, taking the mutation score from 82.28% -> 88.61%
+-> 89.87% (71/79) across three re-measurements.
+
+The 8 remaining survivors are true equivalent mutants, confirmed by reading
+their diffs, not assumed: an `is_member` field `api.py` accepts but never
+reads (dead code — fixing it would mean changing source to use it, which is
+out of scope and arguably a separate real-bug report, not a test gap), and 7
+`round(x, 2) -> round(x, 3)` mutations across `pricing.py`/`cart.py`/`api.py`
+— exactly the pitfall AGENTS.md §9 already names as unkillable without
+fragile float-precision tests.
+
+Also caught and fixed a pre-existing, unrelated doc error while measuring
+endpoint coverage: `api.py` has 7 endpoints, not the 8 documented in
+`README.md` and `AGENTS.md`'s directory trees and old baseline table.
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Wrote `test_pricing_complete.py`, `test_cart_complete.py`, `test_inventory_complete.py`, `test_api_complete.py` | `docs/expected-after-tests/` |
+| 2 | Measured, diffed survivors, strengthened 3 tests (boundary + exception-message assertions), re-measured to a stable 89.87% (71/79), confirmed deterministic across 2 runs | same 3 files |
+| 3 | Copied into `demo-repo/tests/` to measure, removed again afterward — never left in place, per AGENTS.md §7 | (temporary only) |
+| 4 | Updated `AGENTS.md §7`'s "After" row with the real numbers | `AGENTS.md` |
+| 5 | Updated README's before/after table, prose, and endpoint count (8 -> 7) | `README.md` |
+| 6 | Corrected the same endpoint-count error in `AGENTS.md`'s directory tree | `AGENTS.md` |
+| 7 | Marked the reference-tests task done in `PENDING.md`; bumped README's Phase 12 status to 🟢 | `PENDING.md` |
+
+### Key decisions (Session 8)
+
+- Never accepted "equivalent mutant" as an excuse without checking first — every one of the original 14 survivors was diffed against its unmutated source to see the exact line, not just trusted by category. Only called something equivalent after confirming the mutated behavior is genuinely unobservable from outside (dead code) or matches an already-documented pitfall (round precision).
+- The `is_member` dead-code finding is a real product gap (a field accepted but never used to affect pricing) — flagged here rather than "fixed" by changing `api.py`, since that would be a source change outside this task's scope and AGENTS.md reserves source changes for evidence of a real bug, decided deliberately, not slipped in while writing tests.
+
 ---
 
 ## Current repo state
 
-- Branch: `feat/13-dockerize` (rebased on `docs/claude-authors-code-and-cicd-plan`, on top of `main` at `fd6655c`)
-- Phase 0: 🟢 · Phase 3: 🟢 · Phase 7: 🟢 · Phase 8: 🟢 (all complete)
-- Phase 13 (Containerization & CI/CD): 🟢 all Claude-side deliverables done; actual `docker build` and first live deploy still need a human/CI runner with Docker + GCP access
-- Remaining 🔴 critical-path items: `repoguard fix` (Phase 9), Phase 11 full run
+- Branch: `feat/reference-tests`, on top of `main` (PRs #7, #8, #9 all merged)
+- Phase 0: 🟢 · Phase 3: 🟢 · Phase 7: 🟢 · Phase 8: 🟢 · Phase 13: 🟢 (all Claude-side work complete)
+- README's before/after table is now fully real: 71 passed, 100% coverage, 89.87% mutation (71/79), 7 of 7 endpoints tested
+- Remaining 🔴 critical-path items: `repoguard fix` (Phase 9), Phase 11 full end-to-end swarm run — both need Bob *executing*, not authoring
 - Bob: execution/demo only until credits for code authoring are restored
+- GCP deploy still pending a human running `docs/DEPLOY.md`'s one-time setup
 
 ---
 
@@ -180,8 +228,6 @@ avoid duplicating the Phase 13 table it already added to `PENDING.md`).
 
 1. Read `PENDING.md` for the task list.
 2. Run `python scripts/verify.py phase0`, `phase3`, `phase7` to confirm baseline holds.
-3. Merge `docs/claude-authors-code-and-cicd-plan` (PR #7) then `feat/13-dockerize`, in that order, to avoid a `PENDING.md` conflict.
-4. Once merged, let CI run once on `main` to get the first real `docker build` (this sandbox can't run one) — fix anything that surfaces there before trusting the image.
-5. A human follows `docs/DEPLOY.md` to do the one-time GCP setup and add the GitHub secrets/variables; then the CD workflow deploys on every push to `main`.
-6. Separately: write `docs/expected-after-tests/*.py` (4 files) to unblock the README's "After" column without needing a live Bob run.
-7. Still waiting on Bob credits: `repoguard fix` (Phase 9), Phase 11 first full end-to-end demo run.
+3. GCP setup (`docs/DEPLOY.md`) is the one remaining human-only task — do it whenever, it doesn't block anything else.
+4. Check whether Bob's execution-only credits are enough to run the orchestrator pipeline now that Test Writer/Critic/Publisher modes exist — that's Phase 11, the last thing standing between here and a real demo.
+5. `repoguard fix` (Phase 9) is still unverified (Bob Shell invocation syntax, AGENTS.md §9) — needs a live Bob run to test regardless of credits.
