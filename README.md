@@ -361,7 +361,9 @@ as-is, and the new frontend ships as a plain Vercel project (no IaC). See
 
 ## Author
 
-Agustin Diaz-Cano
+**Agustin Diaz-Cano** M.Sc. Candidate, Information Systems Engineering - [UTN](https://frba.utn.edu.ar/)
+
+[LinkedIn](https://www.linkedin.com/in/agustindiazcano/) · [Portfolio](http://www.agustindiazcano.com/) · [ORCID](https://orcid.org/0009-0001-4336-490X) · [Google Scholar](https://scholar.google.com/citations?user=qUcRD6UAAAAJ&hl=en)
 
 ## Team
 
