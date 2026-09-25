@@ -210,6 +210,40 @@ ibm-bob-mcp-agent-guard/
 └── .bobignore
 ```
 
+## AI-Assisted Development
+
+This project is built with IBM Bob as the primary coding agent, working under an explicit, versioned contract rather than ad-hoc prompting. Bob writes the code, tests and docs, and drives the git workflow. The human sets direction, approves risky changes, and checks Bob's claims against `scripts/verify.py`'s output.
+
+### The contract: context files in the repo
+
+| File | Role |
+|---|---|
+| `AGENTS.md` | Architecture rules, layer boundaries, the token budget, and the actions that need human sign-off (Section 8). Bob loads this on every task. |
+| `PENDING.md` | The prioritized roadmap, phase by phase. Bob reads it to pick the next task and checks items off as they land. The safety hook refuses to delete or empty it. |
+| `LASTCONTEXT.md` | Current state, kept short: which phase is done, which is in progress, decisions in force, what's waiting on the user, known gotchas (e.g. "mutation score flakes without `PYTHONDONTWRITEBYTECODE`"). A new session reads this instead of re-deriving context. |
+| `docs/worklog/` | History: each session's decisions and validation results, moved out of `LASTCONTEXT.md` once superseded. |
+| `docs/BUILD_WITH_BOB.md` | The build runbook: one phase, one prompt, one acceptance check. |
+| `docs/ARCHITECTURE.md` | Operational knowledge Bob must follow — the data contract in `repoguard-out/`, the MCP tool list, the agent team. |
+
+### What Bob does, end to end
+- **Verify before claiming done:** every phase in `PENDING.md` has a matching check in `scripts/verify.py` (`core`, `mutation`, `api`, `visual`, `mcp`, `cli`, `web`, `after`). Bob runs the relevant check and pastes its output before marking a phase complete — a claim without a PASS doesn't count.
+- **Git workflow:** one short-lived branch per phase (`feat/03-mutation`, `feat/07-mcp-server`), Conventional Commits, a PR description with the verify output as the test plan. Every commit carries a `Co-Authored-By` trailer. PRs are opened by Bob, merged by the human.
+- **Documentation:** keeps README, `AGENTS.md`, `PENDING.md` and the measured numbers in `docs/` in sync with each change — a number in the docs must always match what `verify.py` just measured.
+- **Diagnosis:** when a check fails (e.g. the mutation score isn't deterministic), Bob's job is to find the real cause before patching around it — see `AGENTS.md` Section 9, "Known pitfalls," for the ones already found (bytecode caching, animation timing in visual checks).
+
+### Guardrails on Bob itself
+Hooks live in `.bob/hooks/`:
+- **`safety_guard` (before each tool call), three tiers:**
+  - *Deny*, which never runs: deleting or emptying `PENDING.md`; editing `demo-repo/shop/` or `demo-repo/web/` from a test-writing mode.
+  - *Ask*: force push, `git reset --hard`, `git clean -f`, renaming or deleting anything under `.bob/`.
+  - *Ask before editing* protected files: the mutation operators, the visual diff threshold, the MCP tool signatures (a breaking change for live agents).
+- **`evidence_export` (after each `repoguard` mode task):** exports the task session report to `bob-evidence/NN-short-name.md` automatically.
+
+Skills live in `.bob/skills/`. They are procedures Bob must follow for this repo's risky or repetitive operations:
+- **`pytest-conventions`:** how to write a test that kills a specific mutant (per operator type).
+- **`mutation-hunting`:** how to read `mutation_*.json`, prioritize by risk, and tell an equivalent mutant from a real gap.
+- **`verify-before-pr`:** run the phase's `scripts/verify.py` check and attach its output before opening a PR.
+
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md): diagrams, the sequence of a run, MCP tools and the data contract
