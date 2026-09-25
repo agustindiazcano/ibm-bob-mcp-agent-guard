@@ -9,7 +9,8 @@ description = "AI-powered test quality guard for Python repositories"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "fastapi>=0.111",
+    "fastapi==0.141.1",
+    "starlette==1.7.0",
     "uvicorn[standard]>=0.29",
     "fastmcp>=0.4",
     "pytest>=8",
