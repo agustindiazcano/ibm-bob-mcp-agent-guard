@@ -87,19 +87,46 @@ requirement, not optional polish.
 
 ---
 
+### Session 5 — Housekeeping + Phase 8 subagent modes
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Pulled main (PR #4 feat/03-mutation + PR #5 README sync already merged; local was stale) | — |
+| 2 | Added `coverage.json` to `.gitignore` (untracked file nag) | `.gitignore` |
+| 3 | Created `.gitattributes` (normalize line endings; resolves CRLF warnings on every commit) | `.gitattributes` |
+| 4 | Deleted `phase3-7-plan.md` (working artifact, plan complete, no longer needed) | `phase3-7-plan.md` |
+| 5 | Created branch `feat/08-bob-modes` | — |
+| 6 | Added Test Writer mode (`test-writer`) to `custom_modes.yaml` | `.bob/custom_modes.yaml` |
+| 7 | Added Critic mode (`critic`) to `custom_modes.yaml` | `.bob/custom_modes.yaml` |
+| 8 | Added Publisher mode (`publisher`) to `custom_modes.yaml` | `.bob/custom_modes.yaml` |
+| 9 | Updated Orchestrator `roleDefinition` with explicit 5-step pipeline and blocker conditions | `.bob/custom_modes.yaml` |
+| 10 | Created `test-writer` skill with 7-step mutant-killing guide | `.bob/skills/test-writer/SKILL.md` |
+| 11 | Updated `AGENTS.md` directory tree with new skills | `AGENTS.md` |
+| 12 | Marked Phase 8 Test Writer, Critic, Publisher 🟢 and `.gitattributes` task done in `PENDING.md` | `PENDING.md` |
+
+### Key decisions (Session 5)
+
+- `LASTCONTEXT.md` did not reflect that PRs #4 and #5 were already merged — a drift that caused a stale "open PR" proposal. Fixed by pulling main before any other action. `LASTCONTEXT.md` must be updated at session end, not as an afterthought.
+- `phase3-7-plan.md` deleted (plan served its purpose); moving to `docs/` would just defer the decision.
+- Publisher mode given `execute` group (needs `git` + `gh` CLI calls) but no `edit` group (must not touch test files).
+- Critic mode given `edit` group restricted to `tests/` by convention (enforced by Rule 01, not fileRegex, to keep the YAML readable).
+
+---
+
 ## Current repo state
 
-- Branch: `docs/sync-readme-mutation-numbers` (branched from `main` after `feat/03-mutation` merged)
+- Branch: `feat/08-bob-modes` (on top of main at 8d3d004)
 - Phase 0: 🟢 complete
 - Phase 3: 🟢 complete (AST engine deterministic; `repoguard-out/` written)
 - Phase 7 "Compact responses": 🟢 complete
-- `README.md` before-numbers now match `AGENTS.md §7`; after-numbers correctly TBD
-- Remaining 🔴 critical-path items: Test Writer subagent, Critic subagent, Publisher subagent, `repoguard fix`, Phase 11 full run
+- Phase 8: 🟢 complete — all 6 modes present (orchestrator, analyzer, fixer, gate, visual-agent, reporter + test-writer, critic, publisher); test-writer skill added
+- Remaining 🔴 critical-path items: `repoguard fix` (Phase 9), Phase 11 full run
 
 ---
 
 ## How to resume
 
 1. Read `PENDING.md` for the task list.
-2. Run `python scripts/verify.py phase0`, `phase3`, and `phase7` to confirm the engine work still holds.
-3. Next critical path items (in order): Test Writer subagent (Phase 8) → Publisher subagent → `repoguard fix` (Phase 9) → Phase 11 full run, which is what will finally produce a real "after" number for the README table.
+2. Run `python scripts/verify.py phase0`, `phase3`, `phase7` to confirm baseline holds.
+3. Next critical path: `repoguard fix` CLI (Phase 9) — needs Bob Shell invocation verified; see AGENTS.md §9 pitfall. Then Phase 11 first full end-to-end demo run.
+4. Outstanding housekeeping: populate `bob-evidence/`, `docs/img/`, add CI workflow (`.github/workflows/gate.yml`).
