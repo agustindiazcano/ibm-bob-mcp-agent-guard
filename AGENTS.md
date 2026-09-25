@@ -1,3 +1,5 @@
+> **Read `LASTCONTEXT.md` and `PENDING.md` at the start of every session.**
+
 # Project Context: TestMind AI
 
 ## 1. Role
@@ -121,7 +123,11 @@ When declining an action, say what to do instead.
 - Read only the part of a file you need; don't re-read files you just wrote.
 - At most 3 subagents per round; pass each one only its file and its data, not the conversation history.
 
-## 11. Git
-- Branches `feat/…`, `fix/…`, `docs/…`; Conventional Commits (`feat(engine): …`).
+## 11. Git and workflow
+- One branch per phase of `docs/BUILD_WITH_BOB.md` (`feat/03-mutation`, `feat/07-mcp-server`, …); never commit to `main`.
+- Before opening a PR, run `python3 scripts/verify.py <phase-check>` and paste its output in the PR description; do not open the PR if it FAILs.
+- If a PR changes a measured number, update `README.md` / `docs/ARCHITECTURE.md` / `docs/DEMO.md` in the same PR — a number in the docs must always match what `verify.py` just measured.
+- Conventional Commits: `feat(engine): …`, `fix(api): …`, `docs(runbook): …`.
 - Before committing an engine change, run the Section 7 checks.
 - Export the Bob task session report of each meaningful task to `bob-evidence/NN-short-name.md`.
+- Update `LASTCONTEXT.md` and `PENDING.md` at the end of every meaningful session.
