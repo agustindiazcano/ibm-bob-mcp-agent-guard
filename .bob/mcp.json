@@ -4,7 +4,7 @@
       "command": "repoguard",
       "args": ["mcp"],
       "env": {},
-      "timeout": 60000
+      "timeout": 600000
     }
   }
 }
