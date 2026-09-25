@@ -46,3 +46,7 @@ demo-repo/.pytest_cache/
 # Bob evidence large artefacts
 bob-evidence/**/*.png
 bob-evidence/**/*.mp4
+
+# RepoGuard engine outputs
+repoguard-out/
+**/repoguard-out/
