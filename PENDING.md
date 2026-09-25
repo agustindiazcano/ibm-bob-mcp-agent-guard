@@ -175,7 +175,7 @@ This is what gets recorded for the demo: it's the proof that the system works as
 
 | Deliverable | Description | Status |
 |---|---|---|
-| README | What it is, measured results, how to use it | 🟢 (before/after both real now; badge images in `docs/img/` still missing) |
+| README | What it is, measured results, how to use it | 🟢 (before/after both real now; badge images generated) |
 | ARCHITECTURE.md | Diagrams, data contract, MCP tools | 🟡 |
 | DEMO.md | 3-minute script with the real numbers from phase 11 | 🔴 |
 
@@ -217,7 +217,7 @@ cloud resources or hold real cloud credentials.
 - [x] **Verify demo-repo baseline numbers** — measured 65.1% coverage, 20.25% mutation (16/79), 4 files with gaps (AST engine; old mutmut numbers were 74.5%/23.6% — now stale)
 - [x] **Add `.gitattributes`** — normalize line endings (CRLF warnings on every commit)
 - [ ] **Populate `bob-evidence/`** — export first real Bob session to `bob-evidence/01-initial-build.md`
-- [ ] **Populate `docs/img/`** — `README.md` references `results-en-dark.png` and `results-en-light.png`; these don't exist yet
+- [x] **Populate `docs/img/`** — `docs/make_results_chart.py` rewritten (it previously printed hardcoded fictional numbers, not a real chart) to render both PNGs from the real AGENTS.md §7 numbers via matplotlib (`docs` optional dependency, added to `pyproject.toml`)
 - [x] **CI workflow** — done as part of Phase 13 above (`.github/workflows/ci.yml`), not the standalone `gate.yml` originally sketched in `RUNBOOK.md §7`
 - [x] **Write the missing `docs/expected-after-tests/*.py` reference tests** — all 4 files written (`test_pricing_complete.py`, `test_cart_complete.py`, `test_inventory_complete.py`, `test_api_complete.py`). Measured against the real engine: 71 passed, 100% coverage, 89.87% mutation (71/79), 7 of 7 API endpoints tested. Never left inside `demo-repo/tests/` after measuring, per AGENTS.md §7. Also corrected a pre-existing doc error found along the way: `api.py` has 7 endpoints, not the 8 documented everywhere (README, AGENTS.md's directory tree and old baseline table).
 
