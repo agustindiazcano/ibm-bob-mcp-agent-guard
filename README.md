@@ -1,14 +1,10 @@
-[![IBM Bob IDE](https://img.shields.io/badge/Built%20for-IBM%20Bob%20IDE-0f62fe?style=for-the-badge)](https://ibm.com)
-[![MCP Powered](https://img.shields.io/badge/Protocol-MCP%20Ready-4a4a4a?style=for-the-badge)](https://modelcontextprotocol.io/)
-[![Python FastAPI](https://img.shields.io/badge/Engine-Python%20%7C%20FastAPI-009688?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Built for IBM Bob](https://img.shields.io/badge/Built%20for-IBM%20Bob-0f62fe?style=for-the-badge)](https://bob.ibm.com)
+[![MCP server](https://img.shields.io/badge/Protocol-MCP-4a4a4a?style=for-the-badge)](https://modelcontextprotocol.io/)
+[![Python | FastAPI](https://img.shields.io/badge/Engine-Python%20%7C%20FastAPI-009688?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
 
 # TestMind AI
 
 **A QA agent swarm for IBM Bob that proves whether your tests catch bugs, then writes the ones that are missing.**
-
-[![Built for IBM Bob](https://img.shields.io/badge/Built%20for-IBM%20Bob-0f62fe?style=for-the-badge)](https://bob.ibm.com)
-[![MCP server](https://img.shields.io/badge/Protocol-MCP-4a4a4a?style=for-the-badge)](https://modelcontextprotocol.io/)
-[![Python | FastAPI](https://img.shields.io/badge/Engine-Python%20%7C%20FastAPI-009688?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
 
 > Coverage tells you which lines ran. It doesn't tell you whether your tests would notice a bug.
 > TestMind AI injects bugs into your code on purpose and measures how many your tests catch.
