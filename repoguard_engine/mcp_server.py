@@ -18,53 +18,67 @@ mcp_app = FastMCP("repoguard")
 # Tool 1 — measure_coverage
 # ---------------------------------------------------------------------------
 @mcp_app.tool()
-def tool_measure_coverage(repo_path: str) -> dict:
+def tool_measure_coverage(repo_path: str, detail: bool = False) -> dict:
     """
     Run pytest with coverage on the given repository and return coverage metrics.
 
     Args:
         repo_path: Absolute or relative path to the target repository root.
+        detail: If True, include missing_lines_by_file in the response.
 
     Returns:
-        Dict with percent, covered_lines, total_lines, and missing_lines_by_file.
+        Compact: percent, covered_lines, total_lines.
+        Full (detail=True): + missing_lines_by_file.
     """
     result = measure_coverage(repo_path)
-    return {
+    compact = {
         "percent": result.percent,
         "covered_lines": result.covered_lines,
         "total_lines": result.total_lines,
-        "missing_lines_by_file": result.missing_lines,
     }
+    if not detail:
+        return compact
+    return {**compact, "missing_lines_by_file": result.missing_lines}
 
 
 # ---------------------------------------------------------------------------
 # Tool 2 — find_gaps
 # ---------------------------------------------------------------------------
 @mcp_app.tool()
-def tool_find_gaps(repo_path: str) -> dict:
+def tool_find_gaps(repo_path: str, detail: bool = False) -> dict:
     """
     Measure coverage and return a structured gap report.
 
     Args:
         repo_path: Path to the target repository root.
+        detail: If True, include missing_lines_by_file in the response.
 
     Returns:
-        Dict with uncovered_files and missing_lines_by_file.
+        Compact: coverage_percent, uncovered_file_count, uncovered_files.
+        Full (detail=True): + missing_lines_by_file.
     """
     coverage = measure_coverage(repo_path)
-    gap = find_coverage_gaps(coverage)
-    return {
+    gap = find_coverage_gaps(coverage, repo_path=repo_path)
+    compact = {
         "coverage_percent": coverage.percent,
+        "uncovered_file_count": len(gap.uncovered_files),
         "uncovered_files": gap.uncovered_files,
-        "missing_lines_by_file": gap.missing_lines_by_file,
     }
+    if not detail:
+        return compact
+    return {**compact, "missing_lines_by_file": gap.missing_lines_by_file}
 
 
 # ---------------------------------------------------------------------------
 # Tool 3 — run_mutation_analysis
 # ---------------------------------------------------------------------------
 @mcp_app.tool()
-def tool_run_mutation(repo_path: str, paths_to_mutate: str = ".", tests_dir: str = "tests") -> dict:
+def tool_run_mutation(
+    repo_path: str,
+    paths_to_mutate: str = ".",
+    tests_dir: str = "tests",
+    detail: bool = False,
+) -> dict:
     """
     Run mutation testing on the target repo and return the mutation score.
 
@@ -72,64 +86,85 @@ def tool_run_mutation(repo_path: str, paths_to_mutate: str = ".", tests_dir: str
         repo_path: Path to the target repository root.
         paths_to_mutate: Subdirectory or file to mutate (default: ".").
         tests_dir: Test directory (default: "tests").
+        detail: If True, include surviving_mutant_ids in the response.
 
     Returns:
-        Dict with score, killed, survived, total.
+        Compact: score, killed, survived, total.
+        Full (detail=True): + surviving_mutant_ids.
     """
     result = run_mutation(repo_path, paths_to_mutate=paths_to_mutate, tests_dir=tests_dir)
-    return {
+    compact = {
         "score": result.score,
         "killed": result.killed,
         "survived": result.survived,
         "total": result.total,
     }
+    if not detail:
+        return compact
+    return {**compact, "surviving_mutant_ids": result.surviving_mutant_ids}
 
 
 # ---------------------------------------------------------------------------
 # Tool 4 — find_untested_endpoints
 # ---------------------------------------------------------------------------
 @mcp_app.tool()
-def tool_find_untested_endpoints(repo_path: str) -> list[dict]:
+def tool_find_untested_endpoints(repo_path: str, detail: bool = False) -> dict:
     """
     Detect FastAPI route-decorated functions that have no corresponding test.
 
     Args:
         repo_path: Path to the target repository root.
+        detail: If True, include full endpoint details (file, function, method).
 
     Returns:
-        List of dicts with file, function, method, path, has_test.
+        Compact: untested_count, untested_paths.
+        Full (detail=True): + list of dicts with file, function, method, path.
     """
     endpoints = find_untested_endpoints(repo_path)
-    return [
-        {
-            "file": ep.file,
-            "function": ep.function,
-            "method": ep.method,
-            "path": ep.path,
-            "has_test": ep.has_test,
-        }
-        for ep in endpoints
-        if not ep.has_test
-    ]
+    untested = [ep for ep in endpoints if not ep.has_test]
+    compact = {
+        "untested_count": len(untested),
+        "untested_paths": [f"{ep.method} {ep.path}" for ep in untested],
+    }
+    if not detail:
+        return compact
+    return {
+        **compact,
+        "untested_endpoints": [
+            {"file": ep.file, "function": ep.function, "method": ep.method, "path": ep.path}
+            for ep in untested
+        ],
+    }
 
 
 # ---------------------------------------------------------------------------
 # Tool 5 — smoke_test_endpoints
 # ---------------------------------------------------------------------------
 @mcp_app.tool()
-def tool_smoke_test_endpoints(base_url: str, repo_path: str) -> dict:
+def tool_smoke_test_endpoints(base_url: str, repo_path: str, detail: bool = False) -> dict:
     """
     Fire a minimal HTTP request at each detected endpoint and return status codes.
 
     Args:
         base_url: Running server base URL, e.g. "http://localhost:8000".
         repo_path: Path to the target repository root (for endpoint detection).
+        detail: If True, include all endpoint results; otherwise only failures.
 
     Returns:
-        Dict mapping "METHOD /path" to {"status_code": int, "ok": bool}.
+        Compact: ok_count, fail_count, failures (only failed endpoints).
+        Full (detail=True): + all_results map.
     """
     endpoints = find_untested_endpoints(repo_path)
-    return run_endpoint_smoke_tests(base_url, endpoints)
+    all_results: dict = run_endpoint_smoke_tests(base_url, endpoints)
+    failures = {k: v for k, v in all_results.items() if not v.get("ok", True)}
+    compact = {
+        "ok_count": sum(1 for v in all_results.values() if v.get("ok", True)),
+        "fail_count": len(failures),
+        "failures": failures,
+    }
+    if not detail:
+        return compact
+    return {**compact, "all_results": all_results}
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +175,7 @@ def tool_full_pipeline(
     repo_path: str,
     include_mutation: bool = False,
     gate_threshold: float = 80.0,
+    detail: bool = False,
 ) -> dict:
     """
     Run the full RepoGuard pipeline: coverage → gaps → risk → gate.
@@ -148,15 +184,25 @@ def tool_full_pipeline(
         repo_path: Path to the target repository root.
         include_mutation: Whether to run mutation testing (slow).
         gate_threshold: Minimum coverage % to pass the gate.
+        detail: If True, return full dashboard dict; otherwise key metrics only.
 
     Returns:
-        Full dashboard dict plus passed_gate boolean.
+        Compact: coverage_percent, mutation_score, gap_count, passed_gate.
+        Full (detail=True): full dashboard dict + passed_gate.
     """
     result = run_pipeline(
         repo_path,
         include_mutation=include_mutation,
         gate_threshold=gate_threshold,
     )
+    compact = {
+        "coverage_percent": result.dashboard.get("coverage", {}).get("percent"),
+        "mutation_score": result.dashboard.get("mutation", {}).get("score") if result.dashboard.get("mutation") else None,
+        "gap_count": len(result.dashboard.get("gaps", {}).get("uncovered_files", [])),
+        "passed_gate": result.passed_gate,
+    }
+    if not detail:
+        return compact
     return {**result.dashboard, "passed_gate": result.passed_gate}
 
 
@@ -164,23 +210,30 @@ def tool_full_pipeline(
 # Tool 7 — capture_screenshot
 # ---------------------------------------------------------------------------
 @mcp_app.tool()
-def tool_capture_screenshot(url: str, output_path: str) -> dict:
+def tool_capture_screenshot(url: str, output_path: str, detail: bool = False) -> dict:
     """
     Capture a screenshot of a URL and save it to output_path.
 
     Args:
         url: URL to screenshot.
         output_path: File path to save the PNG.
+        detail: If True, include width, height, and error in the response.
 
     Returns:
-        Dict with path, width, height, ok, error.
+        Compact: ok, path.
+        Full (detail=True): + width, height, error.
     """
     result = capture_screenshot(url, output_path)
-    return {
+    compact = {
+        "ok": result.ok,
         "path": result.path,
+    }
+    if not detail:
+        return compact
+    return {
+        **compact,
         "width": result.width,
         "height": result.height,
-        "ok": result.ok,
         "error": result.error,
     }
 
@@ -189,20 +242,27 @@ def tool_capture_screenshot(url: str, output_path: str) -> dict:
 # Tool 8 — check_accessibility
 # ---------------------------------------------------------------------------
 @mcp_app.tool()
-def tool_check_accessibility(url: str) -> dict:
+def tool_check_accessibility(url: str, detail: bool = False) -> dict:
     """
     Run axe-core accessibility checks on a URL.
 
     Args:
         url: URL to check.
+        detail: If True, include passes and incomplete counts.
 
     Returns:
-        Dict with violations list, passes count, incomplete count.
+        Compact: violation_count, violations.
+        Full (detail=True): + passes, incomplete.
     """
     result = check_accessibility(url)
-    return {
-        "violations": result.violations,
+    compact = {
         "violation_count": len(result.violations),
+        "violations": result.violations,
+    }
+    if not detail:
+        return compact
+    return {
+        **compact,
         "passes": result.passes,
         "incomplete": result.incomplete,
     }

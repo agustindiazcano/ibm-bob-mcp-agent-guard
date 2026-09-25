@@ -68,7 +68,7 @@ Build plan and task tracker. Update status as work progresses; never delete comp
 |---|---|---|
 | `mutation_test()` | Injects bugs one at a time (own AST engine) and measures how many tests catch | 🟢 |
 | Operators | comparison, arithmetic, boolean, constants, `return None`, remove `raise` | 🟢 |
-| Determinism | Same input → same result every time (watch out for bytecode caching) | 🔴 |
+| Determinism | Same input → same result every time (watch out for bytecode caching) | 🟢 |
 
 **This is the product's core feature**: it measures whether tests actually catch bugs, not just whether they execute lines.
 
@@ -112,7 +112,7 @@ Build plan and task tracker. Update status as work progresses; never delete comp
 |---|---|---|
 | `mcp_server.py` | Exposes 8 tools (scan, tests, coverage, mutation, API, visual, risk, dashboard) to Bob | 🟢 |
 | `.bob/mcp.json` | MCP server connection config | 🟢 |
-| Compact responses | Short summaries by default; full detail only on request | 🔴 |
+| Compact responses | Short summaries by default; full detail only on request | 🟢 |
 
 This phase is the Bob integration: without it, Bob has no way to call the engine.
 
