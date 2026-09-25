@@ -14,7 +14,7 @@ Build plan and task tracker. Update status as work progresses; never delete comp
        phases 0 · 1 · 2 · 3 · 7 · 8 · 11
 
 🟡 2 — rounds out the product, doesn't block the first demo
-       phases 4 · 5 · 6 · 9 · 13
+       phases 4 · 5 · 6 · 9 · 13 · 14
 
 🟢 3 — polish, first thing to cut if time runs short
        phases 10 · 12
@@ -206,6 +206,25 @@ Deploying itself (the `gcloud`/console steps, granting the service account,
 adding repo secrets) needs a human with GCP access — Claude can write and
 locally verify the Dockerfile and both workflow files, but can't create
 cloud resources or hold real cloud credentials.
+
+---
+
+## Phase 14 — Next.js dashboard on Vercel
+**Priority: 2 · Depends on: 9, 10** (frontend only — no engine changes)
+
+Decision (this session): no Terraform, no new GCP infrastructure for this
+piece. `docs/DEPLOY.md` / Cloud Run (Phase 13) is left as-is for the existing
+FastAPI service; this phase adds a separate, richer frontend deployed to
+Vercel that consumes the existing `/api/analyze` and `/api/stream` endpoints
+— see `docs/ARCHITECTURE.md`'s "Planned: Next.js dashboard on Vercel".
+
+| Deliverable | Description | Status |
+|---|---|---|
+| Next.js app scaffold | New `web-next/` (or similar), calling the existing FastAPI backend, not replacing it | 🔴 |
+| Dashboard charts | Coverage, mutation score, risk ranking — sourced from the same JSON the current dashboard uses, no new numbers invented | 🔴 |
+| Action buttons | "Analyze", "Gate", "Autofix with Bob" — call the existing `repoguard` commands/endpoints | 🔴 |
+| Vercel deploy | Connect repo/subfolder to Vercel; no IaC, config lives in `vercel.json` / project settings | 🔴 |
+| Docs | Update this file, `README.md` and `docs/ARCHITECTURE.md` with the real deployed URL and measured screenshots once built | 🔴 |
 
 ---
 

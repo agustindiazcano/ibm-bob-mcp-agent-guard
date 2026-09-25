@@ -23,6 +23,7 @@
 - [AI-Assisted Development](#ai-assisted-development)
 - [Development Framework: Working with IBM Bob](#development-framework-working-with-ibm-bob)
 - [Documentation](#documentation)
+- [Roadmap](#roadmap)
 - [Limitations](#limitations)
 
 ## Results on the bundled demo repo
@@ -335,6 +336,21 @@ Skills live in `.bob/skills/` — procedures Bob must follow for this repo's ris
 - [Demo script](docs/DEMO.md): 3-minute pitch and backup plan
 - [AI-Assisted Development Framework](docs/AI_ASSITED_DEVELOPMENT_FRAMEWORK_BOB.md): how IBM Bob drives the full build cycle — session loop, contract files, guardrails, and git workflow
 - [Bob usage evidence](bob-evidence/README.md)
+
+## Roadmap
+
+**Next up: a Next.js dashboard on Vercel.** The current web UI
+(`repoguard serve`, `web/static/index.html`) stays as the reference
+implementation and keeps serving `/api/analyze` and `/api/stream`. Planned
+on top of it: a richer Next.js frontend — charts for coverage/mutation/risk,
+a surviving-mutants table, and one-click buttons for "Analyze", "Gate" and
+"Autofix with Bob" — deployed to Vercel, consuming the same FastAPI
+endpoints rather than replacing them.
+
+We're deliberately not adopting Terraform or new GCP infrastructure for
+this: the existing Cloud Run deploy (`docs/DEPLOY.md`, Phase 13) is left
+as-is, and the new frontend ships as a plain Vercel project (no IaC). See
+`PENDING.md` Phase 14 and `docs/ARCHITECTURE.md` for details. Not built yet.
 
 ## Limitations
 

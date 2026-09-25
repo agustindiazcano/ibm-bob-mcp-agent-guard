@@ -82,3 +82,24 @@ Bob connects to the MCP server (`repoguard mcp`) and uses the 8 tools to:
 5. Report → `tool_capture_screenshot` / `tool_check_accessibility` for visual evidence
 
 The Orchestrator mode in `.bob/custom_modes.yaml` coordinates this flow across sub-agents.
+
+## Planned: Next.js dashboard on Vercel
+
+**Not built yet — roadmap only, see `PENDING.md` Phase 14.**
+
+The current web UI (`web/static/index.html`, served by `web/server.py`) stays as the
+reference implementation. The plan is a richer frontend, built separately and consuming
+the same FastAPI endpoints (`/api/analyze`, `/api/stream`) rather than replacing them:
+
+```
+┌───────────────────────────────┐        ┌──────────────────────────────┐
+│  Next.js dashboard (Vercel)   │  HTTP  │  repoguard_engine/web/server  │
+│  charts, risk table, action   │ ─────▶ │  (FastAPI, unchanged)         │
+│  buttons ("Autofix", "Gate")  │  + SSE │  /api/analyze · /api/stream   │
+└───────────────────────────────┘        └──────────────────────────────┘
+```
+
+No Terraform, no GCP-specific IaC for this piece — Vercel builds and hosts the
+Next.js app directly from the repo. This doesn't change the existing Cloud Run
+CD pipeline (`docs/DEPLOY.md`, Phase 13); the Next.js app is an additional
+frontend, not a replacement backend deploy target.
