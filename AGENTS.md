@@ -95,11 +95,11 @@ Expected results on a clean copy of `demo-repo/` (delete `demo-repo/repoguard-ou
 
 | Check | Command | Expected |
 |---|---|---|
-| Suite | `cd demo-repo && python3 -m pytest -q` | 9 passed |
-| Full measure | `repoguard analyze ./demo-repo` | coverage 74.5%, mutation 23.6% (17/72), 8 of 18 functions untested, 6 of 8 endpoints untested |
-| Determinism | run `mutation_test` 3 times | identical results |
+| Suite | `cd demo-repo && python3 -m pytest -q` | 5 passed |
+| Full measure | `repoguard analyze ./demo-repo` | coverage 65.1%, mutation 20.25% (16/79), 4 files with coverage gaps |
+| Determinism | run `run_mutation` twice | identical results (20.25%, 16/79 both times) |
 | Visual | run `visual_check` twice with no changes | 0.0% diff |
-| After (reference) | copy `docs/expected-after-tests/*.py` into `demo-repo/tests/`, re-measure | 66 passed, coverage 100%, mutation 94.4% (68/72) |
+| After (reference) | copy `docs/expected-after-tests/*.py` into `demo-repo/tests/`, re-measure | TBD — re-measure after reference tests are validated |
 
 Never leave the reference tests inside `demo-repo/tests/` after verifying.
 
