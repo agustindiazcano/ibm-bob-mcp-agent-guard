@@ -127,6 +127,7 @@ When declining an action, say what to do instead.
 - **Visual diffs with no change:** page not fully loaded or animations running.
 - **`repoguard fix` fails:** Bob Shell syntax (`bob run --mode repoguard -f stream-json`) is unverified; check `bob run --help` and adjust one line in `pipeline.py`.
 - **Equivalent mutants** (e.g. `round(x, 2)` → `round(x, 3)`) can't be killed; report them, don't write artificial tests.
+- **`run_mutation` MCP tool times out:** a full run on demo-repo's 79 mutants takes several minutes; `.bob/mcp.json`'s `timeout` (600000ms) has to cover that. If it's ever dropped back toward the default, mutation calls through MCP fail even though the same command works fine from the CLI.
 
 ## 10. Token budget
 - Reply briefly: tables and lists, no restating tool output.
