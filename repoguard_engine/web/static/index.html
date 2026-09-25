@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RepoGuard Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, "Segoe UI", system-ui, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; padding: 2rem; }
+    h1 { font-size: 1.5rem; font-weight: 700; color: #f8fafc; margin-bottom: 0.25rem; }
+    .subtitle { color: #94a3b8; font-size: 0.875rem; margin-bottom: 2rem; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .card h2 { font-size: 1rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; }
+    .metric { display: flex; align-items: baseline; gap: 0.5rem; }
+    .metric-value { font-size: 2.5rem; font-weight: 800; }
+    .metric-label { color: #94a3b8; font-size: 0.875rem; }
+    .green { color: #34d399; }
+    .yellow { color: #fbbf24; }
+    .red { color: #f87171; }
+    .progress-bar { background: #334155; border-radius: 9999px; height: 0.5rem; overflow: hidden; margin-top: 0.75rem; }
+    .progress-fill { height: 100%; border-radius: 9999px; transition: width 0.5s ease; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    th { text-align: left; color: #94a3b8; font-weight: 600; padding: 0.5rem 0.75rem; border-bottom: 1px solid #334155; }
+    td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #1e293b; }
+    tr:last-child td { border-bottom: none; }
+    .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+    .badge-green { background: #064e3b; color: #34d399; }
+    .badge-red { background: #4c1d1d; color: #f87171; }
+    .badge-yellow { background: #451a03; color: #fbbf24; }
+    .controls { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: flex-end; flex-wrap: wrap; }
+    input[type="text"] { background: #1e293b; border: 1px solid #334155; border-radius: 0.5rem; color: #e2e8f0; padding: 0.5rem 0.75rem; font-size: 0.875rem; flex: 1; min-width: 200px; }
+    button { background: #3b82f6; color: white; border: none; border-radius: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+    button:hover { background: #2563eb; }
+    button:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+    #log { background: #0f172a; border: 1px solid #334155; border-radius: 0.5rem; padding: 1rem; font-family: monospace; font-size: 0.8rem; max-height: 200px; overflow-y: auto; color: #94a3b8; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>🛡️ RepoGuard</h1>
+  <p class="subtitle">AI-powered test quality dashboard</p>
+
+  <div class="controls">
+    <input type="text" id="repoPath" value="." placeholder="Repository path (e.g. ./demo-repo)" />
+    <button id="analyzeBtn" onclick="runAnalysis()">Analyse</button>
+    <button id="streamBtn" onclick="startStream()">Stream</button>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Coverage</h2>
+      <div class="metric">
+        <span class="metric-value" id="coverageValue">—</span>
+        <span class="metric-label">%</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="coverageBar" style="width:0%;background:#334155"></div></div>
+    </div>
+    <div class="card">
+      <h2>Lines</h2>
+      <div class="metric">
+        <span class="metric-value" id="coveredLines">—</span>
+        <span class="metric-label">covered</span>
+      </div>
+      <p style="color:#94a3b8;font-size:0.8rem;margin-top:0.5rem">of <span id="totalLines">—</span> total</p>
+    </div>
+    <div class="card">
+      <h2>Gate</h2>
+      <div class="metric" id="gateStatus"><span class="metric-value" style="color:#334155">—</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Top Risk Files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Risk Score</th></tr></thead>
+      <tbody id="riskTable"><tr><td colspan="2" style="color:#475569">Run analysis to see results.</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Event Log</h2>
+    <div id="log">Waiting for analysis…</div>
+  </div>
+
+  <script>
+    function log(msg) {
+      const el = document.getElementById('log');
+      el.textContent += '\n' + msg;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function setCoverage(pct, covered, total) {
+      const val = document.getElementById('coverageValue');
+      const bar = document.getElementById('coverageBar');
+      val.textContent = pct.toFixed(1);
+      val.className = 'metric-value ' + (pct >= 80 ? 'green' : pct >= 60 ? 'yellow' : 'red');
+      bar.style.width = pct + '%';
+      bar.style.background = pct >= 80 ? '#34d399' : pct >= 60 ? '#fbbf24' : '#f87171';
+      document.getElementById('coveredLines').textContent = covered;
+      document.getElementById('totalLines').textContent = total;
+    }
+
+    function setGate(passed) {
+      const el = document.getElementById('gateStatus');
+      el.innerHTML = passed
+        ? '<span class="badge badge-green">✓ PASSED</span>'
+        : '<span class="badge badge-red">✗ FAILED</span>';
+    }
+
+    function setRisk(riskList) {
+      const tbody = document.getElementById('riskTable');
+      if (!riskList || !riskList.length) {
+        tbody.innerHTML = '<tr><td colspan="2" style="color:#475569">No risk data.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = riskList.map(r => {
+        const cls = r.score > 0.5 ? 'red' : r.score > 0.2 ? 'yellow' : 'green';
+        return `<tr><td>${r.file}</td><td><span class="badge badge-${cls}">${(r.score * 100).toFixed(1)}%</span></td></tr>`;
+      }).join('');
+    }
+
+    async function runAnalysis() {
+      const repoPath = document.getElementById('repoPath').value || '.';
+      document.getElementById('analyzeBtn').disabled = true;
+      log('→ Analysing ' + repoPath + ' …');
+      try {
+        const res = await fetch('/api/analyze?repo_path=' + encodeURIComponent(repoPath));
+        const data = await res.json();
+        setCoverage(data.coverage.percent, data.coverage.covered_lines, data.coverage.total_lines);
+        setGate(data.passed_gate);
+        setRisk(data.risk);
+        log('✓ Done. Coverage: ' + data.coverage.percent.toFixed(1) + '%');
+      } catch (e) {
+        log('✗ Error: ' + e.message);
+      } finally {
+        document.getElementById('analyzeBtn').disabled = false;
+      }
+    }
+
+    function startStream() {
+      const repoPath = document.getElementById('repoPath').value || '.';
+      document.getElementById('streamBtn').disabled = true;
+      log('→ Streaming ' + repoPath + ' …');
+      const es = new EventSource('/api/stream?repo_path=' + encodeURIComponent(repoPath));
+      es.onmessage = function(e) {
+        const payload = JSON.parse(e.data);
+        log('[' + payload.type + '] ' + JSON.stringify(payload.data));
+        if (payload.type === 'coverage') {
+          setCoverage(payload.data.percent, payload.data.covered_lines || 0, payload.data.total_lines || 0);
+        }
+        if (payload.type === 'risk') setRisk(payload.data.top_files);
+        if (payload.type === 'done') {
+          setGate(payload.data.passed_gate);
+          es.close();
+          document.getElementById('streamBtn').disabled = false;
+        }
+        if (payload.type === 'error') {
+          es.close();
+          document.getElementById('streamBtn').disabled = false;
+        }
+      };
+      es.onerror = function() {
+        log('✗ Stream error.');
+        es.close();
+        document.getElementById('streamBtn').disabled = false;
+      };
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+﻿# Byte-compiled / optimised
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# pytest cache
+.pytest_cache/
+
+# Mutation testing artefacts
+.mutmut-cache
+mutmut-results/
+
+# Node / frontend (if any)
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+
+# Demo repo generated artefacts
+demo-repo/.coverage
+demo-repo/htmlcov/
+demo-repo/.pytest_cache/
+
+# Bob evidence large artefacts
+bob-evidence/**/*.png
+bob-evidence/**/*.mp4

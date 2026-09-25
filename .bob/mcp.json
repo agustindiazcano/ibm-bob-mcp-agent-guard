@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "repoguard": {
+      "command": "repoguard",
+      "args": ["mcp"],
+      "env": {},
+      "timeout": 60000
+    }
+  }
+}
