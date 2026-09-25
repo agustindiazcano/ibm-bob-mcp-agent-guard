@@ -64,14 +64,36 @@ CLI / package name: `repoguard`. GitHub: https://github.com/agustindiazcano/ibm-
 - **`compute_risk()` formula** is still a stub (coverage gap only, not complexity×churn×detection); deferred to Phase 4.
 - `find_coverage_gaps()` signature changed to accept optional `repo_path` for writing `gaps.json` — callers passing only `coverage` still work (default is `None`).
 
+### Session 4 — Sync README with the new AST engine's measured numbers
+
+`feat/03-mutation` was merged to `main` and independently re-verified (clean venv,
+`verify.py phase0/phase3/phase7` all PASS, `run_mutation` reproduced 20.25%/16/79
+twice, `git status` clean afterward — no leakage from the temp-copy isolation).
+`AGENTS.md §7` was already correct from that PR; `README.md` was not — it still
+showed the old `mutmut`-era before/after table. Per `AGENTS.md §11` ("a number in
+the docs must always match what `verify.py` just measured"), that's a same-PR
+requirement, not optional polish.
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Replaced README's before-numbers (9 tests / 74.5% / 23.6% (17/72)) with the measured AST-engine numbers (5 tests / 65.1% / 20.25% (16/79)) | `README.md` |
+| 2 | Marked the after-column `TBD` instead of carrying over the old `mutmut`-era after-numbers (66 tests / 100% / 94.4%), since the reference tests haven't been re-run against the new engine yet | `README.md` |
+| 3 | Noted in-page that the interim `mutmut`-based figures are superseded, so a reader doesn't assume the old badge/table was ever wrong on its own terms | `README.md` |
+
+### Key decisions (Session 4)
+
+- Never carry forward an unmeasured "after" number just to fill a table cell — `TBD` is honest, a guessed 94.4% would not be.
+- `docs/img/results-en-{dark,light}.png` still don't exist (pre-existing gap, out of scope here); the alt text was updated to match reality regardless, since alt text is read even when the image itself is broken.
+
 ---
 
 ## Current repo state
 
-- Branch: `feat/03-mutation` (ready to PR into `main`)
+- Branch: `docs/sync-readme-mutation-numbers` (branched from `main` after `feat/03-mutation` merged)
 - Phase 0: 🟢 complete
 - Phase 3: 🟢 complete (AST engine deterministic; `repoguard-out/` written)
 - Phase 7 "Compact responses": 🟢 complete
+- `README.md` before-numbers now match `AGENTS.md §7`; after-numbers correctly TBD
 - Remaining 🔴 critical-path items: Test Writer subagent, Critic subagent, Publisher subagent, `repoguard fix`, Phase 11 full run
 
 ---
@@ -79,6 +101,5 @@ CLI / package name: `repoguard`. GitHub: https://github.com/agustindiazcano/ibm-
 ## How to resume
 
 1. Read `PENDING.md` for the task list.
-2. Run `python scripts/verify.py phase0` and `python scripts/verify.py phase7` to confirm recent work.
-3. Run `python scripts/verify.py phase3` from a terminal (takes ~8 min — two full mutation runs).
-4. Next critical path items (in order): Test Writer subagent (Phase 8) → Publisher subagent → `repoguard fix` (Phase 9) → Phase 11 full run.
+2. Run `python scripts/verify.py phase0`, `phase3`, and `phase7` to confirm the engine work still holds.
+3. Next critical path items (in order): Test Writer subagent (Phase 8) → Publisher subagent → `repoguard fix` (Phase 9) → Phase 11 full run, which is what will finally produce a real "after" number for the README table.

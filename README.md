@@ -29,19 +29,22 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/results-en-dark.png">
-  <img alt="Before and after on demo-repo: line coverage 74.5% to 100%, bugs caught 23.6% to 94.4%, endpoints with tests 25% to 100%" src="docs/img/results-en-light.png">
+  <img alt="Before numbers on demo-repo, measured with RepoGuard's own AST mutation engine: line coverage 65.1%, bugs caught 20.25%" src="docs/img/results-en-light.png">
 </picture>
 
 | demo-repo | Before | After |
 |---|---|---|
-| Tests | 9 | 66 |
-| Line coverage | 74.5% | 100% |
-| **Bugs caught (mutation score)** | **23.6%** (17/72) | **94.4%** (68/72) |
-| API endpoints with tests | 2 of 8 | 8 of 8 |
+| Tests | 5 | TBD |
+| Line coverage | 65.1% | TBD |
+| **Bugs caught (mutation score)** | **20.25%** (16/79) | TBD |
+| API endpoints with tests | 2 of 8 | TBD |
 | Visual regression | baseline saved | catches a button color change |
 
-The demo's tests covered 74.5% of the lines but caught fewer than 1 in 4 injected bugs.
-"After" was measured with the reference tests in [`docs/expected-after-tests/`](docs/expected-after-tests/).
+The demo's tests covered 65.1% of the lines but caught roughly 1 in 5 injected bugs.
+Measured with RepoGuard's own AST mutation engine (see `AGENTS.md §7`); the earlier
+figures on this page came from an interim `mutmut`-based engine and are superseded.
+"After" will be measured with the reference tests in [`docs/expected-after-tests/`](docs/expected-after-tests/)
+once that pass is re-run against the new engine — not yet done, so left as TBD rather than guessed.
 
 ## What it does
 
