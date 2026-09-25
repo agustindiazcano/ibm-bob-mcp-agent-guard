@@ -228,6 +228,25 @@ Vercel that consumes the existing `/api/analyze` and `/api/stream` endpoints
 
 ---
 
+## Phase 15 — watsonx.ai narrative summary
+**Priority: 2 · Depends on: 4** (a text layer on top of already-measured numbers — no new metrics, no engine changes)
+
+`repoguard_engine/narrative.py` turns an already-measured dashboard dict into
+plain-English prose via IBM watsonx.ai — advisory text only, never a source
+of any number, per `AGENTS.md §4`. Optional dependency (`pip install -e
+".[ai]"`), degrades gracefully (`ok=False`, a real error) with no credentials.
+
+| Deliverable | Description | Status |
+|---|---|---|
+| `narrative.py` | `generate_summary(dashboard)` — prompt built only from measured fields, never invents a number | 🟢 |
+| `tool_generate_summary` MCP tool (9th tool) | Compact `{ok, summary}`, detail `{+error}` | 🟢 |
+| `repoguard analyze --summarize` CLI flag | Prints the summary or `Summary unavailable: <real error>` | 🟢 |
+| `docs/WATSONX_SETUP.md` | Human-only steps: IBM Cloud API key, watsonx project ID, env vars | 🟢 |
+| `scripts/verify.py phase15` | Confirms graceful degradation with no credentials — real check, not a live API call | 🟢 |
+| Live generation with real credentials | Not verified — no IBM Cloud account available here. SDK call shapes confirmed against the real installed SDK (`ibm-watsonx-ai==1.7.2`) via `inspect.signature`; a call with a fake key reached the real endpoint and got a genuine `403`. Confirm `DEFAULT_MODEL_ID` is available in your project once real credentials exist. | 🟡 |
+
+---
+
 ## Standalone tasks (not phase-blocked)
 
 - [ ] **Create `scripts/verify.py`** — accepts a phase name, runs the relevant checks, outputs PASS/FAIL with numbers pasteable into a PR description

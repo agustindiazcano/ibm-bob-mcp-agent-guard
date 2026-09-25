@@ -28,6 +28,10 @@ dependencies = [
 # Only for regenerating docs/img/*.png (docs/make_results_chart.py); the CLI
 # and MCP server never import matplotlib, so it stays out of the core deps.
 docs = ["matplotlib>=3.8"]
+# Only for narrative.py / `repoguard analyze --summarize` / tool_generate_summary.
+# Everything else (measurement, CLI, MCP tools 1-8) works with zero AI calls
+# and zero credentials, so this stays out of the core deps too.
+ai = ["ibm-watsonx-ai>=1.7"]
 
 [project.scripts]
 repoguard = "repoguard_engine.cli:main"

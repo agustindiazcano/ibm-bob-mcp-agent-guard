@@ -23,7 +23,13 @@ def main() -> None:
 @click.option("--mutation", is_flag=True, default=False, help="Also run mutation testing (slow).")
 @click.option("--endpoints", is_flag=True, default=False, help="Detect untested FastAPI endpoints.")
 @click.option("--json-output", is_flag=True, default=False, help="Print raw JSON instead of formatted output.")
-def analyze(repo_path: str, mutation: bool, endpoints: bool, json_output: bool) -> None:
+@click.option(
+    "--summarize", is_flag=True, default=False,
+    help="Also ask watsonx.ai for a plain-English summary of the measured numbers "
+         "(requires WATSONX_APIKEY/WATSONX_PROJECT_ID — see docs/WATSONX_SETUP.md). "
+         "Advisory text only, never a source of any metric.",
+)
+def analyze(repo_path: str, mutation: bool, endpoints: bool, json_output: bool, summarize: bool) -> None:
     """Measure test coverage and quality gaps in REPO_PATH."""
     from .pipeline import run_pipeline
 
@@ -39,6 +45,16 @@ def analyze(repo_path: str, mutation: bool, endpoints: bool, json_output: bool) 
         return
 
     _print_coverage_table(result)
+
+    if summarize:
+        from .narrative import generate_summary
+
+        narrative = generate_summary(result.dashboard)
+        if narrative.ok:
+            console.print("\n[bold]AI summary (watsonx.ai — advisory, not a measurement):[/]")
+            console.print(narrative.text)
+        else:
+            console.print(f"\n[yellow]Summary unavailable:[/] {narrative.error}")
 
 
 @main.command()

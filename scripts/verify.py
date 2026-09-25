@@ -123,10 +123,36 @@ print('All 8 tools have detail:bool=False')
     return ok
 
 
+def check_phase15() -> bool:
+    """Verify the watsonx narrative module degrades gracefully instead of
+    fabricating a summary when credentials aren't configured."""
+    print("=== Phase 15: watsonx narrative summary ===")
+
+    script = """
+from repoguard_engine.narrative import generate_summary
+import os
+os.environ.pop('WATSONX_APIKEY', None)
+os.environ.pop('WATSONX_PROJECT_ID', None)
+r = generate_summary({'coverage': {'percent': 1.0}, 'gaps': {'uncovered_files': []}, 'mutation': None, 'risk': []})
+assert r.ok is False, 'expected ok=False with no credentials configured'
+assert r.text == '', 'expected no fabricated text'
+assert r.error, 'expected a real error message'
+print('OK:', r.error)
+"""
+
+    rc, out = run([sys.executable, "-c", script], timeout=30)
+    ok = rc == 0
+    status = "PASS" if ok else "FAIL"
+    print(f"  {out.strip()}")
+    print(f"  no-credentials graceful-degradation check -> {status}")
+    return ok
+
+
 CHECKS: dict[str, callable] = {
     "phase0": check_phase0,
     "phase3": check_phase3,
     "phase7": check_phase7,
+    "phase15": check_phase15,
 }
 
 
