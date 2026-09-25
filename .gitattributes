@@ -1,0 +1,25 @@
+# Normalize line endings: commit with LF, checkout with platform default
+* text=auto
+
+# Force LF for scripts and source
+*.py text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.txt text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+
+# Binary files — no normalization
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff2 binary
+*.woff binary

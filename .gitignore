@@ -1,4 +1,4 @@
-﻿# Byte-compiled / optimised
+# Byte-compiled / optimised
 __pycache__/
 *.py[cod]
 *.pyo
@@ -19,6 +19,7 @@ htmlcov/
 .coverage
 .coverage.*
 coverage.xml
+coverage.json
 
 # pytest cache
 .pytest_cache/

@@ -36,7 +36,9 @@ ibm-bob-mcp-agent-guard/
 │   │   └── 03-test-quality.md        Mutation-resistant assertion standards
 │   └── skills/
 │       ├── mutation-hunting/SKILL.md     How to kill surviving mutants
-│       └── pytest-conventions/SKILL.md   Fixture, parametrize, conftest conventions
+│       ├── pytest-conventions/SKILL.md   Fixture, parametrize, conftest conventions
+│       ├── test-writer/SKILL.md          Step-by-step guide for writing mutant-killing tests
+│       └── verify-before-pr/SKILL.md    Gate check before opening a PR
 │
 ├── repoguard_engine/
 │   ├── __init__.py
