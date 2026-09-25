@@ -1,4 +1,4 @@
-"""MCP server exposing 8 RepoGuard tools via FastMCP."""
+"""MCP server exposing 9 RepoGuard tools via FastMCP."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from .pipeline import run_pipeline
 from .core import measure_coverage, find_coverage_gaps, run_mutation, compute_risk
 from .api_check import find_untested_endpoints, run_endpoint_smoke_tests
 from .visual import capture_screenshot, pixel_diff, check_accessibility
+from .narrative import generate_summary
 
 mcp_app = FastMCP("repoguard")
 
@@ -270,3 +271,38 @@ def tool_check_accessibility(url: str, detail: bool = False) -> dict:
         "incomplete": result.incomplete,
         "error": result.error,
     }
+
+
+# ---------------------------------------------------------------------------
+# Tool 9 — generate_summary
+# ---------------------------------------------------------------------------
+@mcp_app.tool()
+def tool_generate_summary(repo_path: str, detail: bool = False) -> dict:
+    """
+    Measure repo_path (coverage, gaps, risk) and ask watsonx.ai for a short
+    plain-English summary of those exact numbers. Advisory text only — never
+    a source of any metric; every number the summary can mention was already
+    measured by the engine before this tool ever calls watsonx.
+
+    Requires WATSONX_APIKEY and WATSONX_PROJECT_ID (see docs/WATSONX_SETUP.md).
+    ok=False means the summary could not be generated (missing credentials,
+    SDK not installed, or an API error) — the measured numbers themselves are
+    unaffected either way; call tool_full_pipeline for those.
+
+    Args:
+        repo_path: Path to the target repository root.
+        detail: If True, include the full error string on failure.
+
+    Returns:
+        Compact: ok, summary.
+        Full (detail=True): + error.
+    """
+    result = run_pipeline(repo_path)
+    narrative = generate_summary(result.dashboard)
+    compact = {
+        "ok": narrative.ok,
+        "summary": narrative.text,
+    }
+    if not detail:
+        return compact
+    return {**compact, "error": narrative.error}

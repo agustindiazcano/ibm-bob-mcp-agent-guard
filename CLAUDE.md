@@ -1,4 +1,10 @@
 > **Read `LASTCONTEXT.md` and `PENDING.md` at the start of every session.**
+>
+> **`AGENTS.md` and `CLAUDE.md` must stay identical.** Different tools read
+> different filenames by convention (Claude Code reads `CLAUDE.md`; other
+> agents, including Bob, read `AGENTS.md`) — both need the same content, or
+> whichever one a given session happens to read goes stale. Edit both in the
+> same change, every time.
 
 # Project Context: TestMind AI
 
@@ -22,7 +28,7 @@ TestMind AI measures whether a Python repo's tests actually catch bugs, then use
 > This note goes away once Bob is authoring code again.
 
 ## 3. Tech stack
-Python ≥ 3.10 · pytest · coverage.py · stdlib `ast` (own mutation engine, no mutmut/Stryker) · MCP Python SDK (FastMCP, stdio) · FastAPI + uvicorn + SSE (web UI) · httpx TestClient (API checks) · Playwright Chromium + Pillow (visual) · matplotlib (docs chart only).
+Python ≥ 3.10 · pytest · coverage.py · stdlib `ast` (own mutation engine, no mutmut/Stryker) · MCP Python SDK (FastMCP, stdio) · FastAPI + uvicorn + SSE (web UI) · httpx TestClient (API checks) · Playwright Chromium + Pillow + axe-playwright-python (visual) · matplotlib (docs chart only) · IBM watsonx.ai (`ibm-watsonx-ai`, narrative summary only — optional `[ai]` extra, no metric ever comes from it).
 
 ## 4. Architecture rules (non-negotiable)
 - **The AI decides, the engine measures.** Every number (coverage, mutation score, risk, endpoints, visual diff) must come from an engine function. Never estimate, round up or extrapolate a metric.
@@ -54,9 +60,10 @@ ibm-bob-mcp-agent-guard/
 │   ├── core.py           measure_coverage · find_coverage_gaps · run_mutation · compute_risk · build_dashboard_data
 │   ├── api_check.py      find_untested_endpoints (AST) · run_endpoint_smoke_tests (httpx)
 │   ├── visual.py         capture_screenshot · pixel_diff · collect_console_logs · check_accessibility
+│   ├── narrative.py      generate_summary — watsonx.ai prose from an already-measured dashboard, never a metric source
 │   ├── pipeline.py       run_pipeline — ordered steps; returns PipelineResult
 │   ├── cli.py            repoguard analyze | fix | gate | serve | mcp  (click entry point)
-│   ├── mcp_server.py     8 FastMCP tools (thin wrappers, stdio transport)
+│   ├── mcp_server.py     9 FastMCP tools (thin wrappers, stdio transport)
 │   └── web/
 │       ├── __init__.py
 │       ├── server.py         FastAPI app: GET / · GET /api/analyze · GET /api/stream (SSE)
@@ -132,6 +139,7 @@ When declining an action, say what to do instead.
 - **Never call `subprocess.run(["pytest", ...])` or `["python", ...])` with a bare command name.** It resolves via the *caller's ambient PATH*, not the environment `repoguard` is actually installed in — if something else (a stale system Python, an old venv) is earlier on PATH, the subprocess silently runs against a completely different, possibly dependency-less environment. This produced two real, previously undiscovered bugs in one session: (1) `measure_coverage()` fell back to a fabricated `0%`/`0`/`0` result instead of erroring when pytest-cov wasn't on the resolved PATH — silently indistinguishable from a real empty repo; (2) `scripts/verify.py`'s `phase3` check reported a false **PASS** with mutation score **100% (79/79 killed)** — internally consistent across two runs (both hit the same broken interpreter, so "deterministic"), but the number was completely wrong, because pytest itself couldn't run in every single mutant subprocess and every one was scored "killed" by default. Both are fixed by always using `sys.executable` (or `[sys.executable, "-m", "pytest", ...]`), which pins the subprocess to the exact interpreter already running the code, regardless of ambient PATH. The one deliberate exception is `verify.py`'s `phase0` check, which uses bare `repoguard` on purpose — it's specifically testing whether the console script is on PATH, the same way `.bob/mcp.json` invokes it.
 - **A script reporting PASS is not proof it measured the real thing** — `phase3`'s determinism check alone (do two runs agree?) let the 100%-false-positive above slip through, because two runs of the *same broken environment* agree with each other trivially. `phase3` now also asserts against the documented `AGENTS.md §7` baseline (`killed == 16`, `total == 79`) as a second, independent check — internal consistency and a known-good external value, not just internal consistency alone.
 - **`check_accessibility()` silently reported "0 violations" (a fake clean pass) instead of failing** when `axe-playwright-python` wasn't installed — it was imported in `visual.py` but never declared as a dependency anywhere, so the check has likely never actually run in any environment. Now declared as a dependency, and the function returns `ok=False` with a real `error` message (surfaced through the MCP tool's compact response) whenever the check couldn't actually run, instead of an empty result that looks identical to a genuine pass.
+- **`narrative.py` (watsonx.ai) needs `pip install -e ".[ai]"` plus `WATSONX_APIKEY`/`WATSONX_PROJECT_ID`** — see `docs/WATSONX_SETUP.md`. Without them, `generate_summary()` returns `ok=False` with a real error, same graceful-degradation pattern as `check_accessibility()` — it never fabricates summary text. Its output is advisory prose only; no code path may read a number out of it back into a measurement. The exact SDK call shapes were checked against the real installed `ibm-watsonx-ai` package, but an actual successful generation with real credentials has not been verified — only that a call with a fake key reaches the real endpoint and fails cleanly.
 
 ## 10. Token budget
 - Reply briefly: tables and lists, no restating tool output.
