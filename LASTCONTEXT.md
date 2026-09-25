@@ -13,36 +13,47 @@ CLI / package name: `repoguard`. GitHub: https://github.com/agustindiazcano/ibm-
 
 ## Session summary
 
-### What was done in this session
+### Session 1 (previous)
 
 | # | Action | Files affected |
 |---|---|---|
 | 1 | Initialized git repo, connected to GitHub remote, pushed initial commit | all project files |
-| 2 | Created `RUNBOOK.md` — full operational runbook (install, CLI, dashboard, MCP, Bob swarm, CI gate, troubleshooting) | `RUNBOOK.md` |
-| 3 | Expanded `## Project structure` in `README.md` with full annotated file tree | `README.md` |
-| 4 | Expanded `## 5. Directory layout` in `AGENTS.md` with full annotated file tree | `AGENTS.md` |
-| 5 | Replaced `## 11. Git` in `AGENTS.md` with `## 11. Git and workflow` — added branch-per-phase rule, `verify.py` gate, and doc-sync rule | `AGENTS.md` |
-| 6 | Added session-start instruction at the top of `AGENTS.md` | `AGENTS.md` |
-| 7 | Created `LASTCONTEXT.md` (this file) and `PENDING.md` | `LASTCONTEXT.md`, `PENDING.md` |
+| 2 | Created `RUNBOOK.md` | `RUNBOOK.md` |
+| 3 | Expanded project tree in `README.md` and `AGENTS.md` | `README.md`, `AGENTS.md` |
+| 4 | Added branch-per-phase / verify.py gate rules to `AGENTS.md §11` | `AGENTS.md` |
+| 5 | Created `LASTCONTEXT.md` and `PENDING.md` | both |
+
+### Session 2 — Phase 0 completion
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Fixed `pyproject.toml`: corrected build-backend (`setuptools.build_meta`), set `requires-python = ">=3.10"`, added `playwright` and `pillow` deps | `pyproject.toml` |
+| 2 | Added `repoguard-out/` and `**/repoguard-out/` exclusions | `.gitignore`, `.bobignore` |
+| 3 | Created `scripts/verify.py` with `phase0` check | `scripts/verify.py` |
+| 4 | Installed package with `pip install -e . --no-deps`; confirmed `repoguard --help` shows all 5 subcommands | — |
+| 5 | `python scripts/verify.py phase0` → **PASS** | — |
+| 6 | Marked all Phase 0 deliverables 🟢 in `PENDING.md` | `PENDING.md` |
 
 ### Key decisions made
 
-- `RUNBOOK.md` is the operational reference; `AGENTS.md` is the agent/coding reference — they are complementary, not duplicated.
-- Project tree in both `README.md` and `AGENTS.md` reflects the actual repo state including `RUNBOOK.md` and `LASTCONTEXT.md`/`PENDING.md`.
-- `AGENTS.md` section 11 now enforces a `scripts/verify.py` gate before PRs — script does not exist yet (see PENDING).
+- `build-backend` was wrong (`setuptools.backends.legacy:build` → `setuptools.build_meta`); fixed.
+- `playwright` and `pillow` added as required by AGENTS.md §3 tech stack.
+- `scripts/verify.py` is a thin gate script; extend it per phase as work progresses.
 
 ---
 
 ## Current repo state
 
-- Branch: `main`
-- Last commit: `docs: add RUNBOOK.md and expand project tree in README and AGENTS`
-- All changes pushed to origin
+- Branch: `feat/guardrails-and-automation`
+- Phase 0: **complete** (all deliverables 🟢)
+- Phase 1–3 and most of Phase 4–10 already have code in the repo (see PENDING.md for status per item)
+- `repoguard --help` works; full pipeline requires demo-repo baseline check
 
 ---
 
 ## How to resume
 
 1. Read `PENDING.md` for the task list.
-2. Check `git log --oneline -5` to confirm the commit you're on.
-3. Run `repoguard analyze ./demo-repo` to verify the engine baseline before any code change.
+2. Run `python scripts/verify.py phase0` to confirm skeleton is intact.
+3. Run `repoguard analyze ./demo-repo` to verify the engine baseline numbers before any code change.
+4. Next critical path item: Phase 3 — Mutation engine determinism (🔴 in PENDING.md).

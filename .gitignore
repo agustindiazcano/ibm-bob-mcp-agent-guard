@@ -44,3 +44,7 @@ Thumbs.db
 demo-repo/.coverage
 demo-repo/htmlcov/
 demo-repo/.pytest_cache/
+
+# RepoGuard engine outputs (written to target repo; never commit)
+repoguard-out/
+**/repoguard-out/

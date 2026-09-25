@@ -27,10 +27,12 @@ Build plan and task tracker. Update status as work progresses; never delete comp
 
 | Deliverable | Description | Status |
 |---|---|---|
-| Folder structure | `repoguard_engine/`, `.bob/`, `demo-repo/`, `docs/`, `bob-evidence/` | 🟢 |
-| `pyproject.toml` | Package `repoguard`, dependencies, `repoguard` console script | 🟢 |
+| Folder structure | `repoguard_engine/`, `.bob/`, `demo-repo/`, `docs/`, `bob-evidence/`, `scripts/` | 🟢 |
+| `pyproject.toml` | Package `repoguard`, Python >=3.10, deps (incl. playwright, pillow), `repoguard` console script | 🟢 |
 | `AGENTS.md` | Project context: what it is, stack, architecture rules, layers, standards | 🟢 |
-| `.gitignore` / `.bobignore` | Exclude caches, virtual envs, results | 🟢 |
+| `.gitignore` / `.bobignore` | Exclude caches, virtual envs, `repoguard-out/` results | 🟢 |
+| `scripts/verify.py` | Phase gate script — `python scripts/verify.py phase0` → PASS | 🟢 |
+| `pip install -e .` | Package installs; `repoguard --help` runs all 5 subcommands | 🟢 |
 
 ---
 
