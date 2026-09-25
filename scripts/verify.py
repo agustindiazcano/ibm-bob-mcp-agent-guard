@@ -46,24 +46,42 @@ def check_phase3() -> bool:
     )
 
     print("  Run 1 ...", end=" ", flush=True)
-    rc1, out1 = run(["python", "-c", script], timeout=270)
+    rc1, out1 = run([sys.executable, "-c", script], timeout=270)
     print(out1.strip())
 
     print("  Run 2 ...", end=" ", flush=True)
-    rc2, out2 = run(["python", "-c", script], timeout=270)
+    rc2, out2 = run([sys.executable, "-c", script], timeout=270)
     print(out2.strip())
 
     if rc1 != 0 or rc2 != 0:
         print("  ERROR: mutation run failed")
         return False
 
-    ok = out1.strip() == out2.strip()
-    status = "PASS" if ok else "FAIL"
+    deterministic = out1.strip() == out2.strip()
+    status = "PASS" if deterministic else "FAIL"
     print(f"  Determinism check -> {status}")
-    if not ok:
+    if not deterministic:
         print(f"  Run 1: {out1.strip()!r}")
         print(f"  Run 2: {out2.strip()!r}")
-    return ok
+        return False
+
+    # Two runs agreeing isn't enough on its own -- they can agree on a
+    # consistently *wrong* answer (e.g. every mutant "killed" because pytest
+    # itself failed to run in every subprocess, not because tests caught
+    # anything). Cross-check against the documented AGENTS.md Section 7
+    # baseline: killed=16, total=79.
+    try:
+        _score, killed_str, _survived, total_str = out1.strip().split()
+        killed, total = int(float(killed_str)), int(float(total_str))
+    except ValueError:
+        print(f"  ERROR: could not parse mutation output: {out1.strip()!r}")
+        return False
+
+    baseline_ok = killed == 16 and total == 79
+    print(f"  Baseline check (expect killed=16, total=79) -> {'PASS' if baseline_ok else 'FAIL'}")
+    if not baseline_ok:
+        print(f"  Got killed={killed}, total={total} -- see AGENTS.md Section 7 for the documented baseline.")
+    return baseline_ok
 
 
 def check_phase7() -> bool:
@@ -97,7 +115,7 @@ if missing:
 print('All 8 tools have detail:bool=False')
 """
 
-    rc, out = run(["python", "-c", script], timeout=30)
+    rc, out = run([sys.executable, "-c", script], timeout=30)
     ok = rc == 0
     status = "PASS" if ok else "FAIL"
     print(f"  {out.strip()}")

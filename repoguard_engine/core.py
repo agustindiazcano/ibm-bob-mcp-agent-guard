@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -69,8 +70,8 @@ def _write_out(repo_path: Path, name: str, data: object) -> None:
 def measure_coverage(repo_path: str | Path) -> CoverageResult:
     """Run pytest with coverage on *repo_path*, write repoguard-out/coverage.json, return CoverageResult."""
     repo = Path(repo_path)
-    subprocess.run(
-        ["pytest", "--cov", "--cov-report=json", "-q", "--tb=no"],
+    proc = subprocess.run(
+        [sys.executable, "-m", "pytest", "--cov", "--cov-report=json", "-q", "--tb=no"],
         cwd=repo,
         capture_output=True,
         text=True,
@@ -78,9 +79,13 @@ def measure_coverage(repo_path: str | Path) -> CoverageResult:
     )
     coverage_json = repo / "coverage.json"
     if not coverage_json.exists():
-        result = CoverageResult(percent=0.0, covered_lines=0, total_lines=0)
-        _write_out(repo, "coverage", dataclasses.asdict(result))
-        return result
+        # A missing coverage.json means pytest/pytest-cov failed to run, not
+        # that the repo has 0% coverage — report the failure instead of a
+        # fabricated zero (AGENTS.md: never claim a result you did not measure).
+        raise RuntimeError(
+            f"pytest did not produce coverage.json (exit code {proc.returncode}).\n"
+            f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
+        )
 
     data = json.loads(coverage_json.read_text())
     totals = data.get("totals", {})
@@ -378,7 +383,7 @@ def _run_mutant(
         env["PYTHONDONTWRITEBYTECODE"] = "1"
 
         proc = subprocess.run(
-            ["pytest", "-q", "--tb=no", "--no-header", tests_dir],
+            [sys.executable, "-m", "pytest", "-q", "--tb=no", "--no-header", tests_dir],
             cwd=tmp,
             capture_output=True,
             text=True,

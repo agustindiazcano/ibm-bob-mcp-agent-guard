@@ -251,11 +251,14 @@ def tool_check_accessibility(url: str, detail: bool = False) -> dict:
         detail: If True, include passes and incomplete counts.
 
     Returns:
-        Compact: violation_count, violations.
-        Full (detail=True): + passes, incomplete.
+        Compact: ok, violation_count, violations. ok=False means the check
+            could not run at all (e.g. axe-playwright-python not installed) —
+            distinct from ok=True with violation_count=0 (a real clean pass).
+        Full (detail=True): + passes, incomplete, error.
     """
     result = check_accessibility(url)
     compact = {
+        "ok": result.ok,
         "violation_count": len(result.violations),
         "violations": result.violations,
     }
@@ -265,4 +268,5 @@ def tool_check_accessibility(url: str, detail: bool = False) -> dict:
         **compact,
         "passes": result.passes,
         "incomplete": result.incomplete,
+        "error": result.error,
     }

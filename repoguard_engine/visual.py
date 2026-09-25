@@ -34,6 +34,8 @@ class A11yResult:
     violations: list[dict] = field(default_factory=list)
     passes: int = 0
     incomplete: int = 0
+    ok: bool = True
+    error: str = ""
 
 
 def capture_screenshot(
@@ -156,4 +158,6 @@ def check_accessibility(url: str) -> A11yResult:
             incomplete=len(results.get("incomplete", [])),
         )
     except ImportError:
-        return A11yResult()
+        return A11yResult(ok=False, error="playwright or axe-playwright-python not installed")
+    except Exception as exc:
+        return A11yResult(ok=False, error=str(exc))
