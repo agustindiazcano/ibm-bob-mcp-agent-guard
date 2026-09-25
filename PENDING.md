@@ -124,10 +124,10 @@ This phase is the Bob integration: without it, Bob has no way to call the engine
 | Deliverable | Description | Status |
 |---|---|---|
 | Orchestrator mode | Runs the full pipeline (diagnose → fix → verify → close) | 🟢 |
-| Test Writer subagent | Writes tests that kill specific mutants, in parallel per file | 🔴 |
+| Test Writer subagent | Writes tests that kill specific mutants, in parallel per file | 🟢 |
 | Fixer subagent | Repairs failing tests without touching source code | 🟢 |
-| Critic subagent | Audits tests it didn't write (independent reviewer) | 🔴 |
-| Publisher subagent | Creates a branch and PR with the new tests | 🔴 |
+| Critic subagent | Audits tests it didn't write (independent reviewer) | 🟢 |
+| Publisher subagent | Creates a branch and PR with the new tests | 🟢 |
 | Rules | Never edit source code, never estimate numbers, minimum assert quality | 🟢 |
 | Skills | pytest conventions, how to prioritize mutants by risk | 🟢 |
 
@@ -187,7 +187,7 @@ This is what gets recorded for the demo: it's the proof that the system works as
 - [ ] **Add `LASTCONTEXT.md` and `PENDING.md` to the project tree** in `README.md` and `AGENTS.md`
 - [ ] **Write engine tests** — `repoguard_engine/` has no `tests/` of its own; run `repoguard gate .` and reach ≥ 80% coverage
 - [x] **Verify demo-repo baseline numbers** — measured 65.1% coverage, 20.25% mutation (16/79), 4 files with gaps (AST engine; old mutmut numbers were 74.5%/23.6% — now stale)
-- [ ] **Add `.gitattributes`** — normalize line endings (CRLF warnings on every commit)
+- [x] **Add `.gitattributes`** — normalize line endings (CRLF warnings on every commit)
 - [ ] **Populate `bob-evidence/`** — export first real Bob session to `bob-evidence/01-initial-build.md`
 - [ ] **Populate `docs/img/`** — `README.md` references `results-en-dark.png` and `results-en-light.png`; these don't exist yet
 - [ ] **CI workflow** — add `.github/workflows/gate.yml` (snippet is in `RUNBOOK.md § 7`)
