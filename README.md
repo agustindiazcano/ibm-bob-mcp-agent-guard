@@ -13,6 +13,22 @@
 > Coverage tells you which lines ran. It doesn't tell you whether your tests would notice a bug.
 > TestMind AI injects bugs into your code on purpose and measures how many your tests catch.
 
+## Table of Contents
+
+- [Results on the bundled demo repo](#results-on-the-bundled-demo-repo)
+- [What it does](#what-it-does)
+- [How it works](#how-it-works)
+- [Is it multi-agent?](#is-it-multi-agent)
+- [Quick start](#quick-start)
+- [Commands](#commands)
+- [Using it in IBM Bob](#using-it-in-ibm-bob)
+- [Requirements](#requirements)
+- [Project structure](#project-structure)
+- [AI-Assisted Development](#ai-assisted-development)
+- [Development Framework: Working with IBM Bob](#development-framework-working-with-ibm-bob)
+- [Documentation](#documentation)
+- [Limitations](#limitations)
+
 ## Results on the bundled demo repo
 
 <picture>
