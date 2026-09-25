@@ -213,12 +213,74 @@ endpoint coverage: `api.py` has 7 endpoints, not the 8 documented in
 
 ---
 
+### Session 9 — Real results badges (fixed a fictional chart script)
+
+`docs/make_results_chart.py` printed a hardcoded ASCII chart with fictional
+numbers (30/0/3 → 85/72/22) that never came from a real measurement, and
+`docs/img/results-en-{light,dark}.png` — referenced by the README badge —
+never existed. Rewrote it to render real matplotlib bar charts from the
+actual `AGENTS.md §7` numbers (65.1%→100% coverage, 20.25%→89.87% mutation).
+`matplotlib` was named in `AGENTS.md §3`'s tech stack but never in
+`pyproject.toml` — added as a `project.optional-dependencies` `docs` extra
+(not a core dependency, since the CLI/MCP server never import it).
+
+### Session 10 — Bob hit a blocked start; full audit found the real causes
+
+Bob's Phase 11 swarm run failed at Sub-Task 1 with a FastAPI/starlette
+error. Investigated rather than assumed: `git log` confirmed the unpinned
+`fastapi>=0.111` line predates this session entirely — not something
+introduced here. Root cause: no upper bound on `fastapi`, no `starlette`
+pin, no lockfile, so different environments could resolve incompatible
+pairs. Pinned both to the verified-working `fastapi==0.141.1`/
+`starlette==1.7.0` (PR #13).
+
+That fix exposed the deeper problem: I had only ever verified things in my
+own sandbox venv, never checked whether the same code held up against
+Bob's actual environment. Ran a full audit from a genuinely clean venv with
+*no manual PATH manipulation* — the same conditions Bob runs under — and
+found two real, previously undiscovered bugs, both worse than a crash
+because they produce plausible wrong numbers instead of failing loudly:
+
+1. `core.py`'s `measure_coverage()`/`_run_mutant()` called
+   `subprocess.run(["pytest", ...])` with a bare command name, resolved via
+   ambient PATH rather than the interpreter actually running
+   `repoguard_engine`. Silently returned fabricated `0%`/`0`/`0` instead of
+   erroring when PATH resolved to the wrong (or no) pytest.
+2. `scripts/verify.py`'s `phase3`/`phase7` had the identical bug with bare
+   `"python"` — reproduced live: `phase3` reported a false **PASS** with
+   mutation score **100% (79/79 killed)**, because both runs hit the same
+   broken interpreter and "two runs agree" trivially held for two wrong
+   answers.
+
+Fixed both with `sys.executable` (PR #14), except `phase0`'s intentional
+bare `repoguard` check (deliberately tests PATH visibility, matching
+`.bob/mcp.json`). Hardened `phase3` to also assert against the documented
+baseline (`killed=16, total=79`), not just internal two-run agreement.
+Also found and fixed `check_accessibility()`: `axe-playwright-python` was
+imported but never declared as a dependency, so the check has likely never
+actually run — it silently returned "0 violations," indistinguishable from
+a real clean pass. Now declared, and reports `ok=False` with a real error
+when it can't run.
+
+Everything re-verified from the clean venv with zero PATH tricks: `phase3`
+and `phase7` PASS with real numbers, demo-repo's suite, `repoguard
+analyze/gate/serve`, and the MCP tools (called through the real `fastmcp`
+`Client` protocol, not just imported) all confirmed working.
+
+### Key decisions (Session 10)
+
+- **"Passes in my sandbox" was quietly being treated as equivalent to "passes for Bob," and it isn't** — the fastapi/starlette break and the two PATH bugs it led me to find all stem from the same root gap: nothing had ever been verified from a clean environment with no manual PATH help. That's now been done once, thoroughly; it should become a standing check before claiming anything is "green," not a one-off.
+- Didn't just fix the immediate fastapi/starlette error and stop — since the trigger was "code that depends on ambient environment state," searched for every other instance of that pattern (`grep` for bare `subprocess.run(["pytest"...`/`["python"...`) rather than assuming it was isolated.
+- A verification script reporting PASS is not proof by itself — `phase3`'s own false 100% PASS is now a permanent cautionary example baked into `AGENTS.md §9`.
+
+---
+
 ## Current repo state
 
-- Branch: `feat/reference-tests`, on top of `main` (PRs #7, #8, #9 all merged)
-- Phase 0: 🟢 · Phase 3: 🟢 · Phase 7: 🟢 · Phase 8: 🟢 · Phase 13: 🟢 (all Claude-side work complete)
-- README's before/after table is now fully real: 71 passed, 100% coverage, 89.87% mutation (71/79), 7 of 7 endpoints tested
-- Remaining 🔴 critical-path items: `repoguard fix` (Phase 9), Phase 11 full end-to-end swarm run — both need Bob *executing*, not authoring
+- Branch: `docs/session-9-10-context`, on top of `main` (PRs #7–#14 all merged)
+- Phase 0: 🟢 · Phase 3: 🟢 · Phase 7: 🟢 · Phase 8: 🟢 · Phase 13: 🟢 (all Claude-side work complete and now verified from a clean, PATH-independent environment)
+- Dependency pins fixed (`fastapi`, `starlette`, `axe-playwright-python` added); `core.py`/`scripts/verify.py` no longer depend on ambient PATH for subprocess calls
+- Remaining 🔴 critical-path items: `repoguard fix` (Phase 9), Phase 11 full end-to-end swarm run — both need Bob *executing*, not authoring, and Bob's environment should now actually work for them
 - Bob: execution/demo only until credits for code authoring are restored
 - GCP deploy still pending a human running `docs/DEPLOY.md`'s one-time setup
 
@@ -227,7 +289,7 @@ endpoint coverage: `api.py` has 7 endpoints, not the 8 documented in
 ## How to resume
 
 1. Read `PENDING.md` for the task list.
-2. Run `python scripts/verify.py phase0`, `phase3`, `phase7` to confirm baseline holds.
-3. GCP setup (`docs/DEPLOY.md`) is the one remaining human-only task — do it whenever, it doesn't block anything else.
-4. Check whether Bob's execution-only credits are enough to run the orchestrator pipeline now that Test Writer/Critic/Publisher modes exist — that's Phase 11, the last thing standing between here and a real demo.
-5. `repoguard fix` (Phase 9) is still unverified (Bob Shell invocation syntax, AGENTS.md §9) — needs a live Bob run to test regardless of credits.
+2. Run `python scripts/verify.py phase0`, `phase3`, `phase7` to confirm baseline holds — all three should now pass regardless of ambient PATH (except `phase0`'s intentional PATH check).
+3. Bob should retry Phase 11 Sub-Task 1 now that the environment issues (fastapi/starlette pin, PATH-independent subprocess calls) are fixed — pull `main` and reinstall from a clean venv first, don't patch the old mismatched environment in place.
+4. `repoguard fix` (Phase 9) is still unverified (Bob Shell invocation syntax, AGENTS.md §9) — needs a live Bob run to test regardless of credits.
+5. GCP setup (`docs/DEPLOY.md`) is the one remaining human-only task — do it whenever, it doesn't block anything else.
