@@ -12,6 +12,15 @@ TestMind AI measures whether a Python repo's tests actually catch bugs, then use
 - **Entry points:** Bob IDE (MCP stdio), terminal (`repoguard analyze | fix | gate | serve | mcp`), web UI (`repoguard serve`).
 - The product name is TestMind AI; the CLI, package and MCP server are still named `repoguard`.
 
+> **Session note (since Session 6):** Bob's remaining credits are reserved for
+> *running* the application (measurement, the live demo, `repoguard serve`) —
+> not for authoring new code. Until that changes, code changes (engine,
+> Docker, CI/CD, the reference tests) are written by Claude, not by Bob's
+> Test Writer/Fixer subagents. The `.bob/custom_modes.yaml` pipeline and its
+> rules still describe the intended design and stay unchanged — they're what
+> Bob runs once credits allow, and what the live demo still shows executing.
+> This note goes away once Bob is authoring code again.
+
 ## 3. Tech stack
 Python ≥ 3.10 · pytest · coverage.py · stdlib `ast` (own mutation engine, no mutmut/Stryker) · MCP Python SDK (FastMCP, stdio) · FastAPI + uvicorn + SSE (web UI) · httpx TestClient (API checks) · Playwright Chromium + Pillow (visual) · matplotlib (docs chart only).
 

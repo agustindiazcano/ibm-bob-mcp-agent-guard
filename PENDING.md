@@ -14,7 +14,7 @@ Build plan and task tracker. Update status as work progresses; never delete comp
        phases 0 · 1 · 2 · 3 · 7 · 8 · 11
 
 🟡 2 — rounds out the product, doesn't block the first demo
-       phases 4 · 5 · 6 · 9
+       phases 4 · 5 · 6 · 9 · 13
 
 🟢 3 — polish, first thing to cut if time runs short
        phases 10 · 12
@@ -181,6 +181,24 @@ This is what gets recorded for the demo: it's the proof that the system works as
 
 ---
 
+## Phase 13 — Containerization & CI/CD
+**Priority: 2 · Depends on: 0** (independent of the Bob swarm — pure engineering, written by Claude)
+
+| Deliverable | Description | Status |
+|---|---|---|
+| `Dockerfile` + `.dockerignore` | Single-container image serving both `repoguard serve`'s API and static dashboard | 🔴 |
+| `cli.py` Cloud Run readiness | `serve` binds `0.0.0.0` and respects `$PORT`, not just the `127.0.0.1:8000` CLI defaults | 🔴 |
+| CI workflow | GitHub Actions: install, `repoguard gate demo-repo`, run on every PR/push | 🔴 |
+| CD workflow | GitHub Actions: build image, push to a registry, deploy to Cloud Run on merge to `main` | 🔴 |
+| GCP setup doc | One-time steps a human must do (project, Artifact Registry, service account or Workload Identity Federation, GitHub secrets) — Claude can't create GCP resources from here | 🔴 |
+
+Deploying itself (the `gcloud`/console steps, granting the service account,
+adding repo secrets) needs a human with GCP access — Claude can write and
+locally verify the Dockerfile and both workflow files, but can't create
+cloud resources or hold real cloud credentials.
+
+---
+
 ## Standalone tasks (not phase-blocked)
 
 - [ ] **Create `scripts/verify.py`** — accepts a phase name, runs the relevant checks, outputs PASS/FAIL with numbers pasteable into a PR description
@@ -190,7 +208,8 @@ This is what gets recorded for the demo: it's the proof that the system works as
 - [x] **Add `.gitattributes`** — normalize line endings (CRLF warnings on every commit)
 - [ ] **Populate `bob-evidence/`** — export first real Bob session to `bob-evidence/01-initial-build.md`
 - [ ] **Populate `docs/img/`** — `README.md` references `results-en-dark.png` and `results-en-light.png`; these don't exist yet
-- [ ] **CI workflow** — add `.github/workflows/gate.yml` (snippet is in `RUNBOOK.md § 7`)
+- [ ] **CI workflow** — superseded by Phase 13 above (kept here as history; don't do both)
+- [ ] **Write the missing `docs/expected-after-tests/*.py` reference tests** — `docs/expected-after-tests/README.md` describes 4 files (`test_pricing_complete.py`, `test_cart_complete.py`, `test_inventory_complete.py`, `test_api_complete.py`) as the demo's Plan B fallback, but none of them exist yet. This blocks the README's "After" column and, now that Bob can't author code, is a Claude task, not a Bob one.
 
 ---
 

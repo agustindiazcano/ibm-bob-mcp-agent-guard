@@ -111,16 +111,45 @@ requirement, not optional polish.
 - Publisher mode given `execute` group (needs `git` + `gh` CLI calls) but no `edit` group (must not touch test files).
 - Critic mode given `edit` group restricted to `tests/` by convention (enforced by Rule 01, not fileRegex, to keep the YAML readable).
 
+### Session 6 — Role change: Bob out of code-authoring credits; Docker/CI-CD phase added
+
+Bob has credits left to *run* the application (measurement, live demo) but not
+to author new code. Until that changes, Claude writes the code directly —
+`.bob/custom_modes.yaml`'s pipeline stays as the intended design (what Bob
+runs once credits allow / what the live demo shows executing), it's just not
+how code gets written meanwhile.
+
+Two concrete gaps surfaced and got queued as a result:
+1. `docs/expected-after-tests/*.py` — described in that folder's own README as
+   the demo's Plan B, but the 4 files were never actually written. This blocks
+   the README "After" column and is now explicitly a Claude task.
+2. No containerization or CI/CD existed at all — added as a new **Phase 13**
+   in `PENDING.md`, scoped to what Claude can actually do from here (write and
+   locally verify a `Dockerfile` + two GitHub Actions workflows) versus what
+   needs a human with real GCP access (creating the project, Artifact
+   Registry, service account/WIF, repo secrets — Claude holds no cloud
+   credentials and can't create cloud resources).
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Added a session note to `AGENTS.md §2` documenting the role change so a future session (Bob's or Claude's) doesn't assume the swarm is authoring code | `AGENTS.md` |
+| 2 | Added Phase 13 (Containerization & CI/CD) to `PENDING.md`, with the human-vs-Claude split spelled out | `PENDING.md` |
+| 3 | Added the missing reference-tests gap as an explicit standalone task | `PENDING.md` |
+
+### Key decisions (Session 6)
+
+- Don't rewrite `.bob/custom_modes.yaml` or the rules/skills — the swarm design is still correct, it's just temporarily not the thing writing code. Reverting or diluting that design would be the wrong fix for a credits problem.
+- Docker/CI-CD is scoped honestly: Claude can produce and locally test the artifacts, but actual cloud deployment (creating GCP resources, holding credentials) is a human step — said explicitly in `PENDING.md` rather than implied.
+
 ---
 
 ## Current repo state
 
-- Branch: `feat/08-bob-modes` (on top of main at 8d3d004)
-- Phase 0: 🟢 complete
-- Phase 3: 🟢 complete (AST engine deterministic; `repoguard-out/` written)
-- Phase 7 "Compact responses": 🟢 complete
-- Phase 8: 🟢 complete — all 6 modes present (orchestrator, analyzer, fixer, gate, visual-agent, reporter + test-writer, critic, publisher); test-writer skill added
+- Branch: `docs/claude-authors-code-and-cicd-plan` (on top of `main` at `fd6655c`)
+- Phase 0: 🟢 · Phase 3: 🟢 · Phase 7: 🟢 · Phase 8: 🟢 (all complete)
+- Phase 13 (Containerization & CI/CD): 🔴 just added, not started
 - Remaining 🔴 critical-path items: `repoguard fix` (Phase 9), Phase 11 full run
+- Bob: execution/demo only until credits for code authoring are restored
 
 ---
 
@@ -128,5 +157,6 @@ requirement, not optional polish.
 
 1. Read `PENDING.md` for the task list.
 2. Run `python scripts/verify.py phase0`, `phase3`, `phase7` to confirm baseline holds.
-3. Next critical path: `repoguard fix` CLI (Phase 9) — needs Bob Shell invocation verified; see AGENTS.md §9 pitfall. Then Phase 11 first full end-to-end demo run.
-4. Outstanding housekeeping: populate `bob-evidence/`, `docs/img/`, add CI workflow (`.github/workflows/gate.yml`).
+3. Phase 13 (Docker + CI/CD) is next up for Claude — Dockerfile first, then CI workflow, then CD workflow, then hand the GCP setup steps to a human.
+4. Separately: write `docs/expected-after-tests/*.py` (4 files) to unblock the README's "After" column without needing a live Bob run.
+5. Still waiting on Bob credits: `repoguard fix` (Phase 9), Phase 11 first full end-to-end demo run.
