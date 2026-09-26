@@ -1,8 +1,15 @@
+# TestMind AI
+
+**A test-quality tool that proves whether your tests catch bugs, then uses IBM watsonx.ai to write the ones that are missing.**
+
+> Coverage tells you which lines ran. It doesn't tell you whether your tests would notice a bug.
+> TestMind AI injects bugs into your code on purpose and measures how many your tests catch.
+
 [![Built with watsonx.ai](https://img.shields.io/badge/Built%20with-watsonx.ai-0f62fe?style=for-the-badge)](https://www.ibm.com/watsonx)
 [![MCP server](https://img.shields.io/badge/Protocol-MCP-4a4a4a?style=for-the-badge)](https://modelcontextprotocol.io/)
 [![Python | FastAPI](https://img.shields.io/badge/Engine-Python%20%7C%20FastAPI-009688?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
 
-# Bob IDE (bobalytics, updated 09/25/2026)
+# Built with Bob IDE (bobalytics, updated 09/25/2026)
 Bob's repository impact for this repo specifically:
 
 | Repository | Bob lines | User lines | Total lines | Bob factor | Bob commits |
@@ -14,13 +21,6 @@ Bob's repository impact for this repo specifically:
 | Bob commits | 12 | 1st |
 | Bob lines | 820 | 14th |
 | Bob factor | 16.0% | 21st |
-
-# TestMind AI
-
-**A test-quality tool that proves whether your tests catch bugs, then uses IBM watsonx.ai to write the ones that are missing.**
-
-> Coverage tells you which lines ran. It doesn't tell you whether your tests would notice a bug.
-> TestMind AI injects bugs into your code on purpose and measures how many your tests catch.
 
 ## Table of Contents
 
