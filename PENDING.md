@@ -316,8 +316,11 @@ badge on "Running" until then, bad path shows the backend's `detail`, no
 console errors. Fails against the previous frontend (stream/gate mismatch,
 no endpoints card). Not in CI yet.
 
-**Not yet verified:** Analyze *with* mutation on Cloud Run (~270 s locally
-— may hit Cloud Run's request timeout).
+**Verified live:** Analyze *with* mutation against the real Cloud Run
+service (`GET /api/analyze?repo_path=demo-repo&mutation=true`) — `200` in
+2m45s, well under the service's `--timeout=1800`; returned 65.1%
+(112/172), mutation 20.25% (16/79), 4 gap files, 1/7 endpoints tested —
+exact match to `AGENTS.md §7`.
 
 **Known issues**
 
@@ -415,16 +418,16 @@ check) in its new §13. Build from §13, not the original design sketch.
 |---|---|---|
 | — | `docs/DATA_PLATFORM.md` — schema, views, charts, Terraform layout, build order | 🟢 corrected + step-by-step plan added, §13 |
 | A1 | `repoguard_engine/store/` (SQLAlchemy Core, SQLite + Postgres), `[db]` extra; `run_pipeline(persist, project)` stores when `REPOGUARD_DATABASE_URL` is set, opening the DB *before* measuring; `--project` on `analyze`/`gate`; web `/api/analyze`, the fix loop and `tool_generate_summary` never store | 🟢 Session 23 — `verify.py phase17-store` PASS on SQLite **and** a real PostgreSQL 16 (exact equality: stored coverage `65.11627906976744`); `phase17-pipeline` PASS (outputs byte-identical stored vs. not, stored 16/79 = 20.25, bad URL fails in 0.37 s); CI job `store` with a `postgres:16` service |
-| A1-gap | **`endpoint_results` has no consumer.** The table is written (decision #6: keep the skeleton) but no route or chart reads it. Build one — e.g. `GET /api/projects/{slug}/endpoints` (A3.1) or an "untested endpoints over time" chart (C1) — or drop the table | 🔴 must be done |
+| A1-gap | **`endpoint_results` has no consumer.** The table is written (decision #6: keep the skeleton) but no route or chart reads it. Build one — e.g. `GET /api/projects/{slug}/endpoints` (A3.1) or an "untested endpoints over time" chart (C1) — or drop the table | 🟢 `GET /api/projects/{slug}/endpoints` (`store/queries.py`, `web/server.py`) — 503 with no database, 404 for an unknown project, 200 with the latest run's endpoints measured (matches demo-repo: 7 endpoints, 1 tested); `verify.py phase17-endpoints` PASS. Frontend wiring (a card/chart consuming it) is separate, not done here |
 | A2 | Engine: per-mutant outcomes + stable fingerprints (`MutantRecord` → `repoguard-out/mutants.json`), `junit.xml` per-test outcomes (→ `repoguard-out/tests.json`); built as one commit with Phase 18 S1 (`mutation.py` split out of `core.py`, re-exported) since S2 and A2 are the same work | 🟢 PR #62 — `verify.py phase17-engine` PASS: 79 unique/stable fingerprints identical across 2 runs, fingerprint-stability check on an added function, per-test outcomes 5→71 passed baseline→after-reference, JUnit pass/fail/skip/xfail mapping correct |
 | A2-gap | **Per-mutant/per-test records aren't in the database yet** — A2 only writes them to `repoguard-out/mutants.json`/`tests.json`, same as everything else, but nothing loads them into `store/`. Without this, `v_runs` (A1) has no per-mutant history to query, so "persistent surviving mutants" and "flaky tests" (this phase's whole motivation, §1) can't be asked yet. Needs new tables or extending A1's schema | 🔴 blocks the actual point of the history feature, not just a nice-to-have |
-| A3 | API read routes + `POST /api/runs` ingest (project token) + `repoguard analyze --push` | 🔴 next up. `web-next/app/results/` (PR #58) already has the frontend scaffolding (`fetchProjects`/`fetchView` in `history.ts`) expecting these routes — it currently shows "Run history isn't on this backend yet" |
+| A3 | API read routes + `POST /api/runs` ingest (project token) + `repoguard analyze --push` | 🟢 Session 25 — `GET /api/projects`, `/trend`, `/risk-heatmap` (real schema only: `operators`/`fix-effect`/`survivors`/`flaky` still need per-mutant/per-test SQL storage, the A2-gap below, so those 4 routes are deliberately not built yet); `POST /api/runs` bearer-token ingest (`repoguard db init/create-project/create-token`), idempotent on `run_id`; `repoguard analyze --push URL` (works without `[db]`/`REPOGUARD_DATABASE_URL`). `verify.py phase17-api` PASS — includes a real `repoguard serve` subprocess + a real CLI push, not just `TestClient`. `web-next/app/results/` (PR #58, `fetchProjects`/`fetchView`) isn't wired to these routes yet — separate task |
 | B1 | `infra/terraform/` — Artifact Registry, deployer service account + roles, WIF pool/provider; `infra-ci.yml` (fmt/validate) | 🟢 codifies the Phase 13 identity that already existed for real; `terraform plan` against the live project confirmed "No changes" after `terraform import` — see `infra/terraform/README.md`. Cloud SQL/Secret Manager stay out until Block A (the DB store itself) is built — no infra ahead of the app that would use it |
 | B2 | `cd.yml` on Workload Identity Federation (drop `GCP_SA_KEY`) | 🟢 done early, as part of Phase 13 — see `docs/DEPLOY.md` |
 | C1 | web-next charts: trend, survival by operator, fix effect, survivors, flaky | 🔴 |
 | C2 | Risk heatmap (below the cut line) | 🔴 |
 | D | User accounts (below the cut line — optional) | 🔴 |
-| — | `verify.py phase17` (round-trip, determinism, after-reference delta 69.62 pp, Postgres service container) | 🟡 `phase17-store` + `phase17-pipeline` (A1) and `phase17-engine` (A2) all exist and PASS individually; only A1's are wired into `ci.yml` (job `store`) — **`phase17-engine` and `phase18-s1` run nowhere in CI yet**, PR #62 added the checks but not a job. No single aggregate `phase17` check either |
+| — | `verify.py phase17` (round-trip, determinism, after-reference delta 69.62 pp, Postgres service container) | 🟡 `phase17-store` + `phase17-pipeline` (A1), `phase17-engine` (A2), `phase17-endpoints` (A1-gap) and `phase17-api` (A3) all exist and PASS individually; only A1's are wired into `ci.yml` (job `store`) — **`phase17-engine`, `phase18-s1`, `phase17-endpoints` and `phase17-api` run nowhere in CI yet.** `phase17-engine`/`phase18-s1` are wired on `ci/wire-phase17-phase18-checks` (Session 25, not yet merged); `phase17-endpoints`/`phase17-api` still need the same treatment. No single aggregate `phase17` check either |
 
 `terraform apply` and a GCP billing account are human steps — same
 situation as `docs/DEPLOY.md`.

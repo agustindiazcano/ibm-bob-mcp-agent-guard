@@ -757,6 +757,43 @@ in `main` via #60/#62; nothing else in it is real, unmerged work.
 
 ---
 
+### Session 25 — CI wiring, live Cloud Run mutation check, Phase 17 A1-gap (`ci/wire-phase17-phase18-checks`, `docs/verify-cloud-run-mutation-timeout`)
+
+User asked for a status check across `PENDING.md`/`LASTCONTEXT.md` first,
+then picked a subset of the resulting punch list to execute now, skipping
+the GitHub Settings cosmetic fix and the repo-rename decision.
+
+| # | Action | Files / branch |
+|---|---|---|
+| 1 | Confirmed local `eager-gauss-check` == `origin/claude/eager-gauss-ifyd8w` exactly (same commit hash) — superseded per Session 24, safe to delete. **Blocked**: the auto-mode classifier denies `git branch -D` / `git push --delete` as a destructive git action regardless of scope. Not done — needs the user to run it directly | — |
+| 2 | Wired `phase17-engine` and `phase18-s1` into CI: new `engine-parallel-mutation` job, plain install (no `[db]` needed). Verified locally first: `phase18-s1` PASS (workers=1 215s / workers=4 106s, both 20.25% 16/79, identical survivors), `phase17-engine` PASS (79 unique fingerprints, 5→71 passed baseline→after-reference) | `.github/workflows/ci.yml` — `ci/wire-phase17-phase18-checks` |
+| 3 | Verified Analyze-with-mutation live against the real Cloud Run service: `GET /api/analyze?repo_path=demo-repo&mutation=true` → `200` in 2m45s, well under the service's `--timeout=1800`, numbers exact match to `AGENTS.md §7` (65.1%, 20.25% 16/79) | `PENDING.md` — `docs/verify-cloud-run-mutation-timeout` |
+| 4 | Attempted Phase 14 gap 3's token setup (`docs/DEPLOY.md §5`): `gcloud services enable secretmanager` succeeded, but `gcloud secrets create repoguard-fix-token` was denied by the auto-mode classifier (`Secret-Store Writes`) before even reaching the IAM-binding step that Session 21 had already found blocked. Confirms this really is a human-only step, not something narrower than previously documented. Not done | — |
+| 5 | Phase 17 A1-gap: `endpoint_results` had no consumer. Built `GET /api/projects/{slug}/endpoints` — 503 no database, 404 unknown project / no run with endpoints measured yet, 200 with the latest such run's rows verbatim (method/path/function/has_test). New `store/queries.py` (read-only; `repository.py` stays write-only); route calls `init_db()` first since a fresh database has no tables yet, same pattern `pipeline._open_store` already uses for writes | `repoguard_engine/store/queries.py` (new), `web/server.py`, `scripts/verify.py` + `verify_phase17.py` (`phase17-endpoints`), `AGENTS.md`+`CLAUDE.md` — `docs/verify-cloud-run-mutation-timeout` |
+
+Verified before each commit: `phase17-endpoints` PASS (503/404/200, 7
+endpoints/1 tested matching demo-repo, a later `include_endpoints=False` run
+doesn't shadow the real one); `phase0` PASS; `demo-repo/` untouched
+throughout (`git status` clean after every check).
+
+### Key decisions (Session 25)
+
+- Frontend wiring for the new `/api/projects/{slug}/endpoints` route (a card
+  or chart consuming it) was deliberately left out — the ask was "give
+  `endpoint_results` a real consumer," which the route itself satisfies;
+  a UI for it is separate scope, likely folded into Phase 17 A3/C1.
+- Two real infra actions were attempted and denied by Claude Code's own
+  auto-mode classifier (branch deletion, secret creation) rather than
+  worked around — both are exactly the kind of "human step" `docs/DEPLOY.md`
+  and Session 21 already called out. Don't retry these from an agent
+  session; the user runs them directly.
+- Both new commits landed on a single branch (`docs/verify-cloud-run-mutation-timeout`)
+  that started as a one-line PENDING.md update — not a clean one-branch-
+  per-task split, but both are small, related "verify + document reality"
+  changes and neither touches the other's files.
+
+---
+
 ## Current repo state
 
 - `main` is at PR #62. All of Sessions 22–24's work is merged: #55 (Autofix),
@@ -767,30 +804,42 @@ in `main` via #60/#62; nothing else in it is real, unmerged work.
   groundwork, `claude/inspiring-cannon-zy5v80`), #60 (Phase 17 A1 store,
   `claude/gifted-archimedes-3yrywk`), #61 (README accuracy fixes, Session 24),
   #62 (Vertex-as-default + Phase 17 A2/Phase 18 S1-S2, rebuilt from
-  `eager-gauss-ifyd8w` in Session 24). Nothing is open and unmerged right now.
-- **`claude/eager-gauss-ifyd8w` is superseded — safe to delete.** Session 24
-  found its 4 commits split into 2 obsolete (an `S0`/`ScriptedProvider` that
-  duplicated #59 with an incompatible implementation, and a Phase 17 A1 store
-  that duplicated #60 with a different schema) and 2 real
+  `eager-gauss-ifyd8w` in Session 24). Two small branches from Session 25
+  are local-only, verified, not yet pushed or PR'd: `ci/wire-phase17-phase18-checks`
+  (wires `phase17-engine`/`phase18-s1` into `ci.yml`) and
+  `docs/verify-cloud-run-mutation-timeout` (live Cloud Run mutation
+  verification + Phase 17 A1-gap's `GET /api/projects/{slug}/endpoints`).
+- **`claude/eager-gauss-ifyd8w` is superseded — safe to delete, still not deleted.**
+  Session 24 found its 4 commits split into 2 obsolete (an `S0`/`ScriptedProvider`
+  that duplicated #59 with an incompatible implementation, and a Phase 17 A1
+  store that duplicated #60 with a different schema) and 2 real
   (Vertex-as-default, S1+S2/A2), both of which are now in `main` via #62.
-  Nothing left in that branch is unmerged, real work.
+  Nothing left in that branch is unmerged, real work. Session 25 confirmed
+  the local `eager-gauss-check` branch is the exact same commit and tried to
+  delete both — **denied by the auto-mode classifier as a destructive git
+  action** regardless of the branch being provably safe. Needs the user to
+  run `git branch -D eager-gauss-check && git push origin --delete claude/eager-gauss-ifyd8w` directly.
 - Prior `main` history: PR #37 (Phase 16 + 13 WIF) through #55 — see earlier
   session entries above for the full list.
 - Phase 0/3/7/8/9/13/15/16: 🟢. Phase 11: 🟢 (Session 20) — 89.87%/71/79.
   Phase 17 B1/B2: 🟢 (Terraform-managed WIF).
 - Phase 14: 🟡 — the dashboard (gaps 1–8) and the new 5-page site (#58) are
-  done. Remaining: Autofix's (gap 3) live run is waiting on
-  `REPOGUARD_FIX_TOKEN` being attached on Cloud Run (`docs/DEPLOY.md` §5).
-  Analyze *with* mutation against Cloud Run's request timeout is unchecked.
+  done. Remaining: Autofix's (gap 3) live run is still waiting on
+  `REPOGUARD_FIX_TOKEN` being attached on Cloud Run (`docs/DEPLOY.md` §5) —
+  Session 25 tried the first step (`gcloud secrets create`) and was denied
+  by the auto-mode classifier (`Secret-Store Writes`); still a human step.
+  Analyze *with* mutation against Cloud Run is now **verified live**
+  (Session 25): 200 in 2m45s, exact match to `AGENTS.md §7`.
 - **Phase 17: A1 🟢, A2 🟢 (Session 24, PR #62 — per-mutant/per-test records,
-  JSON-only, not yet in the SQL store), A1-gap 🔴 (`endpoint_results` has no
-  consumer), A3 🔴 (next step — the frontend's `/results` page already
-  expects it, #58), B1/B2 🟢, C 🔴.** `phase17-engine` PASSes but runs in no
-  CI job yet.
+  JSON-only, not yet in the SQL store), A1-gap 🟢 (Session 25 —
+  `GET /api/projects/{slug}/endpoints`, `verify.py phase17-endpoints` PASS;
+  no frontend card yet, separate task), A3 🔴 (next up — the frontend's
+  `/results` page already expects it, #58), B1/B2 🟢, C 🔴.**
+  `phase17-engine` now runs in CI (Session 25, `ci/wire-phase17-phase18-checks`,
+  not yet merged).
 - **Phase 18: S0 🟢, S1 🟢, S2 🟢 (Session 24, PR #62 — same commit as
   Phase 17 A2), S3–S10 🔴 (S3, per-lane sandbox, is next).** `phase18-s1`
-  PASSes but also runs in no CI job yet — wiring both new checks into
-  `ci.yml` is a cheap, real next step before building further on top.
+  now runs in CI too (Session 25, same branch as above, not yet merged).
 - IBM Bob is retired. `.bob/` stays on disk as inert legacy (`.bob/DEPRECATED.md`); `repoguard_engine/watson_agent/` is the live replacement.
 - GCP Cloud Run: identity is Terraform-managed and a real deploy has succeeded. `GCP_PROJECT_ID`'s raw value in GitHub Settings still has the leading space (cosmetic — `cd.yml` auto-trims it every run; clean it up next time you're in Settings)
 - **Done, human-run:** `roles/aiplatform.user` granted to the Cloud Run runtime SA (`993240087609-compute@developer.gserviceaccount.com`) — confirmed in the real IAM policy. Was blocked for an agent session (Claude Code's auto-mode classifier blocks IAM permission grants regardless of scope), so the user ran `gcloud projects add-iam-policy-binding ...` directly
@@ -802,7 +851,7 @@ in `main` via #60/#62; nothing else in it is real, unmerged work.
 ## How to resume
 
 1. Read `PENDING.md` for the task list (Phase 11 is now 🟢 — read its "3 attempts, 3 bugs" narrative before touching `watson_agent/` again, it explains real, non-obvious API constraints).
-2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16`, `multicloud`, `phase14fix`, `phase14ui` (needs `npm ci` in `web-next/`), `phase18-seq-stub` (and, with `[db]`, `phase17-store`, `phase17-pipeline`, `phase18-s1`, `phase17-engine`) to confirm baseline holds. `phase18-s1`/`phase17-engine` run nowhere in CI yet (Session 24 finding) — a cheap first task is adding them to `ci.yml`, e.g. a new job or folding into `store`, before building S3/A3 on top.
+2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16`, `multicloud`, `phase14fix`, `phase14ui` (needs `npm ci` in `web-next/`), `phase18-seq-stub` (and, with `[db]`, `phase17-store`, `phase17-pipeline`, `phase17-endpoints`, `phase18-s1`, `phase17-engine`) to confirm baseline holds. `phase18-s1`/`phase17-engine` are wired into `ci.yml` on `ci/wire-phase17-phase18-checks` (Session 25) but that branch isn't merged yet — merge it (or re-verify and redo the wiring) before assuming CI actually covers them.
 3. Frontend punch-list items 1-4 are all done and verified live (Session 21). Autofix (`POST /api/fix`, Phase 14 gap 3) is built (Session 22); what's left is the human token step plus a first live run. When pushing follow-up commits to a branch mid-session, confirm with `git log origin/main..<branch>` that nothing merged out from under you first (Session 21 item 5, and again in Session 24 — a cherry-pick's conflicts were resolved but `--continue` was never run; always check `git log`/`git status` after resolving conflicts, don't trust that the files look right).
 4. Phase 17/18 next steps (A2/S1/S2 landed in Session 24, PR #62): **A3** (read routes + ingest — the frontend's `/results` page already expects `fetchProjects`/`fetchView`, #58) and **S3** (per-lane sandbox + write guard). Both still build from `docs/DATA_PLATFORM.md` §13 / `docs/MULTI_AGENT_SWARM.md` §14, not their original sketches. Decision #1 (JUnit test id) is still open. Don't forget the A1-gap: `endpoint_results` has no reader yet.
 5. Autofix: attach `REPOGUARD_FIX_TOKEN` (`docs/DEPLOY.md` §5), then run it from the Vercel demo against `demo-repo` and record the measured before/after. If you change a Vercel env var, Redeploy the **newest `main`** deployment, never an older row (`docs/ARCHITECTURE-front.md`, Session 21-front item 5).

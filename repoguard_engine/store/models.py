@@ -100,8 +100,7 @@ risk_scores = Table(
     Column("reasons", _Json, nullable=False),
 )
 
-# Skeleton (decision #6): stored when runs.endpoints_measured is true, but no
-# route or chart reads it yet -- see PENDING.md Phase 17.
+# Consumed by GET /api/projects/{slug}/endpoints (Phase 17 A1-gap).
 endpoint_results = Table(
     "endpoint_results", metadata,
     _run_fk(),
@@ -111,4 +110,18 @@ endpoint_results = Table(
     Column("method", String(16), nullable=False),
     Column("path", Text, nullable=False),
     Column("has_test", Boolean, nullable=False),
+)
+
+# POST /api/runs ingest tokens (Phase 17 A3.2). Only the SHA-256 hex digest is
+# stored; the plaintext is shown once, at creation, and never persisted.
+api_tokens = Table(
+    "api_tokens", metadata,
+    Column("id", String(36), primary_key=True),
+    Column("project_id", String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column("token_hash", String(64), nullable=False),
+    Column("label", Text),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("revoked_at", DateTime(timezone=True)),
+    UniqueConstraint("token_hash", name="uq_api_tokens_hash"),
+    Index("ix_api_tokens_project", "project_id"),
 )
