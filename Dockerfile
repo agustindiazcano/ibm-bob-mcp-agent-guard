@@ -19,7 +19,15 @@ COPY demo-repo ./demo-repo
 # error until it's added — see repoguard_engine/visual.py's except Exception
 # handling. To enable them, add:
 #   RUN playwright install --with-deps chromium
-RUN pip install --no-cache-dir -e .
+#
+# [vertex] extra included so /api/summary's ok=true path actually works on
+# the deployed service (REPOGUARD_AI_PROVIDER=vertex, set via cd.yml) --
+# without it, get_provider() fails loud with "google-genai is not
+# installed" instead of generating real text. [ai] (watsonx) stays out:
+# vertex is this deployment's configured provider, and Application Default
+# Credentials (the runtime service account) are what watsonx has no
+# equivalent to -- it needs a separate WATSONX_APIKEY nobody has set here.
+RUN pip install --no-cache-dir -e ".[vertex]"
 
 EXPOSE 8080
 
