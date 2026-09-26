@@ -70,6 +70,20 @@ superseded. The 8 mutants still surviving after "After" are equivalent mutants, 
 gaps: an `is_member` field `api.py` never reads, and `round(x, 2)` precision changes
 that don't affect the tested inputs — see `AGENTS.md §9`.
 
+### The same "Before" run in the dashboard
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/dashboard-dark.png">
+  <img alt="TestMind AI web dashboard after analyzing demo-repo with mutation testing: line coverage 65.1% (112/172 lines), mutation score 20.25% (16/79 mutants killed), 4 files with coverage gaps, quality gate FAIL at an 80% threshold, risk ranking led by shop/inventory.py at 0.54" src="docs/img/dashboard-light.png">
+</picture>
+
+A real capture of the [`web-next/`](web-next/) dashboard (deployed at
+https://ibm-bob-mcp-agent-guard.vercel.app/) running against a local
+`repoguard serve` — every number on it comes straight from the engine. The AI
+summary panel shows "unavailable" because no AI credentials were configured
+for the capture; that's its normal state without them. How to retake it:
+[`docs/img/README.md`](docs/img/README.md).
+
 ## What it does
 
 - 🧬 **Mutation testing.** Injects one small bug at a time (flipped comparisons, swapped operators, changed constants, `return None`, removed `raise`) with its own AST engine, then reruns your suite. Every mutant that survives is a bug your tests would miss.
@@ -540,7 +554,7 @@ frontend consumes the same endpoints rather than replacing them.
 
 Still open: the Vercel deployment's `NEXT_PUBLIC_REPOGUARD_API_BASE` points
 at a `localhost` placeholder until the backend is deployed to Cloud Run
-(Phase 13); README screenshots of the dashboard are still to come; and the
+(Phase 13); and the
 "Autofix" button stays disabled until there's a `POST /api/fix`, which waits
 on a verified live fix-loop run (Phase 11). The frontend gets no Terraform or
 GCP infrastructure: it ships as a plain Vercel project, with its own
