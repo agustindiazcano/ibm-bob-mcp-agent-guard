@@ -388,11 +388,46 @@ summary endpoint and AI-provider labeling, which in turn wait on Phase 16's
 
 ---
 
+### Session 14 — Summary endpoint + SummaryPanel (two parallel sessions, PRs #26/#27)
+
+Ran as two Claude Code sessions in parallel: backend on
+`feat/14-summary-endpoint` (this checkout), frontend on
+`feat/14-summary-panel` (separate `-frontend` worktree). The contract was agreed
+up front so neither had to wait: `POST /api/summary`, body = `/api/analyze`'s
+dashboard, response `{ok, text, error, provider}`. No shared files touched;
+both merged to `main`.
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | `POST /api/summary` wraps `narrative.generate_summary()`; `provider` fixed to `"watsonx.ai"` at the endpoint, `NarrativeResult` unchanged (MCP/CLI callers untouched) | `repoguard_engine/web/server.py` |
+| 2 | CORS `allow_methods` → `["GET", "POST"]` | `repoguard_engine/web/server.py` |
+| 3 | `/api/stream` takes `gate_threshold` (default 80.0) instead of a hardcoded 80% | `repoguard_engine/web/server.py` |
+| 4 | `api_summary` changed from `async def` to `def` — caught in the frontend session's review | `repoguard_engine/web/server.py` |
+| 5 | `SummaryPanel`, `fetchSummary()`, `SummaryResponse` type (frontend session) | `web-next/app/` |
+| 6 | Gaps 4/5 closed, gap 6 partially, `SummaryPanel` 🟢 | `PENDING-front.md` |
+
+### Key decisions (Session 14)
+
+- **Blocking calls in FastAPI handlers must be plain `def`.** `generate_summary()`
+  can take up to 30s with real credentials; as `async def` it would freeze the
+  event loop, and `/api/stream` would stop sending progress. It never showed up
+  in testing, because with no credentials it returns in milliseconds.
+- `provider` is added in the web layer, not in `narrative.py` — once
+  `ChatProvider` exists, it becomes the source of that field.
+- Verified: phase0/phase7 PASS; `/api/stream` gives `passed_gate: true` at
+  threshold 60 and `false` at the default 80 against demo-repo (65.1%);
+  `/api/summary` returns the credentials error with no `WATSONX_*` set.
+- `repoguard serve` on this Windows machine needs `PYTHONIOENCODING=utf-8`
+  (the pre-existing `→` console-encoding crash); `GET /` returned 500 during
+  testing — not investigated, backlog.
+
+---
+
 ## Current repo state
 
-- Branch: `feat/14-nextjs-dashboard`, based on `main` (PRs #7–#18 all merged, including #18's narrative summary found mid-task)
+- Branch: `main` at `50fe2e6` (PRs #26/#27 merged); this session's doc updates are on `docs/14-summary-context`
 - Phase 0: 🟢 · Phase 3: 🟢 · Phase 7: 🟢 · Phase 8: 🟢 (redefined for watsonx.ai) · Phase 9: 🟢 (`repoguard fix` now real) · Phase 13: 🟢 · Phase 15: 🟢 (narrative, PR #18)
-- Phase 14: 🟡 in progress on `feat/14-nextjs-dashboard` — scaffold, `RepoForm`/`ActionBar`/`StreamLog`/`StatCards`/`GapsList`/`RiskTable` done (see `PENDING-front.md`); `SummaryPanel` and Autofix blocked on backend gaps (CORS on `fix/web-cors`, `POST /api/fix`, summary endpoint + Phase 16's `ai_providers.get_provider()`)
+- Phase 14: 🟡 — all dashboard components including `SummaryPanel` merged (see `PENDING-front.md`); remaining: Autofix (gap 3, no `POST /api/fix`), Vercel deploy, folding `PENDING-front.md`/`docs/ARCHITECTURE-front.md` back into the main docs, and a browser end-to-end run of `web-next` against `repoguard serve`
 - IBM Bob is retired. `.bob/` stays on disk as inert legacy (`.bob/DEPRECATED.md`); `repoguard_engine/watson_agent/` is the live replacement.
 - Remaining 🔴 critical-path item: Phase 11, a real end-to-end `repoguard fix` run against `demo-repo` with actual IBM Cloud credentials — same human-gated situation as GCP deploy, not something any agent here can supply
 - GCP deploy still pending a human running `docs/DEPLOY.md`'s one-time setup
@@ -404,7 +439,7 @@ summary endpoint and AI-provider labeling, which in turn wait on Phase 16's
 
 1. Read `PENDING.md` for the task list, and `PENDING-front.md` if resuming Phase 14 frontend work specifically.
 2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16` to confirm baseline holds.
-3. For the frontend: merge or rebase on `fix/web-cors` before trying an end-to-end `web-next` ↔ `repoguard serve` fetch — CORS is the only thing blocking that verification.
+3. For the frontend: CORS and `/api/summary` are on `main`; run `PYTHONIOENCODING=utf-8 repoguard serve` + `npm run dev` (with `NEXT_PUBLIC_REPOGUARD_API_BASE`) for the still-pending browser end-to-end check.
 4. Get real IBM Cloud credentials (`docs/WATSONX_SETUP.md`) and run `repoguard fix demo-repo` for the first live Phase 11 run — that's the one thing no agent session here can do without a human providing an account.
 5. GCP setup (`docs/DEPLOY.md`) is the other remaining human-only task — do it whenever, it doesn't block anything else.
 6. The repo-rename decision (`ibm-bob-mcp-agent-guard`) is open and low-urgency — decide whenever, it's cosmetic.
