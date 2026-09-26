@@ -81,10 +81,25 @@ complete to be a manual bootstrap.
 | `db447c3` | chore: add .gitattributes, ignore coverage.json, remove stale plan file | PR #6 |
 
 **Commit-count reconciliation:** 9 commits across PRs #1/#2/#4/#6, plus 3
-direct-push commits before PR #1 existed, totals **12** — matching the
-figure from memory that prompted this document. The initial commit would
-make it 13 if counted; it's kept separate above because, unlike the other
-12, it carries no explicit trailer.
+direct-push commits before PR #1 existed, totals **12** by git archaeology —
+matching the figure from memory that prompted this document. The initial
+commit would make it 13 if counted; it's kept separate above because, unlike
+the other 12, it carries no explicit trailer.
+
+IBM Bob's own platform reports a close but distinct number: its **Bobalytics**
+repository-impact page (`bob-evidence/bob-images/c/23-...bobalytics-repo-impact-sorted-bob-commits.png`)
+lists `agustindiazcano/ibm-bob-mcp-agent-guard` at **817 Bob lines / 5,131
+total lines (15.9% Bob factor), 11 Bob commits** — Bob's own count, not a
+reconstruction from git trailers. The 11-vs-12 gap is unreconciled (possibly
+a different definition of "commit," e.g. excluding one of the pre-PR #1
+direct pushes) but both numbers are real, cited figures, not estimates.
+
+## Screenshot evidence
+
+29 IBM Bob IDE screenshots are in `bob-evidence/bob-images/` (`a/` 1–9,
+`b/` 10–19, `c/` 20–29, one continuous sequence). A representative subset is
+embedded directly in the main `README.md`'s "IBM Bob Usage" section; all 29
+are here for the full session record.
 
 ## Claude's interleaved PRs (docs only, not engine work)
 
