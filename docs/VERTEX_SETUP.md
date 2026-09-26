@@ -40,14 +40,23 @@ Nothing else in `repoguard` needs this — same optional-extra pattern as
 ```bash
 # bash / zsh
 export VERTEX_PROJECT_ID="<your gcp project id>"
-export VERTEX_LOCATION="us-central1"  # optional, this is the default
+export VERTEX_LOCATION="global"          # optional, this is the default
+export VERTEX_MODEL_ID="gemini-3.8-flash" # optional, this is the default
 ```
 
 ```powershell
 # PowerShell (Windows)
 $env:VERTEX_PROJECT_ID="<your gcp project id>"
-$env:VERTEX_LOCATION="us-central1"  # optional, this is the default
+$env:VERTEX_LOCATION="global"           # optional, this is the default
+$env:VERTEX_MODEL_ID="gemini-3.8-flash"  # optional, this is the default
 ```
+
+`VERTEX_MODEL_ID` also accepts `gemini-3.5-flash` (the other Gemini 3 Flash
+tier live-verified here) to A/B against real mutation-score deltas. Both
+404 at `location=us-central1` — Gemini 3's Flash tier is only reachable at
+`global` on this project, unlike `gemini-2.5-flash` which worked
+regionally. `gemini-3.1-pro` (the Gemini 3 Pro tier) 404s even at `global`
+here, likely needing separate preview access — not used as a default.
 
 `VERTEX_PROJECT_ID` is required even if `gcloud config get-value project`
 already has a default set — this stays explicit and reproducible rather
@@ -64,6 +73,17 @@ repoguard fix demo-repo --provider vertex
 If credentials are missing, this prints `Summary unavailable: VERTEX_PROJECT_ID
 must be set ...` or the fix loop fails immediately with the same message —
 never fabricated text, per `AGENTS.md §4`.
+
+## Model history
+
+Originally verified and defaulted to `gemini-2.5-flash` (`us-central1`).
+Moved to Gemini 3 (`gemini-3.8-flash`, `location=global`) after that model
+twice produced a hallucinated method call in a live `repoguard fix` run
+(`PENDING.md` Phase 11) — `gemini-2.5-flash` remains available and works
+fine for `--summarize`, but the fix loop's tool-calling accuracy motivated
+the move. `tools.py`'s new `run_tests` tool (real pytest execution, not the
+model's guess) is the other half of that fix and applies regardless of
+which model is selected.
 
 ## What was verified before this doc was written
 
@@ -102,8 +122,38 @@ initial verification, an actual successful round trip:
   do; `vertex.py` uses the function name itself as the round-trip id. This
   is an internal translation detail, never surfaced to callers.
 
-**Not yet verified:** a full `repoguard fix` run's actual mutation-score
-improvement with Gemini as the writer/critic (whether Gemini reliably
-invokes tools across a real multi-file fix-loop run, the way
-`mistral-small-3-1-24b-instruct-2503` on watsonx.ai did not — see
-`PENDING.md` Phase 16 for that finding).
+## Gemini 3 (`gemini-3.5-flash` / `gemini-3.8-flash`, `location=global`)
+
+Live-verified in a later session, same rigor: plain text call and a full
+function-call round trip, both via `client.models.generate_content` with
+`location="global"` (real finding: 404 at `us-central1` for both). Unlike
+`mistral-small-3-1-24b-instruct-2503` on watsonx.ai (Phase 16), Gemini
+reliably invokes tools across a real multi-file `repoguard fix` run — it
+doesn't fall back to plain text. The open problem was never "does it call
+tools," it's tool-call *content*: a real `gemini-2.5-flash` fix-loop run
+twice wrote a test file calling a method that doesn't exist on the class
+under test (`Inventory.clear()` — hallucinated, confirmed absent via
+`read_source_file`'s own output). `run_mutation()`'s baseline guard caught
+it both times (no false mutation score was ever reported), but the fix
+loop had no way to self-correct mid-run.
+
+Two changes address this directly, not just the model swap: `tools.py`
+gained a `run_tests` tool (real pytest execution) and both `prompts.py`
+stages now require calling it before finalizing — grounding the model in
+real pass/fail output instead of its own confidence.
+
+**Verified for real**: a full `repoguard fix demo-repo --provider vertex`
+run with `gemini-3.8-flash` and `run_tests` wired in took the mutation
+score from 20.25% (16/79) to **89.87% (71/79)**, coverage 65.1% → 99.1% —
+independently re-measured from a clean `run_mutation()` call, exact match.
+The critic's notes confirm `run_tests` was actually invoked, not just
+prompted for (e.g. "Executed `run_tests` on `tests/test_inventory.py`: 25
+passed in 0.03s"). One more real bug surfaced and was fixed en route to
+this result: Gemini 3's function-call parts carry a `thought_signature`
+that must be replayed on the next turn or the API 400s
+(`ClientError: ... Function call is missing a thought_signature`) — this
+module was discarding it; now captured from
+`response.candidates[0].content.parts[*].thought_signature` and replayed
+via `Part.thought_signature` when reconstructing the function-call part.
+See `PENDING.md` Phase 11 for the full narrative (3 real bugs across 3
+attempts before this run succeeded).

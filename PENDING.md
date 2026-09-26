@@ -163,21 +163,29 @@ in-process orchestrator, not parallel subagents — see `docs/ARCHITECTURE.md`.
 ---
 
 ## Phase 11 — Real run via watsonx.ai (was: Real run in Bob)
-**Priority: 1 (critical) · Depends on: 8**
+**Priority: 1 (critical) · Depends on: 8** — 🟢 done, real run, independently re-verified
 
 The old Bob-swarm plan (`phase11-swarm-run-plan.md`) is superseded — Bob is
 retired, and the orchestrator is no longer parallel subagents to screenshot.
-This phase's actual blocker is the same as Phase 8's/15's: a real IBM Cloud
-account, which no agent working on this repo holds (same situation as
-`docs/DEPLOY.md`'s GCP setup).
+This phase's original blocker (a real IBM Cloud/GCP account) was cleared in
+Phase 16; the actual remaining blocker turned out to be model reliability
+(watsonx's fallback model didn't call tools; `gemini-2.5-flash` twice
+hallucinated a nonexistent method), fixed this session — see below.
 
 | Deliverable | Description | Status |
 |---|---|---|
-| First full run | `repoguard fix demo-repo` improves demo-repo's tests end to end, with real credentials | 🔴 |
-| Evidence | `demo-repo/watson-evidence/01-fix-loop.md`, auto-written by the orchestrator | 🔴 |
-| Number verification | Confirm the mutation score rises measurably above the 20.25% (16/79) baseline | 🔴 |
+| First full run | `repoguard fix demo-repo --provider vertex` (`gemini-3.8-flash`) improved demo-repo's tests end to end, with real credentials | 🟢 |
+| Evidence | `demo-repo/watson-evidence/01-fix-loop.md` — auto-written, inspected, then discarded per the "never leave it in demo-repo/tests" rule (it's gitignored anyway) | 🟢 |
+| Number verification | Mutation score 20.25% (16/79) → **89.87% (71/79)**, coverage 65.1% → 99.1%. Independently re-measured from a clean `run_mutation()` call (not just the fix loop's own printed number): `89.87 71 8 79`, exact match | 🟢 |
 
 This is what gets recorded for the demo: it's the proof that the system works as described.
+
+Getting here took 3 real attempts and 3 real bugs found and fixed, not one clean run:
+1. `gemini-2.5-flash` twice wrote a test calling a method (`Inventory.clear()`) that doesn't exist — caught both times by `run_mutation()`'s baseline guard (no false mutation score was ever reported), but the fix loop had no way to self-correct mid-run and `cli.py` crashed with a raw traceback instead of a clean failure (fixed: `fix(cli): repoguard fix fails gracefully...`).
+2. Moved to Gemini 3 (`gemini-3.5-flash`/`gemini-3.8-flash`) for better tool-call accuracy, and added a `run_tests` tool (`watson_agent/tools.py`) plus prompt changes (`watson_agent/prompts.py`) requiring the writer/critic to actually execute pytest and see real output before finalizing — real finding, live-verified: Gemini 3's Flash tier 404s at `location=us-central1` (works at `global`); `gemini-3.1-pro` 404s even at `global` on this project.
+3. Gemini 3's function-call parts carry a `thought_signature` that must be replayed on the next turn or the API 400s (`google.genai.errors.ClientError: ... Function call is missing a thought_signature`) — `ai_providers/vertex.py` was discarding it; fixed by capturing it from `response.candidates[0].content.parts[*].thought_signature` and replaying it via `Part.thought_signature` on the reconstructed function-call part.
+
+The successful run's critic notes confirm `run_tests` was actually used, not just prompted for — e.g. "Executed `run_tests` on `tests/test_inventory.py`: 25 passed in 0.03s" — grounding the APPROVED verdicts in real execution, not model confidence.
 
 ---
 

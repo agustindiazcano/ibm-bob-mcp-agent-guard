@@ -27,7 +27,9 @@ from .prompts import CRITIC_PROMPT, TEST_WRITER_PROMPT
 from .tools import TOOL_REGISTRY, TOOL_SCHEMAS, SourceEditRejected
 
 MAX_FILES_PER_RUN = 3
-MAX_TOOL_ROUNDS_PER_STAGE = 6
+# read -> write -> run_tests -> (rewrite -> run_tests)* needs more headroom
+# than the old write-once flow; 6 was tight even for one correction cycle.
+MAX_TOOL_ROUNDS_PER_STAGE = 10
 _SUBPROCESS_TIMEOUT = 60
 
 
