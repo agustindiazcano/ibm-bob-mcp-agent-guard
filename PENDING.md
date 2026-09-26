@@ -258,6 +258,30 @@ of any number, per `AGENTS.md §4`. Optional dependency (`pip install -e
 
 ---
 
+## Phase 16 — Multicloud AI: watsonx.ai + Google Vertex AI
+**Priority: 2 · Depends on: 8, 15** (design only — see `docs/MULTICLOUD_AI.md`; nothing in this phase is implemented yet)
+
+The user asked for this project to not be single-cloud: watsonx.ai is the
+only provider today (`narrative.py`, `watson_agent/client.py`). This phase
+extracts a small `ChatProvider` abstraction so Google Vertex AI (or any
+future provider) can be added without touching `tools.py`, `prompts.py`, or
+the orchestrator loop, plus a way to benchmark models against each other
+using the engine's own mutation-score measurement, not a subjective opinion.
+
+| Deliverable | Description | Status |
+|---|---|---|
+| `docs/MULTICLOUD_AI.md` | Design doc: architecture, env vars, refactor steps, benchmarking plan, open questions | 🟢 |
+| `ai_providers/base.py` | `ChatProvider` protocol | 🔴 |
+| `ai_providers/watsonx.py` | Today's `watson_agent/client.py` logic, moved unchanged | 🔴 |
+| `ai_providers/vertex.py` | Google Vertex AI implementation; SDK call shapes to be verified against the real installed package before shipping, same rigor as `client.py` | 🔴 |
+| `narrative.py` / `orchestrator.py` switched to `get_provider()` | No behavior change for watsonx.ai; re-run `phase15`/`phase16` after | 🔴 |
+| `scripts/benchmark_models.py` | Runs the fix loop against fresh `demo-repo` copies per `(provider, model_id)`, compares real mutation-score deltas | 🔴 |
+
+Live cross-provider benchmarking needs real credentials for at least two
+clouds — same human-gated situation as `docs/WATSONX_SETUP.md` and Phase 11.
+
+---
+
 ## Standalone tasks (not phase-blocked)
 
 - [ ] **Create `scripts/verify.py`** — accepts a phase name, runs the relevant checks, outputs PASS/FAIL with numbers pasteable into a PR description

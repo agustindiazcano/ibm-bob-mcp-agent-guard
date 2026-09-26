@@ -247,6 +247,7 @@ The rest of this section is about the first one — how the repo itself gets bui
 - [Architecture](docs/ARCHITECTURE.md): diagrams, the sequence of a run, MCP tools and the data contract
 - [Demo script](docs/DEMO.md): 3-minute pitch and backup plan
 - [watsonx.ai setup](docs/WATSONX_SETUP.md): IBM Cloud credentials for `narrative.py` / `watson_agent`
+- [Multicloud AI (design)](docs/MULTICLOUD_AI.md): adding Google Vertex AI alongside watsonx.ai, and benchmarking models
 - [AI-Assisted Development Framework](docs/AI_ASSISTED_DEVELOPMENT_FRAMEWORK.md): how this repo itself is built — contract files and git workflow
 
 ## Roadmap
@@ -263,6 +264,13 @@ We're deliberately not adopting Terraform or new GCP infrastructure for
 this: the existing Cloud Run deploy (`docs/DEPLOY.md`, Phase 13) is left
 as-is, and the new frontend ships as a plain Vercel project (no IaC). See
 `PENDING.md` Phase 14 and `docs/ARCHITECTURE.md` for details. Not built yet.
+
+**Also planned: multicloud AI.** watsonx.ai is the only provider today. See
+[`docs/MULTICLOUD_AI.md`](docs/MULTICLOUD_AI.md) (`PENDING.md` Phase 16) for
+the design — a small `ChatProvider` abstraction so Google Vertex AI can be
+added without touching the write-guarded tools or the orchestrator loop,
+plus a benchmark script to compare models by measured mutation-score deltas
+rather than opinion. Design only; nothing under `ai_providers/` exists yet.
 
 ## Limitations
 

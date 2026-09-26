@@ -30,6 +30,13 @@ TestMind AI measures whether a Python repo's tests actually catch bugs, then use
 ## 3. Tech stack
 Python ≥ 3.10 · pytest · coverage.py · stdlib `ast` (own mutation engine, no mutmut/Stryker) · MCP Python SDK (FastMCP, stdio) · FastAPI + uvicorn + SSE (web UI) · httpx TestClient (API checks) · Playwright Chromium + Pillow + axe-playwright-python (visual) · matplotlib (docs chart only) · IBM watsonx.ai (`ibm-watsonx-ai`, optional `[ai]` extra) for two things: `narrative.py`'s advisory prose summary (no metric ever comes from it) and `watson_agent/`'s tool-calling fix loop (writes tests through a guarded tool, never a source file).
 
+> **Planned, not built: multicloud AI.** watsonx.ai is currently the only AI
+> provider. `docs/MULTICLOUD_AI.md` (Phase 16 in `PENDING.md`) designs a
+> `ChatProvider` abstraction so Google Vertex AI can be added alongside it,
+> plus a benchmark script to compare models by real mutation-score deltas,
+> not opinion. Nothing under `ai_providers/` exists yet — don't assume it
+> does because this note is here.
+
 ## 4. Architecture rules (non-negotiable)
 - **The AI decides, the engine measures.** Every number (coverage, mutation score, risk, endpoints, visual diff) must come from an engine function. Never estimate, round up or extrapolate a metric.
 - **Source code is the reference.** Agents that write tests may only edit `tests/`. If a new test fails against the original code, the test is wrong unless there is evidence of a real bug; mark that as `xfail(reason="possible bug: ...")`, never fix source to make a test pass.
