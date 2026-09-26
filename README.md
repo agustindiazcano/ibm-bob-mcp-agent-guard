@@ -2,6 +2,20 @@
 [![MCP server](https://img.shields.io/badge/Protocol-MCP-4a4a4a?style=for-the-badge)](https://modelcontextprotocol.io/)
 [![Python | FastAPI](https://img.shields.io/badge/Engine-Python%20%7C%20FastAPI-009688?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
 
+# Bob IDE
+
+| Metric | Value | Ranking |
+|---|---|---|
+| Bob commits | 12 | 1st of 6 |
+| Bob lines | 820 | 14th of 14 |
+| Bob factor | 16.0% | 21st of 21 |
+
+Bob's repository impact for this repo specifically:
+
+| Repository | Bob lines | User lines | Total lines | Bob factor | Bob commits |
+|---|---|---|---|---|---|
+| `agustindiazcano/ibm-bob-mcp-agent-guard` | 820 | 4,314 | 5,134 | 16.0% | 12 |
+
 # TestMind AI
 
 **A test-quality tool that proves whether your tests catch bugs, then uses IBM watsonx.ai to write the ones that are missing.**
@@ -363,4 +377,4 @@ rather than opinion. Design only; nothing under `ai_providers/` exists yet.
 
 ## Team
 
-Argentina Team
+Team Argentina
