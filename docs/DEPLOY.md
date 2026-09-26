@@ -6,68 +6,70 @@ are already in the repo and don't need editing — this document is only the
 one-time GCP setup that has to be done by someone with real GCP access,
 since no AI agent working on this repo holds cloud credentials.
 
-## 1. One-time GCP setup
+## 1. One-time GCP setup — done for this project
+
+Auth uses **Workload Identity Federation** (WIF), not a static JSON key —
+GitHub Actions exchanges its own OIDC token for short-lived Google
+credentials at run time, so no long-lived secret is ever stored in GitHub.
+This was set up for real, reusing the same GCP project already configured
+for Vertex AI (`docs/VERTEX_SETUP.md`):
 
 ```bash
-# Pick a project id and region — reuse them exactly in step 3.
-export PROJECT_ID=your-project-id
-export REGION=us-central1
-export REPO_NAME=repoguard
-export SERVICE_NAME=repoguard
+PROJECT_ID=project-e0ad10c9-0b2f-4dc0-ac6
+PROJECT_NUMBER=993240087609
+REGION=us-central1
+REPO_NAME=repoguard
+GITHUB_REPO=agustindiazcano/ibm-bob-mcp-agent-guard
 
-gcloud config set project "$PROJECT_ID"
+gcloud services enable run.googleapis.com artifactregistry.googleapis.com \
+  iamcredentials.googleapis.com sts.googleapis.com --project="$PROJECT_ID"
 
-# APIs needed
-gcloud services enable run.googleapis.com artifactregistry.googleapis.com
-
-# Artifact Registry repo to hold the container images
 gcloud artifacts repositories create "$REPO_NAME" \
-  --repository-format=docker \
-  --location="$REGION" \
-  --description="TestMind AI / repoguard images"
+  --repository-format=docker --location="$REGION" \
+  --description="TestMind AI / repoguard images" --project="$PROJECT_ID"
 
-# Service account the GitHub Action will authenticate as
 gcloud iam service-accounts create repoguard-deployer \
-  --display-name="repoguard CD deployer"
+  --display-name="repoguard CD deployer" --project="$PROJECT_ID"
 
-export SA_EMAIL="repoguard-deployer@${PROJECT_ID}.iam.gserviceaccount.com"
+SA_EMAIL="repoguard-deployer@${PROJECT_ID}.iam.gserviceaccount.com"
+for ROLE in roles/artifactregistry.writer roles/run.admin roles/iam.serviceAccountUser; do
+  gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:${SA_EMAIL}" --role="$ROLE" --condition=None
+done
 
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:${SA_EMAIL}" --role="roles/artifactregistry.writer"
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:${SA_EMAIL}" --role="roles/run.admin"
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:${SA_EMAIL}" --role="roles/iam.serviceAccountUser"
+gcloud iam workload-identity-pools create github-pool \
+  --location=global --display-name="GitHub Actions pool" --project="$PROJECT_ID"
 
-# Key for the GitHub secret (see step 2). Treat this file as a secret —
-# delete it locally once it's pasted into GitHub.
-gcloud iam service-accounts keys create repoguard-deployer-key.json \
-  --iam-account="$SA_EMAIL"
+gcloud iam workload-identity-pools providers create-oidc github-provider \
+  --location=global --workload-identity-pool=github-pool \
+  --display-name="GitHub OIDC" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+  --attribute-condition="assertion.repository=='${GITHUB_REPO}'" \
+  --issuer-uri="https://token.actions.githubusercontent.com" --project="$PROJECT_ID"
+
+gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github-pool/attribute.repository/${GITHUB_REPO}" \
+  --project="$PROJECT_ID"
 ```
 
-A static JSON key is the fastest path for a hackathon deadline. If there's
-time afterward, switch to [Workload Identity Federation](https://github.com/google-github-actions/auth#setting-up-workload-identity-federation) instead — no
-long-lived key to leak or rotate.
+The `--attribute-condition` on the OIDC provider restricts impersonation to
+this exact repo — no other GitHub repo can use this service account, even
+one in the same org.
 
 ## 2. GitHub repo configuration
 
-Settings → Secrets and variables → Actions.
+Settings → Secrets and variables → Actions → **Variables** tab (no Secrets
+needed at all — that's the point of WIF):
 
-**Secrets:**
 | Name | Value |
 |---|---|
-| `GCP_SA_KEY` | Contents of `repoguard-deployer-key.json` |
-
-**Variables:**
-| Name | Value |
-|---|---|
-| `GCP_PROJECT_ID` | your project id |
-| `GCP_REGION` | e.g. `us-central1` |
-| `GAR_REPOSITORY` | e.g. `repoguard` |
-| `CLOUD_RUN_SERVICE` | e.g. `repoguard` |
-
-Then delete the local `repoguard-deployer-key.json` — it's only needed to get
-its contents into the GitHub secret.
+| `GCP_PROJECT_ID` | `project-e0ad10c9-0b2f-4dc0-ac6` |
+| `GCP_REGION` | `us-central1` |
+| `GAR_REPOSITORY` | `repoguard` |
+| `CLOUD_RUN_SERVICE` | `repoguard` |
+| `WIF_PROVIDER` | `projects/993240087609/locations/global/workloadIdentityPools/github-pool/providers/github-provider` |
+| `DEPLOYER_SA` | `repoguard-deployer@project-e0ad10c9-0b2f-4dc0-ac6.iam.gserviceaccount.com` |
 
 ## 3. First deploy
 

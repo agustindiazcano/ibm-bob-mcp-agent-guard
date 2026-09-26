@@ -122,7 +122,7 @@ The engine is also exposed through **MCP** (9 tools), so external agents such as
 
 **What it is not (yet):**
 - **Not a parallel swarm yet.** A parallel multi-agent design for IBM Bob exists in `.bob/`, but it was retired before its first full run (`.bob/DEPRECATED.md`). Its return, rebuilt on watsonx.ai, is planned: see [Multi-agent swarm (planned)](#multi-agent-swarm-planned).
-- **Vertex AI not built yet.** The `ChatProvider` abstraction (`repoguard_engine/ai_providers/`) is implemented and watsonx.ai runs through it; a Vertex AI implementation (`ai_providers/vertex.py`) still needs real GCP credentials to live-verify against the installed SDK — see [`docs/MULTICLOUD_AI.md`](docs/MULTICLOUD_AI.md) (`PENDING.md` Phase 16).
+- **Multicloud, for real.** The `ChatProvider` abstraction (`repoguard_engine/ai_providers/`) is implemented; both watsonx.ai and Google Vertex AI (Gemini) run through it, `REPOGUARD_AI_PROVIDER`/`--provider` select which — see [`docs/MULTICLOUD_AI.md`](docs/MULTICLOUD_AI.md) (`PENDING.md` Phase 16).
 
 ```mermaid
 flowchart TB
@@ -247,7 +247,7 @@ Status key: ✅ implemented and running in this repo · ⚠️ implemented but n
 | AI agents | IBM watsonx.ai (`ibm-watsonx-ai`), default model `mistralai/mistral-small-3-1-24b-instruct-2503` | Writer and critic agents with tool calling (`repoguard fix`), `--summarize` prose | ✅ live-verified with real credentials — `--summarize` returns real generated text; `repoguard fix`'s tool-calling round trip runs for real, though this default model doesn't reliably invoke tools (a model-choice quality gap, not an SDK/plumbing issue — see `PENDING.md` Phase 16) |
 | Multi-agent swarm | Parallel agent lanes (`ThreadPoolExecutor`), per-lane sandboxes, file-based agent contract | Parallel Test Writer / Verifier / Critic per file, parallel mutation workers | 🗺️ Phase 18 ([design](docs/MULTI_AGENT_SWARM.md)) |
 | AI provider abstraction | `ChatProvider` protocol (`repoguard_engine/ai_providers/`) | Switching between providers without touching the agents (`REPOGUARD_AI_PROVIDER` / `--provider`) | ✅ Phase 16 Stage A ([details](docs/MULTICLOUD_AI.md)) |
-| AI (second provider) | Google Vertex AI | Alternative model provider + model benchmarking by mutation-score delta | 🗺️ Phase 16 Stage B — needs real GCP credentials ([details](docs/MULTICLOUD_AI.md)) |
+| AI (second provider) | Google Vertex AI (`google-genai`, Gemini) | Alternative model provider — no free-tier rate limits, unlike watsonx.ai's shared pool | ✅ live-verified: real text generation and a full tool-calling round trip against a real GCP project ([details](docs/VERTEX_SETUP.md)) |
 | Frontend | Next.js 16.3.6, React 19.2.8, TypeScript 5, ESLint 9 | `web-next/` dashboard | ✅ (lint + build pass; end-to-end checked in a browser locally) |
 | Legacy UI | Static HTML served by FastAPI | `repoguard serve` dashboard | ✅ |
 | Charts (docs) | matplotlib (`[docs]` extra) | README before/after image | ✅ |
@@ -256,7 +256,7 @@ Status key: ✅ implemented and running in this repo · ⚠️ implemented but n
 | CI | GitHub Actions: `ci.yml`, `frontend-ci.yml` | Verify checks, tests, coverage gate, mutation determinism, frontend lint/build | ✅ green on `main` |
 | CD | GitHub Actions: `cd.yml` | Build → Artifact Registry → Cloud Run | ⚠️ fails at the Google auth step on every push to `main` until the one-time GCP setup is done ([`docs/DEPLOY.md`](docs/DEPLOY.md)) |
 | Cloud (backend) | Google Cloud Run, Artifact Registry | Hosting the API + dashboard | ⚠️ not deployed yet (human GCP setup pending) |
-| Cloud (frontend) | Vercel | Hosting `web-next/` | 🗺️ not deployed yet (human step, Phase 14) |
+| Cloud (frontend) | Vercel | Hosting `web-next/` | ✅ deployed: https://ibm-bob-mcp-agent-guard.vercel.app/ — `NEXT_PUBLIC_REPOGUARD_API_BASE` still points at `localhost:8000` until the backend (row above) is deployed |
 | Database | PostgreSQL 16 on Cloud SQL; SQLite locally | Run history per commit | 🗺️ Phase 17 ([design](docs/DATA_PLATFORM.md#4-database-design)) |
 | Data access | SQLAlchemy 2 (Core), psycopg 3 | One code path for SQLite and Postgres | 🗺️ Phase 17 |
 | Infrastructure as code | Terraform (google, random providers), GCS remote state | Provisioning GCP | 🗺️ Phase 17 ([design](docs/DATA_PLATFORM.md#8-infrastructure-as-code-terraform)) |
@@ -350,19 +350,19 @@ baseline, so it fails on a real regression instead of always or never.
 ## Deploy to Google Cloud
 
 The backend (`repoguard serve`: API + dashboard + bundled `demo-repo/`)
-deploys to **Cloud Run** through `cd.yml`. The workflow is in the repo; the
-one-time GCP setup (project, Artifact Registry, service account, GitHub
-secrets and variables) needs a person with GCP access and is written out
-step by step in [`docs/DEPLOY.md`](docs/DEPLOY.md). That setup has not been
-run yet, so there is no live URL, and `cd.yml` currently fails at its Google
-authentication step on every push to `main`, because the GCP credentials
-(`GCP_SA_KEY`) aren't configured yet. It stops before building anything.
+deploys to **Cloud Run** through `cd.yml`. The one-time GCP setup (project,
+Artifact Registry, service account, Workload Identity Federation) is done —
+see [`docs/DEPLOY.md`](docs/DEPLOY.md) for exactly what was created. Auth
+uses WIF, not a long-lived JSON key: GitHub Actions exchanges its own OIDC
+token for short-lived Google credentials at run time, so no GCP secret is
+ever stored in the repo. `cd.yml` deploys on every push to `main` once the
+GitHub repo variables (`WIF_PROVIDER`, `DEPLOYER_SA`, etc. — see
+`docs/DEPLOY.md` §2) are set.
 
 Known limits of today's deploy: the service is public
-(`--allow-unauthenticated`, fine for a judged demo), CD authenticates with
-a long-lived JSON key, and the container's filesystem is ephemeral, so
-results in `repoguard-out/` are lost when an instance stops. The next two
-sections plan fixes for the last two.
+(`--allow-unauthenticated`, fine for a judged demo), and the container's
+filesystem is ephemeral, so results in `repoguard-out/` are lost when an
+instance stops. The next section plans a fix for that.
 
 The Next.js dashboard (`web-next/`) is a separate Vercel project — see
 [`docs/ARCHITECTURE-front.md`](docs/ARCHITECTURE-front.md).

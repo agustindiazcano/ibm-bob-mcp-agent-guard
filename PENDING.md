@@ -201,7 +201,9 @@ This is what gets recorded for the demo: it's the proof that the system works as
 | Cloud Run readiness | Handled in the Dockerfile's `CMD` (`--host 0.0.0.0 --port ${PORT:-8080}`) rather than changing `cli.py`'s locally-safe defaults | 🟢 |
 | CI workflow | `.github/workflows/ci.yml` — `verify.py phase0/phase7`, demo-repo pytest, `repoguard gate demo-repo --threshold 60` on every push/PR; mutation determinism (`phase3`) as its own slower job | 🟢 |
 | CD workflow | `.github/workflows/cd.yml` — builds the image, pushes to Artifact Registry, deploys to Cloud Run on push to `main` (or manual dispatch) | 🟢 |
-| GCP setup doc | `docs/DEPLOY.md` — one-time steps a human with GCP access must do (project, Artifact Registry, service account, GitHub secrets/vars) | 🟢 |
+| GCP setup doc | `docs/DEPLOY.md` — one-time steps a human with GCP access must do | 🟢 |
+| GCP resources | Artifact Registry repo, `repoguard-deployer` service account + roles, Workload Identity Federation pool/provider scoped to this exact GitHub repo | 🟢 done for real (`gcloud`, real project, real ADC credentials) |
+| CD auth | `cd.yml` switched from a static `GCP_SA_KEY` JSON key to Workload Identity Federation — no long-lived GCP secret ever stored in GitHub | 🟢 |
 
 Verified locally before marking done: `docker`'s daemon isn't reachable from
 this sandbox (nested containerization blocked), so the `docker build` itself
@@ -213,10 +215,15 @@ passed for real (65.1% ≥ 60%, exit 0). Both workflow YAML files parse
 successfully. The first real `docker build` should happen in CI itself or
 on a machine with Docker access before trusting the image blindly.
 
-Deploying itself (the `gcloud`/console steps, granting the service account,
-adding repo secrets) needs a human with GCP access — Claude can write and
-locally verify the Dockerfile and both workflow files, but can't create
-cloud resources or hold real cloud credentials.
+The GCP side is done for real, not just written and locally checked: the
+user has a working `gcloud` ADC login (already used for Vertex AI, Phase
+16), so the Artifact Registry repo, service account, IAM bindings, and WIF
+pool/provider were all created directly against a real project this
+session — see `docs/DEPLOY.md` §1 for the exact commands run and their
+real output (project `project-e0ad10c9-0b2f-4dc0-ac6`, project number
+`993240087609`). **Still pending, human-only:** `gh` CLI isn't available in
+this environment, so the 6 GitHub repo Variables (`docs/DEPLOY.md` §2) have
+to be added through the GitHub web UI before the first real deploy can run.
 
 ---
 
@@ -251,7 +258,7 @@ contract. (This section absorbed the former satellite `PENDING-front.md`.)
 | `StatCards` + `GapsList` + `RiskTable` | Coverage, mutation score, gaps, risk ranking — verbatim from `AnalyzeResponse`, no new numbers | 🟢 |
 | `SummaryPanel` | AI prose, labeled advisory + which provider generated it (PRs #26/#27) | 🟢 |
 | CI split | `frontend-ci.yml` (lint+build, `web-next/**` only) separate from backend `ci.yml`/`cd.yml` (`paths-ignore: web-next/**`) | 🟢 |
-| Vercel deploy | Connect repo/subfolder to Vercel; no IaC, config in `vercel.json` / project settings; `NEXT_PUBLIC_REPOGUARD_API_BASE` per environment | 🔴 human step |
+| Vercel deploy | Connect repo/subfolder to Vercel; no IaC, config in `vercel.json` / project settings; `NEXT_PUBLIC_REPOGUARD_API_BASE` per environment | 🟢 deployed: https://ibm-bob-mcp-agent-guard.vercel.app/ — `NEXT_PUBLIC_REPOGUARD_API_BASE` still points at `localhost:8000` (placeholder); update once Cloud Run (Phase 13) is deployed |
 | Docs | Fold `docs/ARCHITECTURE-front.md` into `docs/ARCHITECTURE.md`; add the deployed URL and real screenshots to `README.md` | 🔴 |
 
 **Verified so far:** `npm run lint` and `npm run build` pass. End-to-end on
@@ -343,8 +350,8 @@ Persistence is off unless `REPOGUARD_DATABASE_URL` is set.
 | A1 | `repoguard_engine/store/` (SQLAlchemy Core, SQLite + Postgres), `[db]` extra | 🔴 |
 | A2 | Engine: per-mutant outcomes + stable fingerprints, `junit.xml` per-test outcomes; `pipeline.py` persists | 🔴 |
 | A3 | API read routes + `POST /api/runs` ingest (project token) + `repoguard analyze --push` | 🔴 |
-| B1 | `infra/terraform/` — Artifact Registry, Cloud SQL, Secret Manager, Cloud Run, WIF; `infra-ci.yml` (fmt/validate) | 🔴 |
-| B2 | `cd.yml` on Workload Identity Federation (drop `GCP_SA_KEY`) | 🔴 |
+| B1 | `infra/terraform/` — Artifact Registry, Cloud SQL, Secret Manager, Cloud Run, WIF; `infra-ci.yml` (fmt/validate) | 🔴 (WIF pool/provider itself already exist for real, done early as part of Phase 13 — Terraform would just codify what's already there, not create it fresh) |
+| B2 | `cd.yml` on Workload Identity Federation (drop `GCP_SA_KEY`) | 🟢 done early, as part of Phase 13 — see `docs/DEPLOY.md` |
 | C1 | web-next charts: trend, survival by operator, fix effect, survivors, flaky | 🔴 |
 | C2 | Risk heatmap (below the cut line) | 🔴 |
 | D | User accounts (below the cut line — optional) | 🔴 |

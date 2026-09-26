@@ -14,7 +14,7 @@ You are a senior Python engineer and QA specialist. You write small, typed, test
 ## 2. What this project is
 TestMind AI measures whether a Python repo's tests actually catch bugs, then uses an AI provider to write the missing tests.
 - **Engine** (`repoguard_engine/`, CLI `repoguard`): deterministic measurements — pytest, coverage, AST mutation testing, untested functions, FastAPI endpoint checks, visual regression, risk score, HTML dashboard.
-- **AI provider layer** (`repoguard_engine/ai_providers/`): a `ChatProvider` abstraction behind `get_provider()` (`REPOGUARD_AI_PROVIDER`, default `watsonx`, or `--provider` per call). `watsonx.py` is implemented; `vertex.py` (Google Vertex AI) is Phase 16 Stage B, not built yet — see `docs/MULTICLOUD_AI.md`.
+- **AI provider layer** (`repoguard_engine/ai_providers/`): a `ChatProvider` abstraction behind `get_provider()` (`REPOGUARD_AI_PROVIDER`, default `watsonx`, or `--provider` per call). Both `watsonx.py` and `vertex.py` (Google Vertex AI / Gemini) are implemented and live-verified — see `docs/MULTICLOUD_AI.md`.
 - **`watson_agent/` fix loop**: a tool-calling fix loop (`repoguard fix`) that writes tests through one hard-guarded tool restricted to `tests/`, calling whichever provider `ai_providers.get_provider()` returns. `narrative.py`'s advisory-only prose summary (`--summarize`) does the same.
 - **Entry points:** terminal (`repoguard analyze | fix | gate | serve | mcp`), web UI (`repoguard serve`), any MCP client (stdio).
 - The product name is TestMind AI; the CLI, package and MCP server are still named `repoguard`.
@@ -31,15 +31,15 @@ TestMind AI measures whether a Python repo's tests actually catch bugs, then use
 ## 3. Tech stack
 Python ≥ 3.10 · pytest · coverage.py · stdlib `ast` (own mutation engine, no mutmut/Stryker) · MCP Python SDK (FastMCP, stdio) · FastAPI + uvicorn + SSE (web UI) · httpx TestClient (API checks) · Playwright Chromium + Pillow + axe-playwright-python (visual) · matplotlib (docs chart only) · IBM watsonx.ai (`ibm-watsonx-ai`, optional `[ai]` extra) as the default AI provider behind `ai_providers/get_provider()`, used for two things: `narrative.py`'s advisory prose summary (no metric ever comes from it) and `watson_agent/`'s tool-calling fix loop (writes tests through a guarded tool, never a source file).
 
-> **Multicloud AI: Stage A built, Vertex AI (Stage B) not yet.**
+> **Multicloud AI: both providers built and live-verified.**
 > `repoguard_engine/ai_providers/` implements the `ChatProvider` abstraction
-> (`base.py`, `watsonx.py`) behind `get_provider()`; `narrative.py` and
-> `watson_agent/orchestrator.py` both call it instead of importing a cloud
-> SDK directly. `vertex.py` (Google Vertex AI) is designed in
-> `docs/MULTICLOUD_AI.md` (Phase 16 in `PENDING.md`) but not built — it
-> needs real GCP credentials to live-verify the SDK call shape first, same
-> rigor already applied to `watsonx.py`. A benchmark script comparing models
-> by real mutation-score deltas is deferred until both providers exist.
+> (`base.py`, `watsonx.py`, `vertex.py`) behind `get_provider()`;
+> `narrative.py` and `watson_agent/orchestrator.py` both call it instead of
+> importing a cloud SDK directly. See `docs/MULTICLOUD_AI.md` /
+> `docs/VERTEX_SETUP.md` (Phase 16 in `PENDING.md`) for what was actually
+> verified live, including a real Vertex text call and a full tool-calling
+> round trip against a real GCP project. A benchmark script comparing
+> models by real mutation-score deltas is still deferred (Phase 16 step 4).
 
 ## 4. Architecture rules (non-negotiable)
 - **The AI decides, the engine measures.** Every number (coverage, mutation score, risk, endpoints, visual diff) must come from an engine function. Never estimate, round up or extrapolate a metric.
@@ -70,7 +70,7 @@ ibm-bob-mcp-agent-guard/
 │   ├── ai_providers/     ChatProvider abstraction — get_provider() reads REPOGUARD_AI_PROVIDER
 │   │   ├── base.py           ChatProvider protocol, AIProviderError
 │   │   ├── watsonx.py         watsonx.ai chat (tool-calling), fails loud with no credentials — done
-│   │   └── vertex.py          Google Vertex AI — Phase 16 Stage B, not built yet
+│   │   └── vertex.py          Google Vertex AI (google-genai, Gemini) — implemented, live-verified
 │   ├── watson_agent/     AI fix loop — replaces .bob/'s Orchestrator/Test Writer/Critic/Gate/Publisher modes
 │   │   ├── tools.py          TOOL_SCHEMAS/TOOL_REGISTRY — write_test_file hard-guards writes to tests/ only
 │   │   ├── prompts.py        TEST_WRITER_PROMPT, CRITIC_PROMPT — carried forward from .bob/rules,skills
@@ -109,7 +109,8 @@ ibm-bob-mcp-agent-guard/
 │   ├── ARCHITECTURE.md           Layer diagram, data flow, MCP tool list
 │   ├── DEMO.md                   3-minute demo script
 │   ├── WATSONX_SETUP.md          IBM Cloud credentials for the default AI provider
-│   ├── MULTICLOUD_AI.md          ChatProvider abstraction (built) + Vertex AI (Phase 16 Stage B, planned)
+│   ├── MULTICLOUD_AI.md          ChatProvider abstraction + Vertex AI — both built, see docs/VERTEX_SETUP.md
+│   ├── VERTEX_SETUP.md           Google Cloud credentials for the Vertex AI provider
 │   ├── AI_ASSISTED_DEVELOPMENT_FRAMEWORK.md  How this repo itself is built
 │   ├── make_results_chart.py     Generates before/after results chart
 │   ├── expected-after-tests/     Reference tests — copy in to verify "after" numbers; remove after
@@ -164,6 +165,8 @@ When declining an action, say what to do instead.
 - **`check_accessibility()` silently reported "0 violations" (a fake clean pass) instead of failing** when `axe-playwright-python` wasn't installed — it was imported in `visual.py` but never declared as a dependency anywhere, so the check has likely never actually run in any environment. Now declared as a dependency, and the function returns `ok=False` with a real `error` message (surfaced through the MCP tool's compact response) whenever the check couldn't actually run, instead of an empty result that looks identical to a genuine pass.
 - **`narrative.py` needs `pip install -e ".[ai]"` plus credentials for the selected provider** (default watsonx: `WATSONX_APIKEY`/`WATSONX_PROJECT_ID`) — see `docs/WATSONX_SETUP.md`. Without them, `generate_summary()` returns `ok=False` with a real error, same graceful-degradation pattern as `check_accessibility()` — it never fabricates summary text. Its output is advisory prose only; no code path may read a number out of it back into a measurement. **Live-verified with real watsonx.ai credentials**: a real `--summarize` call returns real generated text (first confirmed successful generation, not just a clean-failure network check).
 - **`watson_agent/`'s fix loop degrades differently from `narrative.py`: it fails loud, not gracefully.** `ai_providers.get_provider()` raises `AIProviderError` (a `WatsonxCredentialsError`/`VertexCredentialsError` subclass) rather than returning an `ok=False` result — `repoguard fix` has no measurement to fall back to if the AI stage can't run, unlike `--summarize`'s advisory text. `ModelInference.chat()`'s signature and OpenAI-compatible response shape (`response["choices"][0]["message"]`, `tool_calls`) were confirmed against the real installed `ibm-watsonx-ai==1.7.2` via `inspect.signature()`/`help()` — including that its `params` dict takes `max_tokens`/`time_limit`, not `generate_text()`'s `max_new_tokens` (a real bug this session's refactor fixed: `narrative.py` had been passing the wrong param name). **Live-verified**: a real tool-calling round trip runs end to end against a real IBM Cloud account — but the current default model (`mistral-small-3-1-24b-instruct-2503`, chosen to dodge `llama-3-3-70b-instruct`'s free-tier `429`s) doesn't reliably invoke tools; a real `repoguard fix demo-repo` run produced zero mutation-score improvement because the critic replied in plain text instead of calling `read_source_file`. This is a model-choice quality gap, not a call-shape bug — motivating Vertex AI (Phase 16 Stage B) as a more reliable provider. `scripts/verify.py phase16`/`multicloud` check the write guard and fail-loud path, not model quality.
+- **`ai_providers/orchestrator.py`'s tool dispatch only caught `SourceEditRejected`, so any other tool failure (a hallucinated file path, bad args) crashed the whole fix loop.** Found live: a real Vertex AI (Gemini) run's critic stage called `read_source_file` on a path that didn't exist, raising a raw `FileNotFoundError` that propagated out of `run_fix_loop()` entirely. Fixed by catching any `Exception` around each tool call (not just the write guard) and reporting it back to the model as a normal `{"error": ...}` tool result, same as a `SourceEditRejected` — a bad tool call is something the model should see and adapt to, not a reason to crash the host process.
+- **A second, more serious false-100%-mutation-score bug, structurally identical to the `phase3` one above but with a different root cause.** The same Vertex/Gemini run then reported mutation score **100% (79/79 killed)** — before this was investigated, that would have been reported as a real success. It wasn't: `_run_mutant()` scores a mutant "killed" whenever pytest exits non-zero on the *mutated* copy, but nothing ever checked that pytest exits **zero on the unmutated baseline first** — Gemini's newly written `tests/test_shop_api.py` had 10 real failures against the original, unmutated `shop/` code, so every single mutant run inherited those failures and scored "killed" trivially, regardless of whether the mutation itself was ever exercised. `run_mutation()` now runs the unmutated suite once before mutating anything and raises `RuntimeError` (same pattern as `measure_coverage()`'s missing-`coverage.json` check) if it doesn't pass — confirmed this correctly refuses on the broken suite instead of reporting 100%, and confirmed the documented `AGENTS.md §7` baseline (20.25%, 16/79) is unaffected on a clean suite. This is exactly the kind of result an AI-written test suite can produce (tests that don't even pass against real code) and now can't silently masquerade as a perfect score.
 
 ## 10. Token budget
 - Reply briefly: tables and lists, no restating tool output.

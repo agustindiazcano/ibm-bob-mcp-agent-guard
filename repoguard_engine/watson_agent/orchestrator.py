@@ -73,9 +73,22 @@ def _run_chat_stage(model, system_prompt: str, user_prompt: str, repo_path: str)
                 args = {}
             args["repo_path"] = repo_path
             try:
-                result = TOOL_REGISTRY[name](**args)
-            except SourceEditRejected as exc:
-                result = {"error": str(exc)}
+                tool_fn = TOOL_REGISTRY[name]
+            except KeyError:
+                result = {"error": f"no such tool: {name}"}
+            else:
+                try:
+                    result = tool_fn(**args)
+                except SourceEditRejected as exc:
+                    result = {"error": str(exc)}
+                except Exception as exc:
+                    # Any other tool-execution failure (bad args, a path
+                    # the model hallucinated that doesn't exist, ...) is a
+                    # recoverable error the model should see and adapt to,
+                    # not a reason to crash the whole fix loop. Only
+                    # SourceEditRejected is a hard stop by design (the
+                    # write guard); everything else gets reported back.
+                    result = {"error": f"{type(exc).__name__}: {exc}"}
             messages.append(
                 {
                     "role": "tool",

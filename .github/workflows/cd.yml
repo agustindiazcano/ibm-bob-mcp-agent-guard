@@ -11,14 +11,14 @@ on:
 
 # Requires repo-level configuration a human sets up once — see docs/DEPLOY.md.
 # Variables (Settings → Secrets and variables → Actions → Variables):
-#   GCP_PROJECT_ID   e.g. testmind-ai-hackathon
-#   GCP_REGION       e.g. us-central1
-#   GAR_REPOSITORY   Artifact Registry repo name, e.g. repoguard
-#   CLOUD_RUN_SERVICE  Cloud Run service name, e.g. repoguard
-# Secrets:
-#   GCP_SA_KEY       JSON key for a service account with
-#                    roles/artifactregistry.writer + roles/run.admin +
-#                    roles/iam.serviceAccountUser
+#   GCP_PROJECT_ID       e.g. testmind-ai-hackathon
+#   GCP_REGION           e.g. us-central1
+#   GAR_REPOSITORY       Artifact Registry repo name, e.g. repoguard
+#   CLOUD_RUN_SERVICE    Cloud Run service name, e.g. repoguard
+#   WIF_PROVIDER         Workload Identity provider resource name (no secret)
+#   DEPLOYER_SA          Service account email this workflow impersonates
+# No secrets: auth is Workload Identity Federation (OIDC), no long-lived
+# JSON key ever stored in GitHub.
 
 jobs:
   deploy:
@@ -26,13 +26,15 @@ jobs:
     needs: []
     permissions:
       contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
       - id: auth
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOYER_SA }}
 
       - uses: google-github-actions/setup-gcloud@v2
 
