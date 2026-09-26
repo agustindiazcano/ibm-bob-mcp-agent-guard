@@ -36,6 +36,10 @@ ai = ["ibm-watsonx-ai>=1.7"]
 # Application Default Credentials (gcloud auth application-default login)
 # or GOOGLE_APPLICATION_CREDENTIALS -- see docs/VERTEX_SETUP.md.
 vertex = ["google-genai>=2.25"]
+# Measurement history (repoguard_engine/store/, docs/DATA_PLATFORM.md). Only
+# used when REPOGUARD_DATABASE_URL is set; SQLAlchemy Core gives one code path
+# for SQLite (local, tests) and Postgres (psycopg 3 driver, Cloud SQL).
+db = ["sqlalchemy>=2.0", "psycopg[binary]>=3.1"]
 
 [project.scripts]
 repoguard = "repoguard_engine.cli:main"

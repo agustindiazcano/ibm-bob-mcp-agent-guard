@@ -15,12 +15,17 @@ Phase checks implemented:
     phase16     — fix-loop write guard + fail-loud credential check
     multicloud  — ai_providers.get_provider() dispatch, defaults, and unknown-provider handling
     phase14fix  — POST /api/fix: token gate, single-run lock, NDJSON events, sandbox leaves the target repo untouched
+    phase17-store     — store round trip on SQLite (+ REPOGUARD_TEST_DATABASE_URL); inert without the env var
+    phase17-pipeline  — persisting can't change a measurement; fail-fast before measuring; web never writes
+                        (both need the [db] extra; see scripts/verify_phase17.py)
 """
 
 from __future__ import annotations
 
 import subprocess
 import sys
+
+from verify_phase17 import check_phase17_pipeline, check_phase17_store  # scripts/ is sys.path[0]
 
 
 def run(cmd: list[str], timeout: int = 30) -> tuple[int, str]:
@@ -359,6 +364,8 @@ CHECKS: dict[str, callable] = {
     "phase16": check_phase16,
     "multicloud": check_multicloud,
     "phase14fix": check_phase14fix,
+    "phase17-store": check_phase17_store,
+    "phase17-pipeline": check_phase17_pipeline,
 }
 
 

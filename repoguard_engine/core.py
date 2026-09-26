@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import copy
 import dataclasses
+import hashlib
 import json
 import os
 import shutil
@@ -349,6 +350,29 @@ _TRANSFORMER_CLASSES = [
     _ReturnNoneTransformer,
     _RemoveRaiseTransformer,
 ]
+
+# Identifies the mutation instrument, so stored scores are only compared
+# between runs that used the same operators (docs/DATA_PLATFORM.md §2). The
+# maps cover the operator swaps; the revision covers logic the maps can't
+# see (constant/return/raise rules) -- bump it whenever the operators change.
+MUTATION_ENGINE_REVISION = 1
+
+
+def _operators_hash() -> str:
+    def swaps(mapping: dict[type, type]) -> list[str]:
+        return sorted(f"{a.__name__}->{b.__name__}" for a, b in mapping.items())
+
+    canonical = {
+        "revision": MUTATION_ENGINE_REVISION,
+        "transformers": [cls.__name__ for cls in _TRANSFORMER_CLASSES],
+        "comparison": swaps(_CMP_MAP),
+        "arithmetic": swaps(_BIN_MAP),
+        "boolean": swaps(_BOOL_MAP),
+    }
+    return hashlib.sha256(json.dumps(canonical, sort_keys=True).encode()).hexdigest()
+
+
+MUTATION_OPERATORS_HASH = _operators_hash()
 
 
 def _generate_mutants(source_path: Path, file_rel: str, index_offset: int) -> list[_Mutant]:

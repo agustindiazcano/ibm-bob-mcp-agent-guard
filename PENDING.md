@@ -400,7 +400,8 @@ check) in its new §13. Build from §13, not the original design sketch.
 | Block | Deliverable | Status |
 |---|---|---|
 | — | `docs/DATA_PLATFORM.md` — schema, views, charts, Terraform layout, build order | 🟢 corrected + step-by-step plan added, §13 |
-| A1 | `repoguard_engine/store/` (SQLAlchemy Core, SQLite + Postgres), `[db]` extra | 🔴 |
+| A1 | `repoguard_engine/store/` (SQLAlchemy Core, SQLite + Postgres), `[db]` extra; `run_pipeline(persist, project)` stores when `REPOGUARD_DATABASE_URL` is set, opening the DB *before* measuring; `--project` on `analyze`/`gate`; web `/api/analyze`, the fix loop and `tool_generate_summary` never store | 🟢 Session 23 — `verify.py phase17-store` PASS on SQLite **and** a real PostgreSQL 16 (exact equality: stored coverage `65.11627906976744`); `phase17-pipeline` PASS (outputs byte-identical stored vs. not, stored 16/79 = 20.25, bad URL fails in 0.37 s); CI job `store` with a `postgres:16` service |
+| A1-gap | **`endpoint_results` has no consumer.** The table is written (decision #6: keep the skeleton) but no route or chart reads it. Build one — e.g. `GET /api/projects/{slug}/endpoints` (A3.1) or an "untested endpoints over time" chart (C1) — or drop the table | 🔴 must be done |
 | A2 | Engine: per-mutant outcomes + stable fingerprints, `junit.xml` per-test outcomes; `pipeline.py` persists | 🔴 |
 | A3 | API read routes + `POST /api/runs` ingest (project token) + `repoguard analyze --push` | 🔴 |
 | B1 | `infra/terraform/` — Artifact Registry, deployer service account + roles, WIF pool/provider; `infra-ci.yml` (fmt/validate) | 🟢 codifies the Phase 13 identity that already existed for real; `terraform plan` against the live project confirmed "No changes" after `terraform import` — see `infra/terraform/README.md`. Cloud SQL/Secret Manager stay out until Block A (the DB store itself) is built — no infra ahead of the app that would use it |
@@ -408,10 +409,16 @@ check) in its new §13. Build from §13, not the original design sketch.
 | C1 | web-next charts: trend, survival by operator, fix effect, survivors, flaky | 🔴 |
 | C2 | Risk heatmap (below the cut line) | 🔴 |
 | D | User accounts (below the cut line — optional) | 🔴 |
-| — | `verify.py phase17` (round-trip, determinism, after-reference delta 69.62 pp, Postgres service container) | 🔴 |
+| — | `verify.py phase17` (round-trip, determinism, after-reference delta 69.62 pp, Postgres service container) | 🟡 `phase17-store` + `phase17-pipeline` built (A1) with the Postgres service container in CI; the aggregate `phase17` (per-mutant determinism, after-reference delta) waits for A2 |
 
 `terraform apply` and a GCP billing account are human steps — same
 situation as `docs/DEPLOY.md`.
+
+Decisions #2–#6 were resolved by the user in Session 23 (raise on write
+failure; slug precedence as recommended; `passed_gate` only in views; no web
+writes until per-project tokens; keep `endpoint_results` as a skeleton) —
+see `docs/DATA_PLATFORM.md` §13. #1 (JUnit test id) is still open, needed
+at A2.2. Next step: **A2.1** (per-mutant records + stable fingerprints).
 
 ---
 

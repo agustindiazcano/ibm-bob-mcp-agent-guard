@@ -53,7 +53,12 @@ def api_analyze(
     from ..pipeline import run_pipeline
 
     try:
-        result = run_pipeline(repo_path, include_mutation=mutation, gate_threshold=gate_threshold)
+        # Never stored from here, even with REPOGUARD_DATABASE_URL set: this is a
+        # public, unauthenticated route taking an arbitrary server-side path.
+        # Web writes wait for per-project tokens (DATA_PLATFORM.md §13, decision #5).
+        result = run_pipeline(
+            repo_path, include_mutation=mutation, gate_threshold=gate_threshold, persist=False,
+        )
     except NotADirectoryError as exc:
         # Otherwise this reaches subprocess.run(cwd=...) uncaught and the
         # frontend sees a bare 500 for what is really a bad request.

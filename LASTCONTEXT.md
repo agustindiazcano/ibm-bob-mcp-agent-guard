@@ -594,6 +594,55 @@ until a real run from the Vercel demo shows a measured mutation score above
 
 ---
 
+### Session 23 — Phase 17 Block A1: the database store (`claude/gifted-archimedes-3yrywk`)
+
+User asked to start the database. Built §13's A1.1 + A1.2 from
+`docs/DATA_PLATFORM.md` after the user resolved decisions #2–#6 (asked
+up front, since §13 says they aren't picked silently).
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | `[db]` extra (`sqlalchemy>=2.0`, `psycopg[binary]>=3.1`) | `pyproject.toml` |
+| 2 | `store/` package: `__init__` (URL/env, `StoreError`, no SQLAlchemy import), `context` (slug precedence, git sha/branch/dirty, versions), `record` (plain-dict run record + validator), `models` (7 tables), `views` (`v_runs`, `v_run_trend`), `db` (`get_engine`, `init_db`), `repository` (`save_record`) | `repoguard_engine/store/` (new) |
+| 3 | `MUTATION_OPERATORS_HASH` + `MUTATION_ENGINE_REVISION` moved forward from A2.1 (a constant; no measurement changes) | `core.py` |
+| 4 | `run_pipeline(persist=None, project=None)`: opens the store before measuring, saves after, sets `PipelineResult.run_id` | `pipeline.py` |
+| 5 | `--project` on `analyze`/`gate`; clean `✗ Storage failed` exit 1; `--json-output` stdout is now pure JSON ("Analysing…" + run id to stderr) | `cli.py` |
+| 6 | `persist=False` in web `/api/analyze` (decision #5), both fix-loop measurements, MCP `tool_generate_summary`; `tool_full_pipeline` returns `run_id` when stored | `web/server.py`, `watson_agent/orchestrator.py`, `mcp_server.py` |
+| 7 | `verify.py phase17-store` / `phase17-pipeline` (in `scripts/verify_phase17.py`, since `verify.py` is near 600 lines); CI job `store` with a `postgres:16` service | `scripts/`, `.github/workflows/ci.yml` |
+| 8 | Docs | `docs/DATA_PLATFORM.md` (status, deviations table, resolved decisions), `PENDING.md`, `README.md`, `RUNBOOK.md`, `docs/ARCHITECTURE.md`, `CLAUDE.md`+`AGENTS.md` |
+
+Decisions (user): #2 raise on a failed write after measuring; #3 slug
+`--project` > `REPOGUARD_PROJECT` > `GITHUB_REPOSITORY` > dir name; #4
+`passed_gate` only in views; #5 no web writes until per-project tokens
+(A3.2); #6 keep `endpoint_results` as a skeleton — **it has no consumer
+(route or chart) yet, and one must be built** (`PENDING.md` Phase 17, row
+A1-gap). #1 (JUnit test id) is still open, needed at A2.2.
+
+Bugs found and fixed while verifying:
+- Rich parses `[db]` as markup: the missing-extra error printed
+  `pip install -e "."`. The same bug already hit `repoguard fix` without
+  `[ai]` (`pip install 'repoguard'`) and `--summarize` errors. All CLI error
+  prints now `escape()` the text; `phase17-pipeline` asserts the real hint.
+  Found only by running a real venv without `[db]`, not the `sys.modules`
+  simulation — the simulation goes through `run_pipeline`, not Rich.
+- SQLite's Python driver mishandles SAVEPOINT under SQLAlchemy, so the
+  project get-or-create uses `INSERT … ON CONFLICT DO NOTHING` (both backends).
+
+Verified (clean venv, `pip install -e ".[db]"`, local PostgreSQL 16.13):
+`phase17-store` PASS on SQLite and Postgres (exact float equality — an
+injected `round(percent, 1)` makes it FAIL with `65.1 != 65.11627906976744`);
+`phase17-pipeline` PASS; `phase0/3/7/15/16/multicloud/phase14fix` PASS;
+demo-repo 5 passed; `repoguard analyze ./demo-repo --mutation` 65.1%,
+20.25% (16/79), 4 gap files.
+
+Branch note: `CLAUDE.md §11` says `feat/17-data-store`; this session's
+harness assigned `claude/gifted-archimedes-3yrywk`, so the work is there.
+Noticed, not fixed (out of scope): README's tech-stack rows for CD / Cloud
+Run still say "not deployed", and "Infrastructure as code (planned)" says
+`infra/terraform/` doesn't exist — both stale since Sessions 19–20.
+
+---
+
 ## Current repo state
 
 - **Session 22 (Autofix) is on `claude/eager-gauss-ifyd8w` (commit `1e97a8c` plus this doc follow-up), pushed but not merged and with no PR opened yet.** `main` doesn't have Autofix until that merges and `cd.yml` redeploys.
@@ -601,7 +650,7 @@ until a real run from the Vercel demo shows a measured mutation score above
 - All Session 21 fixes merged: PR #49 (CORS), #51 (ImportError detail), #52 (`Dockerfile` `[vertex]` extra + docs — recovered after #49/#51 both dropped commits pushed post-merge, see Session 21 item 5), #53 (frontend live-deploy docs). `ok: true` summary path verified live for real
 - Phase 0/3/7/8/9/13/15/16: 🟢. Phase 11: 🟢 (see Session 20) — first genuinely successful live AI fix-loop run, 89.87%/71/79. Phase 17 B1/B2: 🟢 (Terraform-managed WIF)
 - Phase 14: 🟡 — PR #43 closed gaps 4/5/6, PR #44 added visual design, PR #48 added a clear backend-unreachable error + real production screenshots, PR #50 shows the backend's error `detail`. `NEXT_PUBLIC_REPOGUARD_API_BASE` now points at the real Cloud Run URL (Vercel, type "Config" not "Secret" since it's not sensitive), verified end-to-end including CORS (Session 21-front). Remaining: gap 3 (Autofix) is built (Session 22), and its live run is waiting on `REPOGUARD_FIX_TOKEN` being attached on Cloud Run (`docs/DEPLOY.md` §5). The summary's `ok=true` path is verified live (Session 21). Analyze *with* mutation against Cloud Run's request timeout is unchecked
-- Phase 17 A1-A3 (DB store) and C1-C2 (charts) still 🔴, but `docs/DATA_PLATFORM.md` §13 now has a corrected, step-by-step Block A build plan (Session 20) — build from that, not the doc's original sketch
+- Phase 17 A1 (store + pipeline hook) 🟢 on `claude/gifted-archimedes-3yrywk` (Session 23), not merged yet. A2 (per-mutant/per-test data), A3 (routes, ingest, `--push`), C (charts) still 🔴; `endpoint_results` needs a consumer (A1-gap). Build from `docs/DATA_PLATFORM.md` §13
 - Phase 18 (swarm) still 🔴, `docs/MULTI_AGENT_SWARM.md` §14 now has a corrected S0–S8 plan + 15 risks (Session 20) — Phase 11's merge (PR #45) clears its §14 R1 blocker; demo-repo's 71/79 ceiling still means H2 can only tie there (§14 R2)
 - IBM Bob is retired. `.bob/` stays on disk as inert legacy (`.bob/DEPRECATED.md`); `repoguard_engine/watson_agent/` is the live replacement.
 - GCP Cloud Run: identity is Terraform-managed and a real deploy has succeeded. `GCP_PROJECT_ID`'s raw value in GitHub Settings still has the leading space (cosmetic — `cd.yml` auto-trims it every run; clean it up next time you're in Settings)
@@ -614,9 +663,9 @@ until a real run from the Vercel demo shows a measured mutation score above
 ## How to resume
 
 1. Read `PENDING.md` for the task list (Phase 11 is now 🟢 — read its "3 attempts, 3 bugs" narrative before touching `watson_agent/` again, it explains real, non-obvious API constraints).
-2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16`, `multicloud`, `phase14fix` to confirm baseline holds. (`ci.yml` doesn't run `phase14fix` yet; it's credential-free, so it could.)
+2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16`, `multicloud`, `phase14fix` (and, with `[db]`, `phase17-store`, `phase17-pipeline`) to confirm baseline holds. (`ci.yml` doesn't run `phase14fix` yet; it's credential-free, so it could.)
 3. Frontend punch-list items 1-4 are all done and verified live (Session 21). Autofix (`POST /api/fix`, Phase 14 gap 3) is built (Session 22); what's left is the human token step plus a first live run. When pushing follow-up commits to a branch mid-session, confirm with `git log origin/main..<branch>` that nothing merged out from under you first (Session 21 item 5 — happened 3 times).
-4. Build Phase 17/18 from `docs/DATA_PLATFORM.md` §13 / `docs/MULTI_AGENT_SWARM.md` §14, not their original sketches.
+4. Build Phase 17/18 from `docs/DATA_PLATFORM.md` §13 / `docs/MULTI_AGENT_SWARM.md` §14, not their original sketches. Phase 17 next step: **A2.1** (per-mutant records + fingerprints; also Phase 18's S2). Needs `pip install -e ".[db]"`; for a Postgres check set `REPOGUARD_TEST_DATABASE_URL` (a local `postgresql` 16 service works: `service postgresql start`). Decision #1 (JUnit test id) must be asked before A2.2. Don't forget the A1-gap: `endpoint_results` has no reader yet. `core.py` is at 586 lines — A2.1 adds `MutantRecord`/fingerprints, so split the mutation engine into its own module first (`CLAUDE.md §6`, ~600-line limit).
 5. Autofix: attach `REPOGUARD_FIX_TOKEN` (`docs/DEPLOY.md` §5), then run it from the Vercel demo against `demo-repo` and record the measured before/after. If you change a Vercel env var, Redeploy the **newest `main`** deployment, never an older row (`docs/ARCHITECTURE-front.md`, Session 21-front item 5).
 6. If tightening `repoguard-deployer`'s IAM roles, or moving the new `aiplatform.user` grant into Terraform: read `infra/terraform/README.md`'s "Known gap" section first — real permissions change against a live project, own PR.
 7. The repo-rename decision is open and low-urgency — decide whenever, it's cosmetic.

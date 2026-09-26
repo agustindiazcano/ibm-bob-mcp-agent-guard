@@ -39,7 +39,7 @@ IBM Bob Hackaton Ranking (Bob IDE ussage):
 - [Project structure](#project-structure)
 - [CI/CD](#cicd)
 - [Deploy to Google Cloud](#deploy-to-google-cloud)
-- [Database (planned)](#database-planned)
+- [Database (in progress)](#database-in-progress)
 - [Infrastructure as code (planned)](#infrastructure-as-code-planned)
 - [IBM Bob Usage](#ibm-bob-usage)
 - [AI-Assisted Development](#ai-assisted-development)
@@ -272,8 +272,8 @@ Status key: ✅ implemented and running in this repo · ⚠️ implemented but n
 | CD | GitHub Actions: `cd.yml` | Build → Artifact Registry → Cloud Run | ⚠️ fails at the Google auth step on every push to `main` until the one-time GCP setup is done ([`docs/DEPLOY.md`](docs/DEPLOY.md)) |
 | Cloud (backend) | Google Cloud Run, Artifact Registry | Hosting the API + dashboard | ⚠️ not deployed yet (human GCP setup pending) |
 | Cloud (frontend) | Vercel | Hosting `web-next/` | ✅ deployed: https://ibm-bob-mcp-agent-guard.vercel.app/, calling the Cloud Run backend (`NEXT_PUBLIC_REPOGUARD_API_BASE`) |
-| Database | PostgreSQL 16 on Cloud SQL; SQLite locally | Run history per commit | 🗺️ Phase 17 ([design](docs/DATA_PLATFORM.md#4-database-design)) |
-| Data access | SQLAlchemy 2 (Core), psycopg 3 | One code path for SQLite and Postgres | 🗺️ Phase 17 |
+| Database | PostgreSQL 16 (Cloud SQL planned); SQLite locally | Run history per commit | 🟡 store built and verified on SQLite + Postgres 16 (Phase 17 A1, `verify.py phase17-store`); Cloud SQL not provisioned ([design](docs/DATA_PLATFORM.md#4-database-design)) |
+| Data access | SQLAlchemy 2 (Core), psycopg 3 (`[db]` extra) | One code path for SQLite and Postgres | ✅ `repoguard_engine/store/` |
 | Infrastructure as code | Terraform (google, random providers), GCS remote state | Provisioning GCP | 🗺️ Phase 17 ([design](docs/DATA_PLATFORM.md#8-infrastructure-as-code-terraform)) |
 | Secrets | Google Secret Manager | Database password | 🗺️ Phase 17 |
 | CD authentication | Workload Identity Federation (GitHub OIDC) | Replacing the JSON service-account key | 🗺️ Phase 17 |
@@ -302,6 +302,7 @@ ibm-bob-mcp-agent-guard/
 │   ├── narrative.py                AI prose summary of an already-measured dashboard (never a metric source)
 │   ├── ai_providers/               ChatProvider abstraction: base.py, watsonx.py, vertex.py
 │   ├── watson_agent/               AI fix loop: guarded tools, prompts, orchestrator
+│   ├── store/                      Run history (optional [db] extra): run record, SQLAlchemy tables + views, writer
 │   ├── pipeline.py                 Ordered pipeline: measure → gaps → risk → gate
 │   ├── cli.py                      CLI entry point: analyze | fix | gate | serve | mcp
 │   ├── mcp_server.py               9 MCP tools via FastMCP (stdio transport)
@@ -329,7 +330,7 @@ ibm-bob-mcp-agent-guard/
 │   ├── ARCHITECTURE.md             Layer diagram, data flow, MCP tool list
 │   ├── DEMO.md                     3-minute demo script
 │   ├── DEPLOY.md                   One-time GCP setup for the Cloud Run deploy
-│   ├── DATA_PLATFORM.md            Design (Phase 17): run history on Postgres, Terraform, data-driven charts
+│   ├── DATA_PLATFORM.md            Phase 17: run history on Postgres (store built, A1), Terraform, data-driven charts
 │   ├── WATSONX_SETUP.md            Getting IBM Cloud credentials for narrative.py / watson_agent
 │   ├── AI_ASSISTED_DEVELOPMENT_FRAMEWORK.md  How this project itself is built (Claude, file-based contract)
 │   ├── make_results_chart.py       Generates the before/after results chart
@@ -382,23 +383,36 @@ instance stops. The next section plans a fix for that.
 The Next.js dashboard (`web-next/`) is a separate Vercel project — see
 [`docs/ARCHITECTURE-front.md`](docs/ARCHITECTURE-front.md).
 
-## Database (planned)
+## Database (in progress)
 
-> Design only (`PENDING.md` Phase 17). Nothing below exists in code yet.
+> `PENDING.md` Phase 17. **Built (A1):** the store and the pipeline hook,
+> verified on SQLite and a real PostgreSQL 16. **Not yet:** per-mutant and
+> per-test history (A2), read routes and CI ingest (A3), charts (C), Cloud SQL (B).
 
-Today every run writes `repoguard-out/*.json` and keeps no history. The
-plan stores every measured run per commit in **PostgreSQL** (Cloud SQL on
-GCP, SQLite locally and in tests, one SQLAlchemy code path), so trends,
-persistent surviving mutants, flaky tests and the fix loop's before/after
-effect become queryable. Rules carried over from `AGENTS.md §4`:
+Every run used to write `repoguard-out/*.json` and forget. With
+`REPOGUARD_DATABASE_URL` set, `repoguard analyze` / `gate` and the MCP
+`tool_full_pipeline` also store the run (coverage, per-file missing lines,
+mutation score, risk ranking, endpoints, git commit/branch/dirty state) in
+**SQLite or PostgreSQL** through one SQLAlchemy code path:
 
-- The engine measures; the database only stores. Deltas and trends are SQL views, never stored numbers.
-- Persistence is off unless `REPOGUARD_DATABASE_URL` is set, and cannot change a measured number.
-- Runs are compared only when they used the same mutation operator set.
+```bash
+pip install -e ".[db]"
+export REPOGUARD_DATABASE_URL=sqlite:///repoguard-history.db   # or postgresql://user:pass@host/db
+repoguard analyze ./demo-repo --mutation --project demo
+# ... Stored run 3f2c…  (project demo)
+```
 
-Before the schema can hold anything useful, the engine must stop discarding
-two things: the outcome of each mutant (today only the positional IDs of
-surviving mutants are kept) and the outcome of each test.
+Rules carried over from `AGENTS.md §4`:
+
+- The engine measures; the database only stores. Values are stored exactly as measured (`Double`, no rounding: coverage is stored as `65.11627906976744`, not `65.1`); `passed_gate`, deltas and trends are SQL views, never stored numbers.
+- Persistence is off unless `REPOGUARD_DATABASE_URL` is set, and cannot change a measured number (`verify.py phase17-pipeline` checks that the `repoguard-out/*.json` files are byte-identical with and without it). A bad URL or a missing `[db]` extra fails before measuring, not after.
+- The public web API never writes: `/api/analyze` doesn't store runs, even with the variable set, until per-project tokens exist (A3).
+- Every run stores the mutation operator set's hash; trends are drawn only between runs that used the same operators.
+
+Before the history is useful for flaky tests and persistent surviving
+mutants, the engine must stop discarding two things (block A2): the outcome
+of each mutant (today only positional IDs of the survivors are kept) and the
+outcome of each test.
 
 | Topic | Link |
 |---|---|
@@ -564,10 +578,10 @@ GCP infrastructure: it ships as a plain Vercel project, with its own
 path-filtered CI (`.github/workflows/frontend-ci.yml`). See `PENDING.md`
 Phase 14 and `docs/ARCHITECTURE-front.md`.
 
-**Also planned: run history, Postgres and Terraform for the backend.** See
-[Database](#database-planned) and
+**In progress: run history, Postgres and Terraform for the backend.** See
+[Database](#database-in-progress) (the store is built, Phase 17 A1) and
 [Infrastructure as code](#infrastructure-as-code-planned) above
-(`PENDING.md` Phase 17). Design only.
+(`PENDING.md` Phase 17).
 
 **Also planned: a real multi-agent swarm.** Parallel Test Writer / Verifier /
 Critic lanes, one per file, bringing back IBM Bob's swarm design on

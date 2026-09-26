@@ -62,3 +62,41 @@ jobs:
 
       - name: Verify phase3 (mutation engine determinism)
         run: python scripts/verify.py phase3
+
+  store:
+    runs-on: ubuntu-latest
+    # Phase 17 measurement-history store. The jobs above install plain `.`
+    # (no [db] extra) -- that's the proof the store stays inert without it.
+    # This one installs [db] and checks the same round trip twice, on SQLite
+    # and on a real Postgres 16: a SQLite PASS alone isn't proof Postgres works.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: repoguard
+          POSTGRES_PASSWORD: repoguard
+          POSTGRES_DB: repoguard_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U repoguard"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      REPOGUARD_TEST_DATABASE_URL: postgresql+psycopg://repoguard:repoguard@localhost:5432/repoguard_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install repoguard with the [db] extra
+        run: pip install -e ".[db]"
+
+      - name: Verify phase17-store (SQLite + Postgres round trip)
+        run: python scripts/verify.py phase17-store
+
+      - name: Verify phase17-pipeline (persisting can't change a measurement)
+        run: python scripts/verify.py phase17-pipeline

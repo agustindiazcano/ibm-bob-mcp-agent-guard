@@ -141,7 +141,12 @@ def run_fix_loop(
 
     repo = str(Path(repo_path).resolve())
     emit("baseline_start", {})
-    baseline = run_pipeline(repo, include_mutation=True, include_endpoints=True, gate_threshold=gate_threshold)
+    # persist=False: a before/after pair only means something stored as a linked
+    # fix session (DATA_PLATFORM.md §13 A3.4), not as two unrelated runs -- and
+    # web Autofix runs on a temp copy whose directory name isn't a project.
+    baseline = run_pipeline(
+        repo, include_mutation=True, include_endpoints=True, gate_threshold=gate_threshold, persist=False,
+    )
     result = FixResult(repo_path=repo, baseline=baseline.dashboard)
     files = _priority_files(baseline.risk)
     emit("baseline_done", {"dashboard": baseline.dashboard, "files": files})
@@ -165,7 +170,9 @@ def run_fix_loop(
         result.critic_notes.append(f"{file_rel}: {notes}")
 
     emit("remeasure_start", {})
-    after = run_pipeline(repo, include_mutation=True, include_endpoints=True, gate_threshold=gate_threshold)
+    after = run_pipeline(
+        repo, include_mutation=True, include_endpoints=True, gate_threshold=gate_threshold, persist=False,
+    )
     result.after = after.dashboard
     emit("remeasure_done", {"dashboard": after.dashboard, "passed_gate": after.passed_gate})
 

@@ -29,7 +29,7 @@ TestMind AI measures whether a Python repo's tests actually catch bugs, then use
 > modes used to do.
 
 ## 3. Tech stack
-Python ≥ 3.10 · pytest · coverage.py · stdlib `ast` (own mutation engine, no mutmut/Stryker) · MCP Python SDK (FastMCP, stdio) · FastAPI + uvicorn + SSE (web UI) · httpx TestClient (API checks) · Playwright Chromium + Pillow + axe-playwright-python (visual) · matplotlib (docs chart only) · IBM watsonx.ai (`ibm-watsonx-ai`, optional `[ai]` extra) as the default AI provider behind `ai_providers/get_provider()`, used for two things: `narrative.py`'s advisory prose summary (no metric ever comes from it) and `watson_agent/`'s tool-calling fix loop (writes tests through a guarded tool, never a source file).
+Python ≥ 3.10 · pytest · coverage.py · stdlib `ast` (own mutation engine, no mutmut/Stryker) · MCP Python SDK (FastMCP, stdio) · FastAPI + uvicorn + SSE (web UI) · httpx TestClient (API checks) · Playwright Chromium + Pillow + axe-playwright-python (visual) · matplotlib (docs chart only) · SQLAlchemy 2 Core + psycopg 3 (optional `[db]` extra: run history on SQLite/Postgres, `store/`, only when `REPOGUARD_DATABASE_URL` is set) · IBM watsonx.ai (`ibm-watsonx-ai`, optional `[ai]` extra) as the default AI provider behind `ai_providers/get_provider()`, used for two things: `narrative.py`'s advisory prose summary (no metric ever comes from it) and `watson_agent/`'s tool-calling fix loop (writes tests through a guarded tool, never a source file).
 
 > **Multicloud AI: both providers built and live-verified.**
 > `repoguard_engine/ai_providers/` implements the `ChatProvider` abstraction
@@ -79,7 +79,14 @@ ibm-bob-mcp-agent-guard/
 │   │   ├── tools.py          TOOL_SCHEMAS/TOOL_REGISTRY — write_test_file hard-guards writes to tests/ only
 │   │   ├── prompts.py        TEST_WRITER_PROMPT, CRITIC_PROMPT — carried forward from .bob/rules,skills
 │   │   └── orchestrator.py   run_fix_loop — measure → write → critique → re-measure → evidence
-│   ├── pipeline.py       run_pipeline — ordered steps; returns PipelineResult
+│   ├── store/            Run history, optional [db] extra (Phase 17, docs/DATA_PLATFORM.md) — no SQLAlchemy import in __init__
+│   │   ├── context.py        collect_context — project slug, git sha/branch/dirty, versions, operators hash
+│   │   ├── record.py         build_run_record / validate_run_record — the plain-dict run record
+│   │   ├── models.py         SQLAlchemy Core tables (Double, JSON/JSONB, UUID strings)
+│   │   ├── views.py          portable view DDL — derived values (passed_gate, trends) live only here
+│   │   ├── db.py             get_engine, init_db (tables + views; the fail-fast connectivity check)
+│   │   └── repository.py     save_record — one transaction per run, stores, never computes
+│   ├── pipeline.py       run_pipeline — ordered steps; returns PipelineResult; persists when asked
 │   ├── cli.py            repoguard analyze | fix | gate | serve | mcp  (click entry point)
 │   ├── mcp_server.py     9 FastMCP tools (thin wrappers, stdio transport)
 │   └── web/
@@ -147,6 +154,8 @@ Expected results on a clean copy of `demo-repo/` (delete `demo-repo/repoguard-ou
 | Determinism | run `run_mutation` twice | identical results (20.25%, 16/79 both times) |
 | Visual | run `visual_check` twice with no changes | 0.0% diff |
 | After (reference) | copy `docs/expected-after-tests/*.py` into `demo-repo/tests/`, re-measure | 71 passed, coverage 100%, mutation 89.87% (71/79) |
+| Store (needs `[db]`) | `python3 scripts/verify.py phase17-store` (+ `REPOGUARD_TEST_DATABASE_URL` for Postgres) | PASS: exact round trip, stored coverage `65.11627906976744` (not rounded) |
+| Persistence is inert | `python3 scripts/verify.py phase17-pipeline` | PASS: `repoguard-out/*.json` byte-identical stored vs. not stored; stored mutation 16/79 = 20.25 |
 
 Never leave the reference tests inside `demo-repo/tests/` after verifying.
 
@@ -173,6 +182,7 @@ When declining an action, say what to do instead.
 - **`ai_providers/orchestrator.py`'s tool dispatch only caught `SourceEditRejected`, so any other tool failure (a hallucinated file path, bad args) crashed the whole fix loop.** Found live: a real Vertex AI (Gemini) run's critic stage called `read_source_file` on a path that didn't exist, raising a raw `FileNotFoundError` that propagated out of `run_fix_loop()` entirely. Fixed by catching any `Exception` around each tool call (not just the write guard) and reporting it back to the model as a normal `{"error": ...}` tool result, same as a `SourceEditRejected` — a bad tool call is something the model should see and adapt to, not a reason to crash the host process.
 - **A second, more serious false-100%-mutation-score bug, structurally identical to the `phase3` one above but with a different root cause.** The same Vertex/Gemini run then reported mutation score **100% (79/79 killed)** — before this was investigated, that would have been reported as a real success. It wasn't: `_run_mutant()` scores a mutant "killed" whenever pytest exits non-zero on the *mutated* copy, but nothing ever checked that pytest exits **zero on the unmutated baseline first** — Gemini's newly written `tests/test_shop_api.py` had 10 real failures against the original, unmutated `shop/` code, so every single mutant run inherited those failures and scored "killed" trivially, regardless of whether the mutation itself was ever exercised. `run_mutation()` now runs the unmutated suite once before mutating anything and raises `RuntimeError` (same pattern as `measure_coverage()`'s missing-`coverage.json` check) if it doesn't pass — confirmed this correctly refuses on the broken suite instead of reporting 100%, and confirmed the documented `AGENTS.md §7` baseline (20.25%, 16/79) is unaffected on a clean suite. This is exactly the kind of result an AI-written test suite can produce (tests that don't even pass against real code) and now can't silently masquerade as a perfect score.
 - **Autofix (`POST /api/fix`) returns `503`:** expected when `REPOGUARD_FIX_TOKEN` isn't set on the server. The endpoint is off by default because each run spends AI-provider quota for minutes on a public service; on Cloud Run the token is a Secret Manager secret attached by hand (`docs/DEPLOY.md` §5). A wrong or missing bearer token gets `401`, and a second concurrent run gets `409`.
+- **Run history (`store/`) is opt-in and never public.** `run_pipeline(persist=None)` stores iff `REPOGUARD_DATABASE_URL` is set — only trusted callers rely on that default (`analyze`, `gate`, MCP `tool_full_pipeline`). `web/server.py`'s `/api/analyze`, the fix loop and `tool_generate_summary` pass `persist=False` explicitly: a public route taking an arbitrary server path must not write rows until per-project tokens exist (`docs/DATA_PLATFORM.md` §13, decision #5). The store is opened *before* measuring (bad URL / missing `[db]` → `StoreError` in milliseconds), and a failed write after measuring raises too (decision #2). Never store a rounded number: columns are `Double`, and `phase17-store` compares with exact equality.
 - **Autofix never touches the target repo.** `web/fix_job.py` copies the repo to a temp dir, runs `run_fix_loop(..., publish=False)` there, returns the written tests in the final `done` event and deletes the copy. Don't "simplify" it into running in place: on Cloud Run that would rewrite the bundled `demo-repo/tests/` that every documented baseline number depends on. `verify.py phase14fix` asserts `demo-repo/` stays byte-identical.
 
 ## 10. Token budget
