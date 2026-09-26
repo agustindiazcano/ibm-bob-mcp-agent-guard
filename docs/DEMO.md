@@ -36,24 +36,22 @@ repoguard serve
 
 Enter `./demo-repo` in the path field and click Analyse or Stream.
 
-## Step 4 — Start the MCP server and let Bob fix it
+## Step 4 — Run the watsonx.ai fix loop
+
+Requires `WATSONX_APIKEY`/`WATSONX_PROJECT_ID` (`pip install -e ".[ai]"`, see `docs/WATSONX_SETUP.md`):
 
 ```bash
-repoguard mcp
+repoguard fix ./demo-repo
 ```
 
-In Bob, switch to the **RepoGuard Orchestrator** mode and say:
+`repoguard_engine/watson_agent/orchestrator.py` will:
+1. Measure a real baseline (coverage, mutation, gaps, risk)
+2. Prioritize up to 3 files by risk score
+3. Ask watsonx.ai to write a test per file, through the guarded `write_test_file` tool (`tests/` only)
+4. Ask watsonx.ai to critique each new test
+5. Re-measure for real and write the run report to `demo-repo/watson-evidence/`
 
-```
-Analyse demo-repo and bring coverage above 80%.
-```
-
-Bob will:
-1. Call `tool_find_gaps` to see what is missing
-2. Activate the `pytest-conventions` skill
-3. Write targeted tests for each gap (Fixer sub-agent)
-4. Re-run `tool_full_pipeline` to confirm the gate passes
-5. Write the evidence report to `bob-evidence/`
+Without credentials, this fails immediately with a clear error instead of silently doing nothing.
 
 ## Step 5 — Verify the gate now passes
 

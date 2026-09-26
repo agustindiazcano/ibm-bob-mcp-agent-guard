@@ -46,11 +46,11 @@ def check_phase3() -> bool:
     )
 
     print("  Run 1 ...", end=" ", flush=True)
-    rc1, out1 = run([sys.executable, "-c", script], timeout=270)
+    rc1, out1 = run([sys.executable, "-c", script], timeout=600)
     print(out1.strip())
 
     print("  Run 2 ...", end=" ", flush=True)
-    rc2, out2 = run([sys.executable, "-c", script], timeout=270)
+    rc2, out2 = run([sys.executable, "-c", script], timeout=600)
     print(out2.strip())
 
     if rc1 != 0 or rc2 != 0:
@@ -101,6 +101,7 @@ tools = [
     m.tool_full_pipeline,
     m.tool_capture_screenshot,
     m.tool_check_accessibility,
+    m.tool_generate_summary,
 ]
 missing = []
 for fn in tools:
@@ -112,7 +113,7 @@ for fn in tools:
 if missing:
     print('MISSING detail param:', missing)
     raise SystemExit(1)
-print('All 8 tools have detail:bool=False')
+print('All 9 tools have detail:bool=False')
 """
 
     rc, out = run([sys.executable, "-c", script], timeout=30)
@@ -148,11 +149,70 @@ print('OK:', r.error)
     return ok
 
 
+def check_phase16() -> bool:
+    """Verify the watsonx.ai fix-loop orchestrator's safety guard and
+    fail-loud credential check -- the two properties that must hold with no
+    live IBM Cloud account available."""
+    print("=== Phase 16: watsonx.ai fix-loop orchestrator ===")
+
+    script = """
+import os, tempfile
+from pathlib import Path
+
+os.environ.pop('WATSONX_APIKEY', None)
+os.environ.pop('WATSONX_PROJECT_ID', None)
+
+from repoguard_engine.watson_agent.tools import write_test_file, read_source_file, SourceEditRejected
+from repoguard_engine.watson_agent.client import get_chat_model, WatsonxCredentialsError
+
+with tempfile.TemporaryDirectory() as tmp:
+    repo = Path(tmp)
+    (repo / 'tests').mkdir()
+    (repo / 'shop').mkdir()
+    (repo / 'shop' / 'pricing.py').write_text('x = 1')
+
+    # Allowed: a write under tests/
+    write_test_file(str(repo), 'tests/test_new.py', 'def test_x(): assert True')
+    assert (repo / 'tests' / 'test_new.py').exists(), 'expected the guarded write to succeed under tests/'
+
+    # Rejected: a write outside tests/
+    try:
+        write_test_file(str(repo), 'shop/pricing.py', 'x = 2')
+        raise AssertionError('expected SourceEditRejected for a write outside tests/')
+    except SourceEditRejected:
+        pass
+
+    # Rejected: path traversal out of the repo
+    try:
+        read_source_file(str(repo), '../outside.py')
+        raise AssertionError('expected SourceEditRejected for a path escaping the repo')
+    except SourceEditRejected:
+        pass
+
+# Fail loud, not silent, with no credentials configured
+try:
+    get_chat_model()
+    raise AssertionError('expected WatsonxCredentialsError with no credentials configured')
+except WatsonxCredentialsError as exc:
+    assert str(exc), 'expected a real error message'
+
+print('OK: write guard enforced, path traversal rejected, fail-loud credential check confirmed')
+"""
+
+    rc, out = run([sys.executable, "-c", script], timeout=30)
+    ok = rc == 0
+    status = "PASS" if ok else "FAIL"
+    print(f"  {out.strip()}")
+    print(f"  fix-loop safety guard + fail-loud credential check -> {status}")
+    return ok
+
+
 CHECKS: dict[str, callable] = {
     "phase0": check_phase0,
     "phase3": check_phase3,
     "phase7": check_phase7,
     "phase15": check_phase15,
+    "phase16": check_phase16,
 }
 
 

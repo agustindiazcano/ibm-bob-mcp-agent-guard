@@ -275,21 +275,93 @@ analyze/gate/serve`, and the MCP tools (called through the real `fastmcp`
 
 ---
 
+### Session 11 — watsonx.ai narrative summary (PR #18)
+
+A separate session (not documented here at the time) added
+`repoguard_engine/narrative.py`: an optional, advisory-only watsonx.ai prose
+summary of an already-measured dashboard, wired as a 9th MCP tool
+(`tool_generate_summary`) and a `repoguard analyze --summarize` CLI flag.
+Merged to `main` as PR #18 before the session below started; found already
+in place when that session pulled `main` mid-task. See `PENDING.md` Phase 15
+and `docs/WATSONX_SETUP.md`.
+
+### Session 12 — IBM Bob retired; watsonx.ai fix-loop orchestrator built
+
+The user reported IBM Bob is no longer available and asked for a full
+replacement using watsonx.ai directly (not Bob, not Watson Assistant). This
+session discovered PR #18 (Session 11, above) mid-task via `git pull` and
+reconciled scope with it before proceeding — kept `narrative.py` as-is,
+built the fix loop as a separate, larger piece.
+
+Built `repoguard_engine/watson_agent/` (`client.py`, `tools.py`, `prompts.py`,
+`orchestrator.py`) as the functional replacement for `.bob/custom_modes.yaml`'s
+Orchestrator/Test Writer/Critic/Gate/Publisher modes: one in-process loop
+(not parallel subagents) that measures a real baseline, asks watsonx.ai to
+write a test per prioritized file through a hard-guarded `write_test_file`
+tool (rejects any path outside `tests/` — a tool property, not a prompt
+rule), asks watsonx.ai to critique it, re-measures for real, and optionally
+publishes a PR. Wired `repoguard fix` to it for real (previously a stub that
+only printed instructions to use Bob).
+
+Per explicit user instruction, `.bob/` was **not deleted** — it's left on
+disk as inert legacy (a single new `.bob/DEPRECATED.md` marks it retired;
+`BOBREADME.md` and `bob-evidence/` are the same kind of leftover). Nothing
+new depends on any of it.
+
+Caught one real bug via testing before it shipped: `run_fix_loop()`
+originally called `get_chat_model()` (the credentials check) *after* the
+multi-minute mutation baseline instead of before — a missing-credentials
+failure would have taken several minutes instead of being instant. Fixed by
+reordering; confirmed instant failure afterward with `PYTHONIOENCODING=utf-8
+repoguard fix demo-repo` and no `WATSONX_*` env vars set (a separate,
+pre-existing Windows console Unicode-rendering issue in `gate`/`fix`'s
+`✗` output is unrelated to this change and out of scope).
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Built `repoguard_engine/watson_agent/` (client, tools, prompts, orchestrator) | new package |
+| 2 | Wired `repoguard fix --publish --threshold` to the real orchestrator | `repoguard_engine/cli.py` |
+| 3 | Added `.bob/DEPRECATED.md`; left the rest of `.bob/` untouched | `.bob/DEPRECATED.md` |
+| 4 | Added `scripts/verify.py phase16` (write-guard + fail-loud credential check); extended `phase7`'s tool list to 9 | `scripts/verify.py` |
+| 5 | Rewrote Bob-specific sections in `README.md`, `RUNBOOK.md`, `docs/ARCHITECTURE.md`, `docs/DEMO.md` for watsonx.ai; dropped the dated hackathon footer | those files |
+| 6 | Renamed `docs/AI_ASSITED_DEVELOPMENT_FRAMEWORK_BOB.md` → `docs/AI_ASSISTED_DEVELOPMENT_FRAMEWORK.md`, rewritten for Claude-as-builder | `docs/` |
+| 7 | Updated `AGENTS.md` **and `CLAUDE.md` identically** (§2, §3, §5, §6, §8, §9, §11) — a sync rule discovered mid-task that wasn't being followed before this change | both files |
+| 8 | Re-scoped `PENDING.md` Phases 7/8/9/11/14, flagged the repo-rename decision as a separate open item | `PENDING.md` |
+| 9 | Carried forward stray pre-existing WIP from before this session (verify.py's phase3 timeout 270→600s) that had never been committed | `scripts/verify.py` |
+
+### Key decisions (Session 12)
+
+- `.bob/` is legacy, not deleted — the user's explicit call, overriding the
+  original plan (which would have removed it). `bob-evidence/`, `BOBREADME.md`
+  get the same treatment: left alone, documented as inert.
+- The MCP server (`mcp_server.py`, `repoguard mcp`) was never actually
+  Bob-specific — it's a generic protocol server. Kept as-is, just no longer
+  described as "the Bob integration" in docs.
+- `watson_agent/` calls `pipeline`/`core`/`api_check` directly (in-process),
+  not through an MCP round-trip — same layering `web/server.py` already uses.
+- Live tool-calling with real watsonx.ai credentials is unverified — no IBM
+  Cloud account available here, same gap already flagged for `narrative.py`
+  in Session 11/PR #18. `ModelInference.chat()`'s signature and response
+  shape were confirmed against the real installed SDK (`inspect.signature`/
+  `help()`), same rigor as that PR used.
+
+---
+
 ## Current repo state
 
-- Branch: `docs/session-9-10-context`, on top of `main` (PRs #7–#14 all merged)
-- Phase 0: 🟢 · Phase 3: 🟢 · Phase 7: 🟢 · Phase 8: 🟢 · Phase 13: 🟢 (all Claude-side work complete and now verified from a clean, PATH-independent environment)
-- Dependency pins fixed (`fastapi`, `starlette`, `axe-playwright-python` added); `core.py`/`scripts/verify.py` no longer depend on ambient PATH for subprocess calls
-- Remaining 🔴 critical-path items: `repoguard fix` (Phase 9), Phase 11 full end-to-end swarm run — both need Bob *executing*, not authoring, and Bob's environment should now actually work for them
-- Bob: execution/demo only until credits for code authoring are restored
+- Branch: `feat/15-watsonx-migration`, based on `main` (PRs #7–#18 all merged, including #18's narrative summary found mid-task)
+- Phase 0: 🟢 · Phase 3: 🟢 · Phase 7: 🟢 · Phase 8: 🟢 (redefined for watsonx.ai) · Phase 9: 🟢 (`repoguard fix` now real) · Phase 13: 🟢 · Phase 15: 🟢 (narrative, PR #18)
+- IBM Bob is retired. `.bob/` stays on disk as inert legacy (`.bob/DEPRECATED.md`); `repoguard_engine/watson_agent/` is the live replacement.
+- Remaining 🔴 critical-path item: Phase 11, a real end-to-end `repoguard fix` run against `demo-repo` with actual IBM Cloud credentials — same human-gated situation as GCP deploy, not something any agent here can supply
 - GCP deploy still pending a human running `docs/DEPLOY.md`'s one-time setup
+- Open, not yet decided: whether to rename the GitHub repo/local directory (`ibm-bob-mcp-agent-guard`) now that Bob is gone — flagged in `PENDING.md`, deliberately not done here
 
 ---
 
 ## How to resume
 
 1. Read `PENDING.md` for the task list.
-2. Run `python scripts/verify.py phase0`, `phase3`, `phase7` to confirm baseline holds — all three should now pass regardless of ambient PATH (except `phase0`'s intentional PATH check).
-3. Bob should retry Phase 11 Sub-Task 1 now that the environment issues (fastapi/starlette pin, PATH-independent subprocess calls) are fixed — pull `main` and reinstall from a clean venv first, don't patch the old mismatched environment in place.
-4. `repoguard fix` (Phase 9) is still unverified (Bob Shell invocation syntax, AGENTS.md §9) — needs a live Bob run to test regardless of credits.
-5. GCP setup (`docs/DEPLOY.md`) is the one remaining human-only task — do it whenever, it doesn't block anything else.
+2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16` to confirm baseline holds.
+3. Get real IBM Cloud credentials (`docs/WATSONX_SETUP.md`) and run `repoguard fix demo-repo` for the first live Phase 11 run — that's the one thing no agent session here can do without a human providing an account.
+4. GCP setup (`docs/DEPLOY.md`) is the other remaining human-only task — do it whenever, it doesn't block anything else.
+5. The repo-rename decision (`ibm-bob-mcp-agent-guard`) is open and low-urgency — decide whenever, it's cosmetic.
