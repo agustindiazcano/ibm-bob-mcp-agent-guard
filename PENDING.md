@@ -358,7 +358,7 @@ Persistence is off unless `REPOGUARD_DATABASE_URL` is set.
 | A1 | `repoguard_engine/store/` (SQLAlchemy Core, SQLite + Postgres), `[db]` extra | 🔴 |
 | A2 | Engine: per-mutant outcomes + stable fingerprints, `junit.xml` per-test outcomes; `pipeline.py` persists | 🔴 |
 | A3 | API read routes + `POST /api/runs` ingest (project token) + `repoguard analyze --push` | 🔴 |
-| B1 | `infra/terraform/` — Artifact Registry, Cloud SQL, Secret Manager, Cloud Run, WIF; `infra-ci.yml` (fmt/validate) | 🔴 (WIF pool/provider itself already exist for real, done early as part of Phase 13 — Terraform would just codify what's already there, not create it fresh) |
+| B1 | `infra/terraform/` — Artifact Registry, deployer service account + roles, WIF pool/provider; `infra-ci.yml` (fmt/validate) | 🟢 codifies the Phase 13 identity that already existed for real; `terraform plan` against the live project confirmed "No changes" after `terraform import` — see `infra/terraform/README.md`. Cloud SQL/Secret Manager stay out until Block A (the DB store itself) is built — no infra ahead of the app that would use it |
 | B2 | `cd.yml` on Workload Identity Federation (drop `GCP_SA_KEY`) | 🟢 done early, as part of Phase 13 — see `docs/DEPLOY.md` |
 | C1 | web-next charts: trend, survival by operator, fix effect, survivors, flaky | 🔴 |
 | C2 | Risk heatmap (below the cut line) | 🔴 |

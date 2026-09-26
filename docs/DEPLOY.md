@@ -12,7 +12,16 @@ Auth uses **Workload Identity Federation** (WIF), not a static JSON key —
 GitHub Actions exchanges its own OIDC token for short-lived Google
 credentials at run time, so no long-lived secret is ever stored in GitHub.
 This was set up for real, reusing the same GCP project already configured
-for Vertex AI (`docs/VERTEX_SETUP.md`):
+for Vertex AI (`docs/VERTEX_SETUP.md`).
+
+**Now managed as code**: `infra/terraform/` (Phase 17 Block B1) codifies
+this identity — see `infra/terraform/README.md` for the one-time
+`terraform import` that adopted these already-existing resources, confirmed
+with a real `terraform plan` showing "No changes" against the live project.
+Changing the identity going forward (new repo, rotated SA, additional
+roles) should go through Terraform, not another one-off `gcloud` call. The
+commands below are kept as the historical record of what was actually run
+to create these resources the first time:
 
 ```bash
 PROJECT_ID=project-e0ad10c9-0b2f-4dc0-ac6
