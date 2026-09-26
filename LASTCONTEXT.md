@@ -347,10 +347,52 @@ pre-existing Windows console Unicode-rendering issue in `gate`/`fix`'s
 
 ---
 
+### Session 13 — Phase 14 frontend: Next.js dashboard scaffold (`feat/14-nextjs-dashboard`)
+
+Built `web-next/` per `docs/ARCHITECTURE-front.md`'s plan and `PENDING-front.md`'s
+backend-gap tracker — both kept as satellite files, separate from
+`PENDING.md`/`docs/ARCHITECTURE.md`, on purpose, so this frontend branch
+doesn't fight a backend branch over the same Phase 14 section (folds back at
+merge time, per that file's own header note).
+
+Scaffolded a Next.js App Router app with a single route: `RepoForm` +
+`ActionBar` drive `/api/analyze` and `/api/stream`; `StreamLog` renders the
+SSE events verbatim; `StatCards`/`GapsList`/`RiskTable` render
+`AnalyzeResponse` fields verbatim, no client-side reinterpretation of any
+number (`AGENTS.md §4`). Autofix ships disabled (backend gap 3: no
+`POST /api/fix` yet); `SummaryPanel` is not built (backend gaps 4/6: needs a
+summary endpoint and AI-provider labeling, which in turn wait on Phase 16's
+`ai_providers.get_provider()` — that folder correctly still doesn't exist).
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Scaffolded `web-next/` (Next.js App Router, TypeScript, ESLint) | `web-next/` (new) |
+| 2 | Built `RepoForm`, `ActionBar` (Analyze + Gate wired to `/api/analyze`, Autofix disabled), `StreamLog`, `StatCards`, `GapsList`, `RiskTable` | `web-next/app/components/` |
+| 3 | Wired `app/lib/api.ts` (`fetchAnalyze`, `streamUrl`) against `NEXT_PUBLIC_REPOGUARD_API_BASE` | `web-next/app/lib/` |
+| 4 | Verified `npm run lint`, `npm run build`, and a real `next dev` serve (200, title "TestMind AI") | — |
+| 5 | Committed and pushed (`27c5a52`) to `feat/14-nextjs-dashboard` | — |
+| 6 | Updated `PENDING-front.md` deliverable statuses to match what's actually built; added this session entry | `PENDING-front.md`, `LASTCONTEXT.md` |
+
+### Key decisions (Session 13)
+
+- **Gate reuses `/api/analyze`**, not a separate endpoint — matches gap 2's
+  note that `/api/analyze?gate_threshold=N` already returns `passed_gate`,
+  so no new backend work was needed for that button.
+- **Didn't work around the missing CORS middleware from this branch** — it's
+  explicitly gap 1, owned by the backend, already being fixed on a separate
+  branch (`fix/web-cors`). End-to-end fetch against a real running
+  `repoguard serve` is therefore unverified here on purpose, not an oversight.
+- **`PENDING-front.md` / `docs/ARCHITECTURE-front.md` stay satellite files**,
+  not folded into `PENDING.md` / `docs/ARCHITECTURE.md` — that fold is
+  explicitly a merge-time step per the file's own header, not a per-session one.
+
+---
+
 ## Current repo state
 
-- Branch: `feat/15-watsonx-migration`, based on `main` (PRs #7–#18 all merged, including #18's narrative summary found mid-task)
+- Branch: `feat/14-nextjs-dashboard`, based on `main` (PRs #7–#18 all merged, including #18's narrative summary found mid-task)
 - Phase 0: 🟢 · Phase 3: 🟢 · Phase 7: 🟢 · Phase 8: 🟢 (redefined for watsonx.ai) · Phase 9: 🟢 (`repoguard fix` now real) · Phase 13: 🟢 · Phase 15: 🟢 (narrative, PR #18)
+- Phase 14: 🟡 in progress on `feat/14-nextjs-dashboard` — scaffold, `RepoForm`/`ActionBar`/`StreamLog`/`StatCards`/`GapsList`/`RiskTable` done (see `PENDING-front.md`); `SummaryPanel` and Autofix blocked on backend gaps (CORS on `fix/web-cors`, `POST /api/fix`, summary endpoint + Phase 16's `ai_providers.get_provider()`)
 - IBM Bob is retired. `.bob/` stays on disk as inert legacy (`.bob/DEPRECATED.md`); `repoguard_engine/watson_agent/` is the live replacement.
 - Remaining 🔴 critical-path item: Phase 11, a real end-to-end `repoguard fix` run against `demo-repo` with actual IBM Cloud credentials — same human-gated situation as GCP deploy, not something any agent here can supply
 - GCP deploy still pending a human running `docs/DEPLOY.md`'s one-time setup
@@ -360,8 +402,9 @@ pre-existing Windows console Unicode-rendering issue in `gate`/`fix`'s
 
 ## How to resume
 
-1. Read `PENDING.md` for the task list.
+1. Read `PENDING.md` for the task list, and `PENDING-front.md` if resuming Phase 14 frontend work specifically.
 2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16` to confirm baseline holds.
-3. Get real IBM Cloud credentials (`docs/WATSONX_SETUP.md`) and run `repoguard fix demo-repo` for the first live Phase 11 run — that's the one thing no agent session here can do without a human providing an account.
-4. GCP setup (`docs/DEPLOY.md`) is the other remaining human-only task — do it whenever, it doesn't block anything else.
-5. The repo-rename decision (`ibm-bob-mcp-agent-guard`) is open and low-urgency — decide whenever, it's cosmetic.
+3. For the frontend: merge or rebase on `fix/web-cors` before trying an end-to-end `web-next` ↔ `repoguard serve` fetch — CORS is the only thing blocking that verification.
+4. Get real IBM Cloud credentials (`docs/WATSONX_SETUP.md`) and run `repoguard fix demo-repo` for the first live Phase 11 run — that's the one thing no agent session here can do without a human providing an account.
+5. GCP setup (`docs/DEPLOY.md`) is the other remaining human-only task — do it whenever, it doesn't block anything else.
+6. The repo-rename decision (`ibm-bob-mcp-agent-guard`) is open and low-urgency — decide whenever, it's cosmetic.

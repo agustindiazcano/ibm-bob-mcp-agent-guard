@@ -35,10 +35,16 @@ and the SSE stream are pure measurement and don't change either way; gaps
 
 | Deliverable | Description | Status |
 |---|---|---|
-| Next.js app scaffold | New `web-next/`, calling the existing FastAPI backend, not replacing it | 🔴 |
-| `RepoForm` + `ActionBar` | Repo path input, mutation/endpoints/threshold options, Analyze + Gate buttons (Autofix disabled — gap 3) | 🔴 |
-| `StreamLog` | Live progress from `/api/stream`, rendering only the event types it actually emits (coverage/gaps/risk) | 🔴 |
-| `StatCards` + `GapsList` + `RiskTable` | Coverage, mutation score, gaps, risk ranking — sourced verbatim from `AnalyzeResponse`, no new numbers invented | 🔴 |
+| Next.js app scaffold | New `web-next/`, calling the existing FastAPI backend, not replacing it | 🟢 |
+| `RepoForm` + `ActionBar` | Repo path input, mutation/endpoints/threshold options, Analyze + Gate buttons (Autofix disabled — gap 3) | 🟢 |
+| `StreamLog` | Live progress from `/api/stream`, rendering only the event types it actually emits (coverage/gaps/risk) | 🟢 |
+| `StatCards` + `GapsList` + `RiskTable` | Coverage, mutation score, gaps, risk ranking — sourced verbatim from `AnalyzeResponse`, no new numbers invented | 🟢 |
 | `SummaryPanel` | AI prose, labeled advisory + which provider generated it — blocked on backend gaps 4 and 6 | 🔴 |
 | Vercel deploy | Connect repo/subfolder to Vercel; no IaC, config lives in `vercel.json` / project settings; `NEXT_PUBLIC_REPOGUARD_API_BASE` env var per environment | 🔴 |
 | Docs | Fold this file and `docs/ARCHITECTURE-front.md` back into `PENDING.md`/`docs/ARCHITECTURE.md`, update `README.md`, once built | 🔴 |
+
+**Verified so far:** `npm run lint` and `npm run build` both pass; `next dev`
+was run directly and served the real page (200, title "TestMind AI"). Not
+yet verified: an end-to-end fetch against a real running `repoguard serve`
+backend — blocked on gap 1 (`CORSMiddleware`), which lives on a separate,
+not-yet-merged branch (`fix/web-cors`).
