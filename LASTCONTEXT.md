@@ -567,12 +567,37 @@ Only what Session 21 above doesn't already cover.
 
 ---
 
+### Session 22 — Phase 14 gap 3: Autofix, `POST /api/fix` (`claude/eager-gauss-ifyd8w`)
+
+The session started from a local branch 43 commits behind `origin/main`, so
+the first "what's next" answer was built on stale context: it still treated
+watsonx and IBM credentials as the blocker. The user caught it. Before
+answering "what's next", run `git fetch` and read `LASTCONTEXT.md` from
+`origin/main`.
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | `run_fix_loop` gets an optional `on_event(type, data)` progress callback (baseline, per-file writer/critic, re-measure). It only reports progress and changes nothing; the CLI path is unchanged | `watson_agent/orchestrator.py` |
+| 2 | Autofix over HTTP. Token gate: `REPOGUARD_FIX_TOKEN` unset → 503, missing/wrong bearer token → 401 (`hmac.compare_digest`). One run per process (409). The loop runs on a temp copy with `publish=False`; the copy is deleted afterwards and the written tests come back in the `done` event. Output streams as NDJSON from a worker thread, with a heartbeat every 15 s. The worker owns the lock, so a client disconnect still releases it | `web/fix_job.py` (new), `web/server.py` |
+| 3 | `verify.py phase14fix`, credential-free with a stubbed `run_fix_loop`: covers 503/401/400/409, event order, the returned test file, deletion of the sandbox, and that `demo-repo/` stays byte-identical | `scripts/verify.py` |
+| 4 | Frontend: Autofix button enabled; token entered in a password field and kept in React state only; `streamFix()` reads the NDJSON with `fetch` + `ReadableStream`, since `EventSource` can't POST or send headers; new `FixResultPanel` shows engine before → after, the tests written, and critic notes labeled advisory | `web-next/app/{page.tsx,lib/api.ts,lib/types.ts,components/*}` |
+| 5 | Checked in real Chromium against `repoguard serve` + `next dev`, with the stubbed fix loop but real engine measurements on the copy. Button disabled with no token; wrong token shows "Missing or invalid Autofix token."; progress streamed mid-run, survived a 20 s silent gap, result panel rendered; `demo-repo/tests` unchanged and no sandbox left behind | — |
+| 6 | Cloud Run `--timeout=1800` (default 300 s would cut a run off). Token setup documented as a human step: Secret Manager + `secretAccessor` for the runtime SA + `--update-secrets` | `.github/workflows/cd.yml`, `docs/DEPLOY.md` §5 |
+| 7 | Docs | `PENDING.md`, `docs/ARCHITECTURE-front.md` (NDJSON contract; also corrected stale gap 8 row → 🟢), `docs/ARCHITECTURE.md`, `README.md`, `CLAUDE.md`+`AGENTS.md` |
+
+Not verified here: a live Autofix run. This container has no Vertex
+credentials, and the Cloud Run token isn't attached yet. Gap 3 stays 🟡
+until a real run from the Vercel demo shows a measured mutation score above
+20.25%, and `/api/analyze` on the same service still reports 65.1% after it.
+
+---
+
 ## Current repo state
 
 - Branch: `main` — PR #37 (Phase 16 + 13 WIF), #38 (doc fixes), #39 (Phase 17 B1 Terraform), #40 (session log), #41 (cd.yml trim fix), #42 (cli graceful failure), #43 (frontend context docs), #44 (dashboard visual design), #45 (Phase 11 Gemini 3 + `run_tests` + `thought_signature` fixes), #46 (Phase 17/18 planning corrections), #47 (`/api/analyze` 400-vs-500 fix), #48 (frontend: clear backend-unreachable error + real screenshots) all merged
 - All Session 21 fixes merged: PR #49 (CORS), #51 (ImportError detail), #52 (`Dockerfile` `[vertex]` extra + docs — recovered after #49/#51 both dropped commits pushed post-merge, see Session 21 item 5), #53 (frontend live-deploy docs). `ok: true` summary path verified live for real
 - Phase 0/3/7/8/9/13/15/16: 🟢. Phase 11: 🟢 (see Session 20) — first genuinely successful live AI fix-loop run, 89.87%/71/79. Phase 17 B1/B2: 🟢 (Terraform-managed WIF)
-- Phase 14: 🟡 — PR #43 closed gaps 4/5/6, PR #44 added visual design, PR #48 added a clear backend-unreachable error + real production screenshots, PR #50 shows the backend's error `detail`. `NEXT_PUBLIC_REPOGUARD_API_BASE` now points at the real Cloud Run URL (Vercel, type "Config" not "Secret" since it's not sensitive), verified end-to-end including CORS (Session 21-front). Remaining: gap 3 (Autofix, `POST /api/fix` — unblocked, needs an auth/job design); the summary's real `ok=true` path needs the pending branch above merged and redeployed, then re-verified for real (IAM grant is already done); Analyze *with* mutation against Cloud Run's request timeout is unchecked
+- Phase 14: 🟡 — PR #43 closed gaps 4/5/6, PR #44 added visual design, PR #48 added a clear backend-unreachable error + real production screenshots, PR #50 shows the backend's error `detail`. `NEXT_PUBLIC_REPOGUARD_API_BASE` now points at the real Cloud Run URL (Vercel, type "Config" not "Secret" since it's not sensitive), verified end-to-end including CORS (Session 21-front). Remaining: gap 3 (Autofix) is built (Session 22), and its live run is waiting on `REPOGUARD_FIX_TOKEN` being attached on Cloud Run (`docs/DEPLOY.md` §5). The summary's `ok=true` path is verified live (Session 21). Analyze *with* mutation against Cloud Run's request timeout is unchecked
 - Phase 17 A1-A3 (DB store) and C1-C2 (charts) still 🔴, but `docs/DATA_PLATFORM.md` §13 now has a corrected, step-by-step Block A build plan (Session 20) — build from that, not the doc's original sketch
 - Phase 18 (swarm) still 🔴, `docs/MULTI_AGENT_SWARM.md` §14 now has a corrected S0–S8 plan + 15 risks (Session 20) — Phase 11's merge (PR #45) clears its §14 R1 blocker; demo-repo's 71/79 ceiling still means H2 can only tie there (§14 R2)
 - IBM Bob is retired. `.bob/` stays on disk as inert legacy (`.bob/DEPRECATED.md`); `repoguard_engine/watson_agent/` is the live replacement.
@@ -587,8 +612,8 @@ Only what Session 21 above doesn't already cover.
 
 1. Read `PENDING.md` for the task list (Phase 11 is now 🟢 — read its "3 attempts, 3 bugs" narrative before touching `watson_agent/` again, it explains real, non-obvious API constraints).
 2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16`, `multicloud` to confirm baseline holds.
-3. Frontend punch-list items 1-4 are all done and verified live (Session 21). Only Autofix (`POST /api/fix`, Phase 14 gap 3) remains open on that list. When pushing follow-up commits to a branch mid-session, confirm with `git log origin/main..<branch>` that nothing merged out from under you first (Session 21 item 5 — happened 3 times).
+3. Frontend punch-list items 1-4 are all done and verified live (Session 21). Autofix (`POST /api/fix`, Phase 14 gap 3) is built (Session 22); what's left is the human token step plus a first live run. When pushing follow-up commits to a branch mid-session, confirm with `git log origin/main..<branch>` that nothing merged out from under you first (Session 21 item 5 — happened 3 times).
 4. Build Phase 17/18 from `docs/DATA_PLATFORM.md` §13 / `docs/MULTI_AGENT_SWARM.md` §14, not their original sketches.
-5. Autofix (`POST /api/fix`, Phase 14 gap 3) is the last open frontend punch-list item. If you change a Vercel env var, Redeploy the **newest `main`** deployment, never an older row (`docs/ARCHITECTURE-front.md`, Session 21-front item 5).
+5. Autofix: attach `REPOGUARD_FIX_TOKEN` (`docs/DEPLOY.md` §5), then run it from the Vercel demo against `demo-repo` and record the measured before/after. If you change a Vercel env var, Redeploy the **newest `main`** deployment, never an older row (`docs/ARCHITECTURE-front.md`, Session 21-front item 5).
 6. If tightening `repoguard-deployer`'s IAM roles, or moving the new `aiplatform.user` grant into Terraform: read `infra/terraform/README.md`'s "Known gap" section first — real permissions change against a live project, own PR.
 7. The repo-rename decision is open and low-urgency — decide whenever, it's cosmetic.

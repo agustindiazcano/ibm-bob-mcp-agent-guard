@@ -17,7 +17,22 @@ function describe(event: StreamEvent): string {
       return `Gaps: ${(event.data.uncovered_files as string[] | undefined)?.length ?? 0} uncovered files`;
     case "risk":
       return `Risk: ${(event.data.top_files as unknown[] | undefined)?.length ?? 0} files ranked`;
+    case "baseline_start":
+      return "Measuring baseline (coverage, mutation, endpoints)…";
+    case "baseline_done":
+      return `Baseline measured — targeting ${(event.data.files as string[] | undefined)?.join(", ") || "no files"}`;
+    case "writer_start":
+      return `Writing tests for ${event.data.file}…`;
+    case "critic_start":
+      return `Critic reviewing tests for ${event.data.file}…`;
+    case "remeasure_start":
+      return "Re-measuring with the new tests…";
+    case "remeasure_done":
+      return `Re-measured — passed_gate: ${event.data.passed_gate}`;
     case "done":
+      if (Array.isArray(event.data.files)) {
+        return `Done — ${event.data.files.length} test file(s) written`;
+      }
       return `Done — passed_gate: ${event.data.passed_gate}`;
     case "error":
       return `Error: ${event.data.message}`;

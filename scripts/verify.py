@@ -14,6 +14,7 @@ Phase checks implemented:
     phase15     — narrative.py degrades gracefully with no watsonx credentials
     phase16     — fix-loop write guard + fail-loud credential check
     multicloud  — ai_providers.get_provider() dispatch, defaults, and unknown-provider handling
+    phase14fix  — POST /api/fix: token gate, single-run lock, NDJSON events, sandbox leaves the target repo untouched
 """
 
 from __future__ import annotations
@@ -262,6 +263,94 @@ print('OK: default-provider fail-loud, unknown-provider fail-loud, callers impor
     return ok
 
 
+def check_phase14fix() -> bool:
+    """Verify POST /api/fix without AI credentials: token gate (503/401),
+    single-run lock (409), NDJSON event order, the written tests coming back
+    in `done`, and that the target repo is left byte-identical and the
+    sandbox copy deleted. run_fix_loop is replaced by a stub -- this checks
+    the HTTP/sandbox layer, not a live AI run."""
+    print("=== Phase 14 gap 3: POST /api/fix (stubbed fix loop) ===")
+
+    script = """
+import hashlib, json, os
+from pathlib import Path
+from fastapi.testclient import TestClient
+import repoguard_engine.watson_agent as wa
+from repoguard_engine.watson_agent.orchestrator import FixResult
+from repoguard_engine.web import fix_job
+from repoguard_engine.web.server import app
+
+demo = Path('demo-repo').resolve()
+def tree_hash(root):
+    h = hashlib.sha256()
+    for p in sorted(root.rglob('*')):
+        if p.is_file() and '__pycache__' not in p.parts and 'repoguard-out' not in p.parts:
+            h.update(str(p.relative_to(root)).encode()); h.update(p.read_bytes())
+    return h.hexdigest()
+before = tree_hash(demo)
+
+seen = {}
+def stub(repo_path, *, gate_threshold, publish, provider, on_event):
+    assert publish is False, 'HTTP runs must never publish'
+    work = Path(repo_path)
+    assert work.resolve() != demo, 'fix loop must run on a copy, not the target repo'
+    seen['work'] = work
+    on_event('baseline_start', {})
+    on_event('baseline_done', {'dashboard': {'mutation': {'score': 20.25}}, 'files': ['shop/pricing.py']})
+    on_event('writer_start', {'file': 'shop/pricing.py'})
+    (work / 'tests' / 'test_stub_written.py').write_text('def test_x():\\n    assert True\\n')
+    on_event('critic_start', {'file': 'shop/pricing.py'})
+    on_event('remeasure_start', {})
+    on_event('remeasure_done', {'dashboard': {}, 'passed_gate': True})
+    ev = work / 'watson-evidence'; ev.mkdir(exist_ok=True); (ev / '01-fix-loop.md').write_text('# stub evidence')
+    return FixResult(repo_path=str(work), baseline={'b': 1}, after={'a': 1},
+                     files_attempted=['shop/pricing.py'], critic_notes=['shop/pricing.py: ok'],
+                     evidence_path=str(ev / '01-fix-loop.md'))
+wa.run_fix_loop = stub
+
+client = TestClient(app)
+body = {'repo_path': str(demo)}
+
+os.environ.pop('REPOGUARD_FIX_TOKEN', None)
+assert client.post('/api/fix', json=body).status_code == 503, 'expected 503 with no REPOGUARD_FIX_TOKEN'
+os.environ['REPOGUARD_FIX_TOKEN'] = 'right'
+assert client.post('/api/fix', json=body).status_code == 401, 'expected 401 with no token'
+assert client.post('/api/fix', json=body, headers={'Authorization': 'Bearer wrong'}).status_code == 401, 'expected 401 with a wrong token'
+auth = {'Authorization': 'Bearer right'}
+assert client.post('/api/fix', json={'repo_path': '/no/such/dir'}, headers=auth).status_code == 400, 'expected 400 for a bad repo_path'
+
+fix_job._run_lock.acquire()
+try:
+    assert client.post('/api/fix', json=body, headers=auth).status_code == 409, 'expected 409 while a run holds the lock'
+finally:
+    fix_job._run_lock.release()
+
+res = client.post('/api/fix', json=body, headers=auth)
+assert res.status_code == 200, res.text
+assert res.headers['content-type'].startswith('application/x-ndjson')
+events = [json.loads(line) for line in res.text.splitlines() if line.strip()]
+types = [e['type'] for e in events if e['type'] != 'heartbeat']
+expected = ['start', 'baseline_start', 'baseline_done', 'writer_start', 'critic_start', 'remeasure_start', 'remeasure_done', 'done']
+assert types == expected, f'event order {types}'
+done = events[-1]['data']
+assert [f['path'] for f in done['files']] == ['tests/test_stub_written.py'], done['files']
+assert done['files'][0]['status'] == 'added'
+assert done['evidence'] == '# stub evidence'
+assert not seen['work'].exists(), 'sandbox copy was not deleted'
+assert not fix_job._run_lock.locked(), 'run lock not released'
+assert tree_hash(demo) == before, 'demo-repo changed during an Autofix run'
+
+print(f'OK: 503/401/400/409 gates, {len(types)} events in order, 1 test file returned, sandbox deleted, demo-repo unchanged')
+"""
+
+    rc, out = run([sys.executable, "-c", script], timeout=60)
+    ok = rc == 0
+    status = "PASS" if ok else "FAIL"
+    print(f"  {out.strip()}")
+    print(f"  /api/fix gate + sandbox check -> {status}")
+    return ok
+
+
 CHECKS: dict[str, callable] = {
     "phase0": check_phase0,
     "phase3": check_phase3,
@@ -269,6 +358,7 @@ CHECKS: dict[str, callable] = {
     "phase15": check_phase15,
     "phase16": check_phase16,
     "multicloud": check_multicloud,
+    "phase14fix": check_phase14fix,
 }
 
 

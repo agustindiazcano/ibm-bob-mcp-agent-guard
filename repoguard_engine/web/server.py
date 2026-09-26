@@ -8,10 +8,11 @@ import os
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 app = FastAPI(title="RepoGuard Dashboard", version="0.1.0")
 
@@ -67,6 +68,29 @@ def api_summary(dashboard: dict) -> dict:
 
     result = generate_summary(dashboard)
     return {"ok": result.ok, "text": result.text, "error": result.error, "provider": result.provider}
+
+
+class FixRequest(BaseModel):
+    repo_path: str = "."
+    gate_threshold: float = 80.0
+    provider: str | None = None
+
+
+@app.post("/api/fix")
+def api_fix(body: FixRequest, authorization: str | None = Header(default=None)) -> StreamingResponse:
+    """Run the AI fix loop on a sandbox copy of repo_path, streaming NDJSON
+    progress events and a final `done` (or `error`) event. Token-gated, one
+    run at a time, never modifies repo_path -- see web/fix_job.py."""
+    from .fix_job import check_token, start_fix_stream
+
+    check_token(authorization)
+    if not Path(body.repo_path).is_dir():
+        raise HTTPException(status_code=400, detail=f"repo_path does not exist or is not a directory: {body.repo_path}")
+    return StreamingResponse(
+        start_fix_stream(body.repo_path, body.gate_threshold, body.provider),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.get("/api/stream")

@@ -62,13 +62,15 @@ RepoGuard is structured as four independent layers that communicate via well-def
 ### `repoguard_engine/watson_agent/`
 - `tools.py` — `TOOL_SCHEMAS`/`TOOL_REGISTRY`; `write_test_file` is the only write tool and hard-rejects any path outside `tests/`
 - `prompts.py` — system prompts for the writer/critic stages
-- `orchestrator.py` — `run_fix_loop(repo_path, ..., provider=None)`: measure → prioritize by risk → write → critique → re-measure → evidence report; calls `ai_providers.get_provider()`, provider-agnostic
+- `orchestrator.py` — `run_fix_loop(repo_path, ..., provider=None, on_event=None)`: measure → prioritize by risk → write → critique → re-measure → evidence report; calls `ai_providers.get_provider()`, provider-agnostic
 
 ### `repoguard_engine/web/server.py`
 - FastAPI application with:
   - `GET /` — serves `index.html`
   - `GET /api/analyze` — synchronous pipeline run, returns JSON
   - `GET /api/stream` — SSE stream of pipeline progress events
+  - `POST /api/summary` — advisory AI prose over an already-measured dashboard
+  - `POST /api/fix` — Autofix: token-gated (`REPOGUARD_FIX_TOKEN`), one run at a time, runs `run_fix_loop` on a temp copy (never publishes, target untouched) and streams NDJSON progress + engine-measured before/after — logic in `web/fix_job.py`
 
 ## Data Flow (analyze command)
 
@@ -118,7 +120,7 @@ FastAPI endpoints rather than replacing them:
 │  Next.js dashboard (Vercel)   │  HTTP  │  repoguard_engine/web/server  │
 │  stats, gaps, risk table,     │ ─────▶ │  (FastAPI)                    │
 │  AI summary, Analyze / Gate   │  + SSE │  /api/analyze · /api/stream   │
-│                               │        │  /api/summary                 │
+│  / Autofix                    │+ NDJSON│  /api/summary · /api/fix      │
 └───────────────────────────────┘        └───────────────────────────────┘
 ```
 

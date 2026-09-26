@@ -20,6 +20,7 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 from ..ai_providers import get_provider
 from ..pipeline import run_pipeline
@@ -108,6 +109,7 @@ def run_fix_loop(
     gate_threshold: float = 80.0,
     publish: bool = False,
     provider: str | None = None,
+    on_event: Callable[[str, dict], None] | None = None,
 ) -> FixResult:
     """
     Run the full AI fix loop against repo_path.
@@ -124,20 +126,29 @@ def run_fix_loop(
     provider: forwarded to ai_providers.get_provider() (None reads
     REPOGUARD_AI_PROVIDER, defaulting to "watsonx").
 
+    on_event: optional progress callback, called as on_event(type, data) at
+    each stage boundary (web/fix_job.py streams these to the browser). It
+    only reports what already happened; it never changes what the loop does.
+
     Raises AIProviderError immediately if the selected provider's
     credentials aren't set -- checked before the (multi-minute) mutation
     baseline runs, not after, so a missing-credentials failure is instant
     rather than waiting on a measurement that was going to be thrown away
     anyway.
     """
+    emit = on_event or (lambda _type, _data: None)
     model = get_provider(provider=provider)
 
     repo = str(Path(repo_path).resolve())
+    emit("baseline_start", {})
     baseline = run_pipeline(repo, include_mutation=True, include_endpoints=True, gate_threshold=gate_threshold)
     result = FixResult(repo_path=repo, baseline=baseline.dashboard)
+    files = _priority_files(baseline.risk)
+    emit("baseline_done", {"dashboard": baseline.dashboard, "files": files})
 
-    for file_rel in _priority_files(baseline.risk):
+    for file_rel in files:
         result.files_attempted.append(file_rel)
+        emit("writer_start", {"file": file_rel})
 
         writer_prompt = (
             f"File: {file_rel}\n"
@@ -148,12 +159,15 @@ def run_fix_loop(
         )
         _run_chat_stage(model, TEST_WRITER_PROMPT, writer_prompt, repo)
 
+        emit("critic_start", {"file": file_rel})
         critic_prompt = f"Review whatever test file(s) were just written for {file_rel}."
         notes = _run_chat_stage(model, CRITIC_PROMPT, critic_prompt, repo)
         result.critic_notes.append(f"{file_rel}: {notes}")
 
+    emit("remeasure_start", {})
     after = run_pipeline(repo, include_mutation=True, include_endpoints=True, gate_threshold=gate_threshold)
     result.after = after.dashboard
+    emit("remeasure_done", {"dashboard": after.dashboard, "passed_gate": after.passed_gate})
 
     if publish and after.passed_gate:
         _publish(repo)

@@ -1,4 +1,4 @@
-import type { AnalyzeResponse, RepoFormValues, SummaryResponse } from "./types";
+import type { AnalyzeResponse, RepoFormValues, StreamEvent, SummaryResponse } from "./types";
 
 function apiBase(): string {
   const base = process.env.NEXT_PUBLIC_REPOGUARD_API_BASE;
@@ -63,4 +63,41 @@ export async function fetchSummary(result: AnalyzeResponse): Promise<SummaryResp
 
 export function streamUrl(repoPath: string): string {
   return `${apiBase()}/api/stream?${new URLSearchParams({ repo_path: repoPath })}`;
+}
+
+// POST /api/fix streams NDJSON (one event per line) for several minutes, so
+// it's read incrementally here instead of awaited as one JSON body.
+// EventSource can't send a POST body or an Authorization header.
+export async function streamFix(
+  { repoPath, gateThreshold }: RepoFormValues,
+  token: string,
+  onEvent: (event: StreamEvent) => void,
+): Promise<void> {
+  const res = await request(`${apiBase()}/api/fix`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ repo_path: repoPath, gate_threshold: gateThreshold }),
+  });
+  if (!res.ok || !res.body) {
+    throw await failure(res, "autofix");
+  }
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffered = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) {
+      break;
+    }
+    buffered += value;
+    const lines = buffered.split("\n");
+    buffered = lines.pop() ?? "";
+    for (const line of lines) {
+      if (line.trim()) {
+        onEvent(JSON.parse(line) as StreamEvent);
+      }
+    }
+  }
+  if (buffered.trim()) {
+    onEvent(JSON.parse(buffered) as StreamEvent);
+  }
 }

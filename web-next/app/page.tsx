@@ -8,10 +8,11 @@ import { StatCards } from "./components/StatCards";
 import { GapsList } from "./components/GapsList";
 import { RiskTable } from "./components/RiskTable";
 import { SummaryPanel } from "./components/SummaryPanel";
+import { FixResultPanel } from "./components/FixResultPanel";
 import { Card } from "./components/Card";
 import styles from "./page.module.css";
-import { fetchAnalyze, fetchSummary, streamUrl } from "./lib/api";
-import type { AnalyzeResponse, RepoFormValues, StreamEvent, SummaryResponse } from "./lib/types";
+import { fetchAnalyze, fetchSummary, streamFix, streamUrl } from "./lib/api";
+import type { AnalyzeResponse, FixDone, RepoFormValues, StreamEvent, SummaryResponse } from "./lib/types";
 
 const DEFAULT_VALUES: RepoFormValues = {
   repoPath: "./demo-repo",
@@ -26,6 +27,9 @@ export default function Home() {
   const [result, setResult] = useState<AnalyzeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
+  // Held in memory only: never persisted, never sent anywhere but /api/fix.
+  const [token, setToken] = useState("");
+  const [fix, setFix] = useState<FixDone | null>(null);
   // The threshold the shown result was measured against, so editing the
   // input afterwards doesn't relabel an old PASS/FAIL.
   const [ranThreshold, setRanThreshold] = useState(DEFAULT_VALUES.gateThreshold);
@@ -58,6 +62,7 @@ export default function Home() {
     setEvents([]);
     setResult(null);
     setSummary(null);
+    setFix(null);
 
     const source = new EventSource(streamUrl(values.repoPath));
     source.onmessage = (msg) => {
@@ -81,6 +86,34 @@ export default function Home() {
     }
   }
 
+  async function runAutofix() {
+    ++runRef.current;
+    setBusy(true);
+    setError(null);
+    setEvents([]);
+    setResult(null);
+    setSummary(null);
+    setFix(null);
+
+    try {
+      await streamFix(values, token, (event) => {
+        if (event.type === "heartbeat") {
+          return;
+        }
+        setEvents((prev) => [...prev, event]);
+        if (event.type === "done") {
+          setFix(event.data as unknown as FixDone);
+        } else if (event.type === "error") {
+          setError(String(event.data.message));
+        }
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <main className={styles.main}>
       <header className={styles.header}>
@@ -88,11 +121,13 @@ export default function Home() {
         <p className={styles.subtitle}>Measures whether a Python repo&rsquo;s tests actually catch bugs.</p>
       </header>
       <Card title="Analyze a repository">
-        <RepoForm values={values} onChange={setValues} disabled={busy} />
+        <RepoForm values={values} onChange={setValues} token={token} onTokenChange={setToken} disabled={busy} />
         <ActionBar
           busy={busy}
           onAnalyze={() => runAnalyze(values.gateThreshold)}
           onGate={() => runAnalyze(values.gateThreshold)}
+          onAutofix={runAutofix}
+          canAutofix={token.trim() !== ""}
         />
       </Card>
       {error && (
@@ -101,7 +136,8 @@ export default function Home() {
         </p>
       )}
       <StreamLog events={events} />
-      {!result && !busy && !error && events.length === 0 && (
+      {fix && <FixResultPanel fix={fix} />}
+      {!result && !fix && !busy && !error && events.length === 0 && (
         <p className={styles.empty}>
           Enter a repo path on the backend&rsquo;s machine and press Analyze to measure it.
         </p>

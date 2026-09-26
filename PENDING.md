@@ -251,10 +251,10 @@ contract. (This section absorbed the former satellite `PENDING-front.md`.)
 |---|---|---|---|
 | 1 | `CORSMiddleware` — `REPOGUARD_CORS_ORIGINS` env var (default `localhost:3000`), `GET`+`POST`. Cloud Run sets it to `https://ibm-bob-mcp-agent-guard.vercel.app` via `cd.yml`'s `env_vars` (PR #49), so it survives every deploy | any browser call from the frontend | 🟢 |
 | 2 | Gate needs no new endpoint — `/api/analyze?gate_threshold=N` already returns `passed_gate` | — | 🟢 |
-| 3 | No `POST /api/fix` — the fix loop is CLI-only | Autofix button | 🔴 unblocked — Phase 11 (live fix-loop run) and Phase 16 (`ChatProvider`) are both done. Open design questions before building: auth and rate limiting (credentialed, long-running, possibly PR-opening), and a run that outlives one HTTP request (the fix loop takes minutes) |
+| 3 | `POST /api/fix` — Autofix over HTTP: body `{repo_path, gate_threshold, provider?}`, `Authorization: Bearer <REPOGUARD_FIX_TOKEN>`; streams NDJSON progress + a final `done` with engine-measured `before`/`after`, the test files written, critic notes (advisory) and `provider`. Runs on a temp copy of the repo (target never modified), never publishes, one run at a time (409); 503 when the token isn't configured (`web/fix_job.py`) | Autofix button | 🟡 built, `verify.py phase14fix` PASS, and checked in a browser against a stubbed fix loop. Still to do: attach the token on Cloud Run (`docs/DEPLOY.md` §5, a human step), then a live Vertex run from the Vercel demo |
 | 4 | `POST /api/summary` — body: `/api/analyze`'s dashboard; returns `{ok, text, error, provider}` (PR #27) | `SummaryPanel` | 🟢 |
 | 5 | `/api/stream` takes `gate_threshold` (default 80.0) instead of a hardcoded 80% (PR #27) | live-progress gate readout | 🟢 |
-| 6 | `provider` on `/api/summary` comes from the provider actually used (`"watsonx"` or `"vertex"`, via `narrative.py`/`get_provider()`), on both `ok` paths | future Autofix result view | 🟢 add it to gap 3's response when that endpoint exists |
+| 6 | `provider` on `/api/summary` comes from the provider actually used (`"watsonx"` or `"vertex"`, via `narrative.py`/`get_provider()`), on both `ok` paths | Autofix result view | 🟢 also on `/api/fix`'s `done` event, shown in `FixResultPanel` |
 | 7 | A nonexistent `repo_path` crashed `/api/analyze` with a raw 500 (`NotADirectoryError`) — now `core._require_repo_dir()` + 400 with `{"detail": "repo_path does not exist or is not a directory: …"}` (PR #47) | a readable error in the dashboard | 🟢 |
 | 8 | AI summary on the Cloud Run backend (the public demo) | `SummaryPanel` `ok=true` on the public demo | 🟢 fixed (PR #52) and verified live — real generated text, `provider: vertex`. Needed all three together: `REPOGUARD_AI_PROVIDER=vertex` + `VERTEX_PROJECT_ID` (`cd.yml`), the `[vertex]` extra in the image (`Dockerfile`), and `roles/aiplatform.user` for runtime SA `993240087609-compute@developer.gserviceaccount.com` (granted by hand; not yet in `infra/terraform/`) |
 
@@ -263,10 +263,11 @@ contract. (This section absorbed the former satellite `PENDING-front.md`.)
 | Deliverable | Description | Status |
 |---|---|---|
 | Next.js app scaffold | `web-next/`, calling the existing FastAPI backend, not replacing it | 🟢 |
-| `RepoForm` + `ActionBar` | Repo path input, mutation/endpoints/threshold options, Analyze + Gate buttons (Autofix disabled — gap 3) | 🟢 |
+| `RepoForm` + `ActionBar` | Repo path input, mutation/endpoints/threshold options, Analyze + Gate + Autofix buttons, Autofix token field (password input, held in memory only) | 🟢 |
 | `StreamLog` | Live progress from `/api/stream` (coverage/gaps/risk events) | 🟢 |
 | `StatCards` + `GapsList` + `RiskTable` | Coverage, mutation score, gaps, risk ranking — verbatim from `AnalyzeResponse`, no new numbers | 🟢 |
 | `SummaryPanel` | AI prose, labeled advisory + which provider generated it (PRs #26/#27) | 🟢 |
+| `FixResultPanel` | Autofix result: engine-measured before → after (mutation, coverage), the test files written (expandable), critic notes labeled advisory, provider | 🟡 checked against a stubbed fix loop; live run pending (gap 3) |
 | CI split | `frontend-ci.yml` (lint+build, `web-next/**` only) separate from backend `ci.yml`/`cd.yml` (`paths-ignore: web-next/**`) | 🟢 |
 | Vercel deploy | Connect repo/subfolder to Vercel; no IaC, config in `vercel.json` / project settings; `NEXT_PUBLIC_REPOGUARD_API_BASE` per environment | 🟢 https://ibm-bob-mcp-agent-guard.vercel.app/ wired to the real backend: `NEXT_PUBLIC_REPOGUARD_API_BASE=https://repoguard-ljm5hefnsq-uc.a.run.app` (Production + Preview, type "Config" — it's public by design, the browser calls it); `REPOGUARD_CORS_ORIGINS` on the service allows the Vercel origin (PR #49). Every merge to `main` redeploys automatically; verified end to end against the live public demo |
 | Error messages | Unreachable backend → "Can't reach the backend at `<URL>`…" naming both causes (stopped backend / CORS rejection look identical to the browser) (PR #48); non-2xx → the backend's `detail` instead of "analyze failed: 400" (PR #50) | 🟢 verified live |

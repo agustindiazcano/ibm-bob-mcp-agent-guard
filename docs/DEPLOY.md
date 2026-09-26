@@ -103,9 +103,45 @@ this image — Playwright's Chromium browser binary isn't installed to keep
 the image small. See the comment in `Dockerfile` for the one line that adds
 it back if a visual-regression demo is needed.
 
+## 5. Enabling Autofix (`POST /api/fix`) — human step
+
+Autofix runs the AI fix loop over HTTP, so it spends Vertex AI quota for
+several minutes per run. It's off (`503`) until the service has a
+`REPOGUARD_FIX_TOKEN`; the dashboard sends it as `Authorization: Bearer
+<token>` from a password field that's never stored. One run at a time
+per instance (`409` otherwise; add `--max-instances=1` if you need a hard
+global limit); each run works on a temporary copy of the repo and never
+commits or opens a PR (`repoguard_engine/web/fix_job.py`).
+
+Store the token in Secret Manager, let the Cloud Run runtime service
+account read it, and attach it to the service. This is the same kind of
+IAM grant as `roles/aiplatform.user` in Session 21, which an agent session
+can't make:
+
+```bash
+PROJECT=project-e0ad10c9-0b2f-4dc0-ac6
+RUNTIME_SA=993240087609-compute@developer.gserviceaccount.com
+
+gcloud services enable secretmanager.googleapis.com --project "$PROJECT"
+openssl rand -hex 24 | gcloud secrets create repoguard-fix-token \
+  --project "$PROJECT" --replication-policy=automatic --data-file=-
+gcloud secrets add-iam-policy-binding repoguard-fix-token --project "$PROJECT" \
+  --member="serviceAccount:$RUNTIME_SA" --role=roles/secretmanager.secretAccessor
+gcloud run services update repoguard --project "$PROJECT" --region us-central1 \
+  --update-secrets=REPOGUARD_FIX_TOKEN=repoguard-fix-token:latest
+
+# The token to paste into the dashboard:
+gcloud secrets versions access latest --secret=repoguard-fix-token --project "$PROJECT"
+```
+
+Later `cd.yml` deploys keep the secret reference, because
+`deploy-cloudrun` only changes what it's given. `cd.yml` already sets
+`--timeout=1800` so a full run isn't cut off at Cloud Run's default 300 s.
+
 ## Known limitation
 
 `--allow-unauthenticated` makes the service public. That's the right choice
 for a judged demo (nobody clicking a link should hit a login wall), but if
 this deployment outlives the hackathon, either add Cloud Run IAM auth or add
-your own auth layer in front — `repoguard serve` has none built in.
+your own auth layer in front — `repoguard serve` has none built in, except
+for `POST /api/fix`, which is token-gated (section 5).

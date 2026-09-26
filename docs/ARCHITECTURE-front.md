@@ -9,8 +9,9 @@ Vercel" section is a short summary pointing here.**
 **Status: built in `web-next/`, deployed to Vercel
 (https://ibm-bob-mcp-agent-guard.vercel.app/) and wired to the real backend
 on Cloud Run (`https://repoguard-ljm5hefnsq-uc.a.run.app`) — Analyze works
-end to end on the public URL. Still open: the AI summary on Cloud Run
-(Vertex SDK in the image, `PENDING.md` Phase 14 gap 8) and Autofix (gap 3).**
+end to end on the public URL, including the AI summary (`ok=true` via
+Vertex). Autofix (`POST /api/fix`, gap 3) is built; it's still waiting on
+the token being attached on Cloud Run and a first live run.**
 
 The original web UI (`web/static/index.html`, served by `web/server.py`)
 stays as the reference implementation. `web-next/` is a separate, richer
@@ -47,13 +48,14 @@ belongs to Phase 17 (`docs/DATA_PLATFORM.md`), not this phase.
 
 | Component | Renders | Fed by |
 |---|---|---|
-| `RepoForm` | repo path input, mutation checkbox, gate threshold input | user input only |
-| `ActionBar` | "Analyze" and "Gate" buttons; "Autofix" ships disabled (gap 3 below) | triggers the calls below |
+| `RepoForm` | repo path input, mutation checkbox, gate threshold input, Autofix token (password field, kept in React state only) | user input only |
+| `ActionBar` | "Analyze", "Gate" and "Autofix" buttons (Autofix enabled once a token is entered) | triggers the calls below |
 | `StreamLog` | live progress lines as SSE events arrive | `/api/stream` |
 | `StatCards` | coverage % (covered/total lines), mutation score or "Not run", files with gaps, gate PASS/FAIL with the threshold that run used | `AnalyzeResponse` + the submitted threshold |
 | `GapsList` | uncovered files + missing lines | `AnalyzeResponse.gaps` |
 | `RiskTable` | file + reasons, score with a bar (the score is already a 0–1 uncovered-line ratio, so the bar width is the score itself) | `AnalyzeResponse.risk` |
 | `SummaryPanel` | AI prose, labeled "advisory, not a measurement", plus which provider generated it; "Summary unavailable: …" when `ok=false` | `SummaryResponse`, passed in by `page.tsx` |
+| `FixResultPanel` | Autofix: engine-measured before → after (mutation, coverage), test files written (expandable), critic notes labeled advisory, provider | `/api/fix`'s `done` event |
 | `Card` | shared section frame (title, optional badge) | — |
 
 Styling is CSS Modules next to each component plus design tokens in
@@ -119,6 +121,42 @@ FastAPI's `detail` when the body has one (e.g. `/api/analyze`'s 400 for a
 nonexistent `repo_path`), else `"<call> failed: <status>"` — note that over
 HTTP/2 (Cloud Run) `statusText` is empty, so the status code is all there is.
 
+**Autofix** (`POST /api/fix`, `web/fix_job.py`): the one endpoint that
+spends AI quota and runs for minutes, so it differs from the rest:
+
+- **Auth:** `Authorization: Bearer <token>` must match the server's
+  `REPOGUARD_FIX_TOKEN`. If that variable isn't set, the endpoint is off
+  (`503`); a missing or wrong token gets `401`. A static site can't keep a
+  secret, so the token is typed into a password field and never stored.
+- **One run per process:** a second request while one is running gets
+  `409`.
+- **Sandbox:** the fix loop runs on a temp copy of `repo_path` with
+  `publish=False`. The target repo is never modified, and nothing is
+  committed or pushed. The copy is deleted after the run, and the tests it
+  wrote come back in the response.
+- **Transport:** one long request streaming `application/x-ndjson`, one
+  `{type, data}` object per line, read with `fetch` + `ReadableStream`
+  (`streamFix()` in `api.ts`). `EventSource` can't POST or send headers.
+  Heartbeats go out every 15 s during silent stretches, such as a mutation
+  run. Cloud Run's request timeout is raised to 1800 s in `cd.yml`.
+
+Event types, in order: `start` → `baseline_start` → `baseline_done` →
+(`writer_start` → `critic_start`) per file → `remeasure_start` →
+`remeasure_done` → `done`, or `error` at any point. `heartbeat` can appear
+anywhere. The `done` event's data:
+
+```ts
+type FixDone = {
+  provider: string;            // "watsonx" | "vertex", the provider actually used
+  before: Dashboard;           // engine-measured, verbatim
+  after: Dashboard | null;     // engine-measured, verbatim
+  files_attempted: string[];
+  files: { path: string; status: "added" | "modified"; content: string }[];
+  critic_notes: string[];      // advisory model output, not a measurement
+  evidence: string;            // the watson-evidence/NN-fix-loop.md report
+};
+```
+
 ## AI providers
 
 The backend has two AI providers behind `ai_providers.get_provider()`
@@ -144,12 +182,12 @@ changes in the frontend once that ships.
 |---|---|---|
 | 1 | CORS — `REPOGUARD_CORS_ORIGINS` (default `localhost:3000` and `127.0.0.1:3000`; Cloud Run sets the Vercel domain in `cd.yml`, PR #49), `GET` + `POST`, all headers | 🟢 |
 | 2 | Gate — no new endpoint needed, `/api/analyze?gate_threshold=N` returns `passed_gate` | 🟢 |
-| 3 | No `POST /api/fix` — the fix loop (`repoguard fix`) is CLI-only | 🔴 Autofix stays disabled. Exposing it means a long-running, credentialed, possibly PR-opening action over HTTP — auth and rate limiting the read-only endpoints never needed, plus a job model for a run that takes minutes. Its prerequisites — a verified live fix-loop run (Phase 11) and `ChatProvider` (Phase 16) — are both done |
+| 3 | `POST /api/fix` (Autofix) | 🟡 built — token-gated, one run at a time, sandboxed, streamed as NDJSON (contract above). Needs `REPOGUARD_FIX_TOKEN` attached on Cloud Run (`docs/DEPLOY.md` §5) and a first live run |
 | 4 | `POST /api/summary` | 🟢 PR #27 |
 | 5 | `/api/stream` takes `gate_threshold` instead of a hardcoded 80% | 🟢 PR #27 |
-| 6 | `provider` surfaced in responses | 🟢 on `/api/summary`, from the provider actually used; add it to gap 3's endpoint when that exists |
+| 6 | `provider` surfaced in responses | 🟢 on `/api/summary` and on `/api/fix`'s `done` event, from the provider actually used |
 | 7 | Nonexistent `repo_path` → raw 500 | 🟢 400 with a `detail` message (PR #47) |
-| 8 | AI summary on Cloud Run (Vertex SDK in the image; runtime-account role already granted) | 🟡 fix on `fix/vertex-import-error-detail`, then re-verify live |
+| 8 | AI summary on Cloud Run (Vertex SDK in the image; runtime-account role granted) | 🟢 PR #52, verified live (`ok: true`, `provider: vertex`) |
 
 ## Local dev & deployment config
 
