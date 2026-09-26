@@ -19,5 +19,5 @@ the sequencing.
 We're deliberately not adopting Terraform or new GCP infrastructure for
 this: the existing Cloud Run deploy (`docs/DEPLOY.md`, Phase 13) is left
 as-is, and the new frontend ships as a plain Vercel project (no IaC). See
-`PENDING-front.md` and `docs/ARCHITECTURE-front.md` for details. Not built
-yet.
+`PENDING.md` Phase 14 and `docs/ARCHITECTURE-front.md` for details.
+Built in `web-next/`; Vercel deploy pending.

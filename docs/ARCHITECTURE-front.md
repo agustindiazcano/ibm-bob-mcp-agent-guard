@@ -8,7 +8,7 @@ already uses for the AI-provider refactor. Fold the relevant parts into
 `docs/ARCHITECTURE.md`'s "Planned: Next.js dashboard on Vercel" section at
 merge time — see `README.md`/`PENDING.md`'s own note pointing here.**
 
-**Not built yet — roadmap only, see `PENDING-front.md`.**
+**Built in `web-next/` (Vercel deploy and Autofix still pending) — status in `PENDING.md` Phase 14.**
 
 The current web UI (`web/static/index.html`, served by `web/server.py`)
 stays as the reference implementation. The plan is a richer frontend, built
