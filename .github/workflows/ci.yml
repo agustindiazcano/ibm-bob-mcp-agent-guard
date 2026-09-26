@@ -142,3 +142,9 @@ jobs:
 
       - name: Verify phase17-pipeline (persisting can't change a measurement)
         run: python scripts/verify.py phase17-pipeline
+
+      - name: Verify phase17-endpoints (GET /api/projects/{slug}/endpoints)
+        run: python scripts/verify.py phase17-endpoints
+
+      - name: Verify phase17-api (history read routes, ingest tokens, analyze --push)
+        run: python scripts/verify.py phase17-api
