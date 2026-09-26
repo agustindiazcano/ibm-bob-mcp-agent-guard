@@ -236,7 +236,7 @@ to be added through the GitHub web UI before the first real deploy can run.
 ---
 
 ## Phase 14 — Next.js dashboard on Vercel
-**Priority: 2 · Depends on: 9, 10** (frontend only — no engine changes)
+**Priority: 2 · Depends on: 9, 10** (frontend, plus one engine touch: gap 3 added an optional `on_event` progress callback to `run_fix_loop`, which changes no measured behavior)
 
 Decision: no Terraform, no new GCP infrastructure for this piece.
 `docs/DEPLOY.md` / Cloud Run (Phase 13) is left as-is for the existing

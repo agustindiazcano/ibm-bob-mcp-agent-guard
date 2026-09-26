@@ -585,6 +585,8 @@ answering "what's next", run `git fetch` and read `LASTCONTEXT.md` from
 | 6 | Cloud Run `--timeout=1800` (default 300 s would cut a run off). Token setup documented as a human step: Secret Manager + `secretAccessor` for the runtime SA + `--update-secrets` | `.github/workflows/cd.yml`, `docs/DEPLOY.md` §5 |
 | 7 | Docs | `PENDING.md`, `docs/ARCHITECTURE-front.md` (NDJSON contract; also corrected stale gap 8 row → 🟢), `docs/ARCHITECTURE.md`, `README.md`, `CLAUDE.md`+`AGENTS.md` |
 
+Verified before commit: `verify.py` phase0/phase3/phase7/phase15/phase16/multicloud/phase14fix all PASS; `demo-repo` 5 passed; `repoguard analyze ./demo-repo --mutation` → 65.1%, 20.25% (16/79), 4 gap files — Section 7 baseline unchanged. `web-next` lint + build clean.
+
 Not verified here: a live Autofix run. This container has no Vertex
 credentials, and the Cloud Run token isn't attached yet. Gap 3 stays 🟡
 until a real run from the Vercel demo shows a measured mutation score above
@@ -594,6 +596,7 @@ until a real run from the Vercel demo shows a measured mutation score above
 
 ## Current repo state
 
+- **Session 22 (Autofix) is on `claude/eager-gauss-ifyd8w` (commit `1e97a8c` plus this doc follow-up), pushed but not merged and with no PR opened yet.** `main` doesn't have Autofix until that merges and `cd.yml` redeploys.
 - Branch: `main` — PR #37 (Phase 16 + 13 WIF), #38 (doc fixes), #39 (Phase 17 B1 Terraform), #40 (session log), #41 (cd.yml trim fix), #42 (cli graceful failure), #43 (frontend context docs), #44 (dashboard visual design), #45 (Phase 11 Gemini 3 + `run_tests` + `thought_signature` fixes), #46 (Phase 17/18 planning corrections), #47 (`/api/analyze` 400-vs-500 fix), #48 (frontend: clear backend-unreachable error + real screenshots) all merged
 - All Session 21 fixes merged: PR #49 (CORS), #51 (ImportError detail), #52 (`Dockerfile` `[vertex]` extra + docs — recovered after #49/#51 both dropped commits pushed post-merge, see Session 21 item 5), #53 (frontend live-deploy docs). `ok: true` summary path verified live for real
 - Phase 0/3/7/8/9/13/15/16: 🟢. Phase 11: 🟢 (see Session 20) — first genuinely successful live AI fix-loop run, 89.87%/71/79. Phase 17 B1/B2: 🟢 (Terraform-managed WIF)
@@ -611,7 +614,7 @@ until a real run from the Vercel demo shows a measured mutation score above
 ## How to resume
 
 1. Read `PENDING.md` for the task list (Phase 11 is now 🟢 — read its "3 attempts, 3 bugs" narrative before touching `watson_agent/` again, it explains real, non-obvious API constraints).
-2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16`, `multicloud` to confirm baseline holds.
+2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16`, `multicloud`, `phase14fix` to confirm baseline holds. (`ci.yml` doesn't run `phase14fix` yet; it's credential-free, so it could.)
 3. Frontend punch-list items 1-4 are all done and verified live (Session 21). Autofix (`POST /api/fix`, Phase 14 gap 3) is built (Session 22); what's left is the human token step plus a first live run. When pushing follow-up commits to a branch mid-session, confirm with `git log origin/main..<branch>` that nothing merged out from under you first (Session 21 item 5 — happened 3 times).
 4. Build Phase 17/18 from `docs/DATA_PLATFORM.md` §13 / `docs/MULTI_AGENT_SWARM.md` §14, not their original sketches.
 5. Autofix: attach `REPOGUARD_FIX_TOKEN` (`docs/DEPLOY.md` §5), then run it from the Vercel demo against `demo-repo` and record the measured before/after. If you change a Vercel env var, Redeploy the **newest `main`** deployment, never an older row (`docs/ARCHITECTURE-front.md`, Session 21-front item 5).
