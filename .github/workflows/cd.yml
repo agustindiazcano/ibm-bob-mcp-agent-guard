@@ -82,6 +82,11 @@ jobs:
           service: ${{ env.CLOUD_RUN_SERVICE }}
           region: ${{ env.GCP_REGION }}
           image: ${{ env.IMAGE }}
+          # web-next's Vercel deployment (Phase 14) calling this API in the
+          # browser — no localhost origin needed here, that's only for local
+          # dev against a local `repoguard serve` (already covered by
+          # web/server.py's own default).
+          env_vars: REPOGUARD_CORS_ORIGINS=https://ibm-bob-mcp-agent-guard.vercel.app
           flags: --allow-unauthenticated
 
       - name: Show live URL
