@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -51,7 +51,12 @@ def api_analyze(
     """Run the full pipeline and return JSON results."""
     from ..pipeline import run_pipeline
 
-    result = run_pipeline(repo_path, include_mutation=mutation, gate_threshold=gate_threshold)
+    try:
+        result = run_pipeline(repo_path, include_mutation=mutation, gate_threshold=gate_threshold)
+    except NotADirectoryError as exc:
+        # Otherwise this reaches subprocess.run(cwd=...) uncaught and the
+        # frontend sees a bare 500 for what is really a bad request.
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {**result.dashboard, "passed_gate": result.passed_gate}
 
 
