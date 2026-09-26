@@ -1,35 +1,6 @@
-"use client";
+import type { SummaryResponse } from "../lib/types";
 
-import { useEffect, useState } from "react";
-import { fetchSummary } from "../lib/api";
-import type { AnalyzeResponse, SummaryResponse } from "../lib/types";
-
-export function SummaryPanel({ result }: { result: AnalyzeResponse }) {
-  const [summary, setSummary] = useState<SummaryResponse | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchSummary(result)
-      .then((data) => {
-        if (!cancelled) setSummary(data);
-      })
-      .catch((err: unknown) => {
-        // A network/HTTP failure is shown the same way as ok=false so the
-        // rest of the dashboard never depends on the summary succeeding.
-        if (!cancelled) {
-          setSummary({
-            ok: false,
-            text: "",
-            error: err instanceof Error ? err.message : String(err),
-            provider: "",
-          });
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [result]);
-
+export function SummaryPanel({ summary }: { summary: SummaryResponse | null }) {
   return (
     <section aria-label="AI summary">
       <h2>AI summary — advisory, not a measurement</h2>
