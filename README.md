@@ -358,7 +358,7 @@ changes don't trigger the Python/mutation pipeline or a Cloud Run deploy.
 We're deliberately not adopting Terraform or new GCP infrastructure for
 this: the existing Cloud Run deploy (`docs/DEPLOY.md`, Phase 13) is left
 as-is, and the new frontend ships as a plain Vercel project (no IaC). See
-`PENDING-front.md` and `docs/ARCHITECTURE-front.md` for the full tracker.
+`PENDING.md` Phase 14 and `docs/ARCHITECTURE-front.md` for the full tracker.
 
 **Also planned: multicloud AI.** watsonx.ai is the only provider today. See
 [`docs/MULTICLOUD_AI.md`](docs/MULTICLOUD_AI.md) (`PENDING.md` Phase 16) for

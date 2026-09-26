@@ -421,13 +421,35 @@ both merged to `main`.
   (the pre-existing `→` console-encoding crash); `GET /` returned 500 during
   testing — not investigated, backlog.
 
+### Session 15 — E2E verified, two web-server bugs fixed, PENDING-front.md folded
+
+| # | Action | Branch / files |
+|---|---|---|
+| 1 | Frontend session ran the browser E2E on `main` (`50fe2e6`): Playwright + `repoguard serve` + `next dev`, all three endpoints 200, `SummaryPanel` showed the credentials error, dashboard intact | — |
+| 2 | `GET /` 500 on Windows: `index.html` read as cp1252. Fixed with explicit `encoding="utf-8"`, plus the same latent bug in `api_check.py` (2 reads) and `core.py` (2 reads) that would break on any non-ASCII source | `fix/web-root-encoding` |
+| 3 | `/api/stream` frozen at the first progress event: `api_analyze` was `async def` running `run_pipeline()` synchronously, and `web-next` opens both at once. Now `def`; confirmed stream events arrive while analyze is still running | `fix/web-root-encoding` |
+| 4 | Folded `PENDING-front.md` into `PENDING.md` Phase 14 (gaps, deliverables, verified, known issues), deleted it, repointed references | `docs/14-fold-pending-front` |
+
+### Key decisions (Session 15)
+
+- **Rule for `web/server.py`: any handler that calls blocking engine code
+  must be `def`, not `async def`.** Two instances in two sessions
+  (`api_summary`, `api_analyze`); only `_stream_pipeline` is legitimately async
+  (it offloads coverage with `run_in_executor`).
+- Engine change → ran §7: phase0/phase3/phase7 PASS (mutation 20.25%, 16/79
+  on both runs), demo-repo 5 passed, coverage 65.1%, 4 gap files.
+- Not changed: `ci.yml`/`cd.yml` still list `PENDING-front.md` in
+  `paths-ignore` — harmless now that the file is gone; clean up whenever CI is
+  touched next. `docs/ARCHITECTURE-front.md` is not folded yet (still a Phase
+  14 Docs deliverable).
+
 ---
 
 ## Current repo state
 
-- Branch: `main` at `50fe2e6` (PRs #26/#27 merged); this session's doc updates are on `docs/14-summary-context`
+- Branch: `main` at `7480cb0`; open branches `fix/web-root-encoding` (code) and `docs/14-fold-pending-front` (docs), independent of each other
 - Phase 0: 🟢 · Phase 3: 🟢 · Phase 7: 🟢 · Phase 8: 🟢 (redefined for watsonx.ai) · Phase 9: 🟢 (`repoguard fix` now real) · Phase 13: 🟢 · Phase 15: 🟢 (narrative, PR #18)
-- Phase 14: 🟡 — all dashboard components including `SummaryPanel` merged (see `PENDING-front.md`); remaining: Autofix (gap 3, no `POST /api/fix`), Vercel deploy, folding `PENDING-front.md`/`docs/ARCHITECTURE-front.md` back into the main docs, and a browser end-to-end run of `web-next` against `repoguard serve`
+- Phase 14: 🟡 — all dashboard components including `SummaryPanel` merged and verified end-to-end in a browser (see `PENDING.md` Phase 14); remaining: Autofix (gap 3, no `POST /api/fix`), Vercel deploy, folding `docs/ARCHITECTURE-front.md` into `docs/ARCHITECTURE.md`, and the `ok=true` summary path (needs credentials)
 - IBM Bob is retired. `.bob/` stays on disk as inert legacy (`.bob/DEPRECATED.md`); `repoguard_engine/watson_agent/` is the live replacement.
 - Remaining 🔴 critical-path item: Phase 11, a real end-to-end `repoguard fix` run against `demo-repo` with actual IBM Cloud credentials — same human-gated situation as GCP deploy, not something any agent here can supply
 - GCP deploy still pending a human running `docs/DEPLOY.md`'s one-time setup
@@ -437,7 +459,7 @@ both merged to `main`.
 
 ## How to resume
 
-1. Read `PENDING.md` for the task list, and `PENDING-front.md` if resuming Phase 14 frontend work specifically.
+1. Read `PENDING.md` for the task list (Phase 14 now holds the frontend tracker too).
 2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16` to confirm baseline holds.
 3. For the frontend: CORS and `/api/summary` are on `main`; run `PYTHONIOENCODING=utf-8 repoguard serve` + `npm run dev` (with `NEXT_PUBLIC_REPOGUARD_API_BASE`) for the still-pending browser end-to-end check.
 4. Get real IBM Cloud credentials (`docs/WATSONX_SETUP.md`) and run `repoguard fix demo-repo` for the first live Phase 11 run — that's the one thing no agent session here can do without a human providing an account.
