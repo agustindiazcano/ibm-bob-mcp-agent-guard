@@ -1,6 +1,8 @@
 "use client";
 
 import type { StreamEvent } from "../lib/types";
+import { Card } from "./Card";
+import styles from "./StreamLog.module.css";
 
 function describe(event: StreamEvent): string {
   switch (event.type) {
@@ -9,7 +11,8 @@ function describe(event: StreamEvent): string {
     case "progress":
       return String(event.data.message ?? event.data.step ?? "");
     case "coverage":
-      return `Coverage: ${event.data.percent}% (${event.data.total_lines} lines)`;
+      // Same 1-decimal display as StatCards; the raw value is unchanged.
+      return `Coverage: ${Number(event.data.percent).toFixed(1)}% (${event.data.total_lines} lines)`;
     case "gaps":
       return `Gaps: ${(event.data.uncovered_files as string[] | undefined)?.length ?? 0} uncovered files`;
     case "risk":
@@ -27,11 +30,34 @@ export function StreamLog({ events }: { events: StreamEvent[] }) {
   if (events.length === 0) {
     return null;
   }
+  const last = events[events.length - 1].type;
+  const finished = last === "done" || last === "error";
+  const status = last === "error" ? (
+    <span className={`${styles.status} ${styles.statusError}`}>Error</span>
+  ) : last === "done" ? (
+    <span className={`${styles.status} ${styles.statusDone}`}>Done</span>
+  ) : (
+    <span className={styles.status}>Running</span>
+  );
+
   return (
-    <ul>
-      {events.map((event, i) => (
-        <li key={i}>{describe(event)}</li>
-      ))}
-    </ul>
+    <Card title="Live progress" aside={status}>
+      <ul className={styles.list} aria-live="polite">
+        {events.map((event, i) => {
+          const active = !finished && i === events.length - 1;
+          const className = [
+            styles.item,
+            active ? styles.active : "",
+            event.type === "error" ? styles.error : "",
+          ].join(" ");
+          return (
+            <li key={i} className={className}>
+              <span className={styles.dot} aria-hidden />
+              {describe(event)}
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
   );
 }

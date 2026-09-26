@@ -540,7 +540,7 @@ frontend consumes the same endpoints rather than replacing them.
 
 Still open: the Vercel deployment's `NEXT_PUBLIC_REPOGUARD_API_BASE` points
 at a `localhost` placeholder until the backend is deployed to Cloud Run
-(Phase 13); the dashboard has no visual design yet (plain HTML); and the
+(Phase 13); README screenshots of the dashboard are still to come; and the
 "Autofix" button stays disabled until there's a `POST /api/fix`, which waits
 on a verified live fix-loop run (Phase 11). The frontend gets no Terraform or
 GCP infrastructure: it ships as a plain Vercel project, with its own

@@ -260,7 +260,7 @@ contract. (This section absorbed the former satellite `PENDING-front.md`.)
 | CI split | `frontend-ci.yml` (lint+build, `web-next/**` only) separate from backend `ci.yml`/`cd.yml` (`paths-ignore: web-next/**`) | 🟢 |
 | Vercel deploy | Connect repo/subfolder to Vercel; no IaC, config in `vercel.json` / project settings; `NEXT_PUBLIC_REPOGUARD_API_BASE` per environment | 🟢 deployed: https://ibm-bob-mcp-agent-guard.vercel.app/ — `NEXT_PUBLIC_REPOGUARD_API_BASE` still points at `localhost:8000` (placeholder); update once Cloud Run (Phase 13) is deployed |
 | Docs | `docs/ARCHITECTURE-front.md` updated to what's built (real `/api/summary` contract, closed gaps); `docs/ARCHITECTURE.md`'s section now a short summary pointing to it (kept as a satellite so front/back sessions don't edit the same paragraphs); deployed URL in `README.md` and `web-next/README.md` | 🟡 real screenshots in `README.md` still pending — wait for the visual design |
-| Visual design | Dashboard is unstyled HTML today; layout, stat cards, tables, loading/error states, dark mode — CSS Modules, no new dependency; display-only formatting (numbers stay verbatim from the API) | 🔴 |
+| Visual design | Layout, stat cards, gaps list, risk table with score bars, live-progress states, advisory-tagged summary, empty/error states, light + dark, mobile — CSS Modules, no new dependency; display-only formatting (numbers stay verbatim from the API) | 🟢 checked in Chrome against a real `repoguard serve` at 1280px light/dark and 390px, no console errors |
 
 **Verified so far:** `npm run lint` and `npm run build` pass. End-to-end on
 `main` (`50fe2e6`): headless Chrome (Playwright) clicked Analyze against

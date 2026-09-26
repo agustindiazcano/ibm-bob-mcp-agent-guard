@@ -1,0 +1,122 @@
+.list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.item {
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.file {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 14px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.badge {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-variant-numeric: tabular-nums;
+}
+
+.lines {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.none {
+  color: var(--pass);
+  font-weight: 500;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0 12px 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.table td {
+  padding: 10px 12px 10px 0;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.table tr:last-child td {
+  border-bottom: 0;
+}
+
+.scoreCell {
+  width: 45%;
+}
+
+.score {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 120px;
+}
+
+.track {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bar-track);
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--fail);
+}
+
+.scoreValue {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  width: 3.2em;
+  text-align: right;
+}
+
+.reasons {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 2px;
+}
