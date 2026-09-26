@@ -70,24 +70,29 @@ def _write_out(repo_path: Path, name: str, data: object) -> None:
 def measure_coverage(repo_path: str | Path) -> CoverageResult:
     """Run pytest with coverage on *repo_path*, write repoguard-out/coverage.json, return CoverageResult."""
     repo = Path(repo_path)
-    proc = subprocess.run(
-        [sys.executable, "-m", "pytest", "--cov", "--cov-report=json", "-q", "--tb=no"],
-        cwd=repo,
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    coverage_json = repo / "coverage.json"
-    if not coverage_json.exists():
-        # A missing coverage.json means pytest/pytest-cov failed to run, not
-        # that the repo has 0% coverage — report the failure instead of a
-        # fabricated zero (AGENTS.md: never claim a result you did not measure).
-        raise RuntimeError(
-            f"pytest did not produce coverage.json (exit code {proc.returncode}).\n"
-            f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
+    # Per-run data/report paths: concurrent measurements of the same repo
+    # (e.g. /api/analyze + /api/stream) would otherwise erase each other's
+    # .coverage and read a half-written coverage.json.
+    with tempfile.TemporaryDirectory(prefix="repoguard-cov-") as tmp:
+        coverage_json = Path(tmp) / "coverage.json"
+        proc = subprocess.run(
+            [sys.executable, "-m", "pytest", "--cov", f"--cov-report=json:{coverage_json}", "-q", "--tb=no"],
+            cwd=repo,
+            env={**os.environ, "COVERAGE_FILE": str(Path(tmp) / ".coverage")},
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
+        if not coverage_json.exists():
+            # A missing coverage.json means pytest/pytest-cov failed to run, not
+            # that the repo has 0% coverage — report the failure instead of a
+            # fabricated zero (AGENTS.md: never claim a result you did not measure).
+            raise RuntimeError(
+                f"pytest did not produce coverage.json (exit code {proc.returncode}).\n"
+                f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
+            )
+        data = json.loads(coverage_json.read_text(encoding="utf-8"))
 
-    data = json.loads(coverage_json.read_text(encoding="utf-8"))
     totals = data.get("totals", {})
     missing: dict[str, list[int]] = {}
     for fname, fdata in data.get("files", {}).items():
