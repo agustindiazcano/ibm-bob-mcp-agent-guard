@@ -445,6 +445,37 @@ both merged to `main`.
   touched next. `docs/ARCHITECTURE-front.md` is not folded yet (still a Phase
   14 Docs deliverable).
 
+### Session 16 — Phase 17 design: measurement history on Postgres + Terraform (`claude/eager-gauss-ifyd8w`)
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Wrote the design for storing every measured run: ER schema, SQL views, risk-model calibration plan, six dashboard charts, API routes, Terraform layout for GCP, two-day build order with an explicit cut line | `docs/DATA_PLATFORM.md` |
+| 2 | Added Phase 17 tracker | `PENDING.md` |
+| 3 | README: new sections + ToC entries for CI/CD, Deploy to Google Cloud, Database (planned), Infrastructure as code (planned); `DEPLOY.md`, `DATA_PLATFORM.md`, `ARCHITECTURE-front.md` added to Documentation; `.github/workflows/`, `Dockerfile`, both docs added to the tree. All anchors checked against GitHub slug rules | `README.md` |
+| 4 | Corrected two false claims: risk score described as `complexity × churn × (1 − detection)` (README, PENDING Phase 4) — real formula is `uncovered / non-blank lines`; `git` listed as used for churn and cloning by URL — neither exists, only `repoguard fix` uses git (branch/commit/push) | `README.md`, `PENDING.md` |
+
+Key decisions (design only, nothing built):
+- Database stores, engine measures: all derived values (deltas, trends) are SQL views, never stored columns. Persistence is off unless `REPOGUARD_DATABASE_URL` is set.
+- Justification for a DB: Cloud Run's filesystem is ephemeral, so `repoguard-out/` history can't survive on the deployed service.
+- Engine gaps found while designing: `run_mutation` discards per-mutant outcomes (only positional surviving IDs kept), and per-test outcomes are never recorded. Both are needed before the schema can hold anything useful (block A2).
+- `compute_risk` today is `uncovered / non-blank lines` only; `PENDING.md` Phase 4's `complexity × churn × (1 − detection)` description doesn't match the code. Phase 17 proposes calibrating extra terms against stored survival data rather than adding them by assertion.
+- Terraform covers the backend only; the frontend stays on Vercel (Phase 14's decision stands). CD moves to Workload Identity Federation.
+
+---
+
+### Session 17 — Phase 18 design: multi-agent swarm (`claude/eager-gauss-ifyd8w`)
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Wrote the plan to bring back a parallel multi-agent swarm: Bob's 9 modes mapped to new agents, lanes per file (Writer → Verifier → Critic), two levels of parallelism, file contract, build order, verification incl. a credential-free stub E2E | `docs/MULTI_AGENT_SWARM.md` |
+| 2 | README: new "Multi-agent swarm (planned)" section + ToC entry, Documentation link, tech-stack row, pointer from "Is it multi-agent?" | `README.md` |
+| 3 | Phase 18 tracker | `PENDING.md` |
+
+Found while designing (not fixed, planned as S1/§3 of the doc):
+- `run_mutation(paths_to_mutate=<file>)` silently finds 0 mutants (`rglob` on a file path returns nothing) and returns `total = 0` instead of an error.
+- Today's fix loop gives each writer the whole repo's surviving mutant IDs as bare integers (no descriptions), never picks a fully covered file that still has surviving mutants (risk = coverage gap only), caps at 3 files (demo-repo has 4 modules), and its critic has the same write tool as the writer.
+- Measured: sequential mutation on demo-repo, 79 mutants in 53 s (this container) — the H1 baseline at the engine level.
+
 ---
 
 ## Current repo state

@@ -79,7 +79,7 @@ Build plan and task tracker. Update status as work progresses; never delete comp
 
 | Deliverable | Description | Status |
 |---|---|---|
-| `risk_score()` | Ranks functions: complexity × git churn × (1 − detection rate) | 🟢 |
+| `risk_score()` | Ranks files by `uncovered lines / non-blank lines` (what `compute_risk` actually does). The earlier "complexity × git churn × (1 − detection rate)" description was never implemented; extra terms are Phase 17 §5, added only if stored data shows they predict surviving mutants better | 🟢 |
 | `render_dashboard()` | HTML report with before/after, gaps, risk, surviving mutants | 🟡 |
 
 ---
@@ -315,6 +315,58 @@ using the engine's own mutation-score measurement, not a subjective opinion.
 
 Live cross-provider benchmarking needs real credentials for at least two
 clouds — same human-gated situation as `docs/WATSONX_SETUP.md` and Phase 11.
+
+---
+
+## Phase 17 — Measurement history: Postgres, Terraform, data-driven charts
+**Priority: 2 · Depends on: 9, 13, 14** — full design in `docs/DATA_PLATFORM.md`
+
+Stores every measured run (per commit) so trends, persistent surviving
+mutants, flaky tests and fix-loop effect become queryable. The engine still
+measures; the database only stores; derived values live in SQL views.
+Persistence is off unless `REPOGUARD_DATABASE_URL` is set.
+
+| Block | Deliverable | Status |
+|---|---|---|
+| — | `docs/DATA_PLATFORM.md` — schema, views, charts, Terraform layout, build order | 🟢 |
+| A1 | `repoguard_engine/store/` (SQLAlchemy Core, SQLite + Postgres), `[db]` extra | 🔴 |
+| A2 | Engine: per-mutant outcomes + stable fingerprints, `junit.xml` per-test outcomes; `pipeline.py` persists | 🔴 |
+| A3 | API read routes + `POST /api/runs` ingest (project token) + `repoguard analyze --push` | 🔴 |
+| B1 | `infra/terraform/` — Artifact Registry, Cloud SQL, Secret Manager, Cloud Run, WIF; `infra-ci.yml` (fmt/validate) | 🔴 |
+| B2 | `cd.yml` on Workload Identity Federation (drop `GCP_SA_KEY`) | 🔴 |
+| C1 | web-next charts: trend, survival by operator, fix effect, survivors, flaky | 🔴 |
+| C2 | Risk heatmap (below the cut line) | 🔴 |
+| D | User accounts (below the cut line — optional) | 🔴 |
+| — | `verify.py phase17` (round-trip, determinism, after-reference delta 69.62 pp, Postgres service container) | 🔴 |
+
+`terraform apply` and a GCP billing account are human steps — same
+situation as `docs/DEPLOY.md`.
+
+---
+
+## Phase 18 — Multi-agent swarm: parallel agent lanes
+**Priority: 2 · Depends on: 8 (fix loop); benchmark needs 11 · Optional: 16 (per-role providers) · Shares S2 with 17** — full design in `docs/MULTI_AGENT_SWARM.md`
+
+Brings back IBM Bob's parallel swarm design (`.bob/custom_modes.yaml`), rebuilt
+in-process: one lane per source file (Test Writer → Verifier → Critic, up to
+2 rounds), lanes in parallel in isolated sandboxes, one global Gate
+re-measure after fan-in. Kept behind `repoguard fix --swarm` until real runs
+show it's faster (H1) and at least as good (H2) as the sequential loop.
+
+| Block | Deliverable | Status |
+|---|---|---|
+| — | `docs/MULTI_AGENT_SWARM.md` — agents, parallelism, file contract, build order, verification | 🟢 |
+| S1 | Parallel mutation workers; `paths_to_mutate` accepts a file (today it silently finds 0 mutants); zero mutants is an error | 🔴 |
+| S2 | Per-mutant records (same as Phase 17 A2) | 🔴 |
+| S3 | Per-lane sandbox + owned-path write guard | 🔴 |
+| S4 | Lane state machine, thread pool, blackboard files, `timeline.jsonl` | 🔴 |
+| S5 | Read-only critic with JSON verdict; one revision round | 🔴 |
+| S6 | Fan-in, Gate, Publisher, Reporter | 🔴 |
+| S7 | Credential-free stub end-to-end test reaching the documented "after" numbers | 🔴 |
+| S8 | SSE lane events + web-next lanes view (below the cut line) | 🔴 |
+| S9 | Per-role AI providers (needs Phase 16) | 🔴 |
+| S10 | "Swarm over MCP" recipe for external MCP clients | 🔴 |
+| — | `verify.py phase18` | 🔴 |
 
 ---
 

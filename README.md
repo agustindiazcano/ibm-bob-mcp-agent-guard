@@ -1,6 +1,6 @@
 # TestMind AI
 
-**A test-quality tool that proves whether your tests catch bugs, then uses IBM watsonx.ai to write the ones that are missing.**
+**A test-quality tool that proves whether your tests catch bugs, then runs two IBM watsonx.ai agents (a test writer and a critic) to write the ones that are missing. Its measurement engine is also an MCP server, so any MCP-capable AI agent can drive it.**
 
 > Coverage tells you which lines ran. It doesn't tell you whether your tests would notice a bug.
 > TestMind AI injects bugs into your code on purpose and measures how many your tests catch.
@@ -30,11 +30,17 @@ IBM Bob Hackaton Ranking (Bob IDE ussage):
 - [What it does](#what-it-does)
 - [How it works](#how-it-works)
 - [Is it multi-agent?](#is-it-multi-agent)
+- [Multi-agent swarm (planned)](#multi-agent-swarm-planned)
 - [Quick start](#quick-start)
 - [Commands](#commands)
 - [Using the watsonx.ai fix loop](#using-the-watsonxai-fix-loop)
 - [Requirements](#requirements)
+- [Tech stack](#tech-stack)
 - [Project structure](#project-structure)
+- [CI/CD](#cicd)
+- [Deploy to Google Cloud](#deploy-to-google-cloud)
+- [Database (planned)](#database-planned)
+- [Infrastructure as code (planned)](#infrastructure-as-code-planned)
 - [IBM Bob Usage](#ibm-bob-usage)
 - [AI-Assisted Development](#ai-assisted-development)
 - [Documentation](#documentation)
@@ -68,9 +74,9 @@ that don't affect the tested inputs — see `AGENTS.md §9`.
 
 - 🧬 **Mutation testing.** Injects one small bug at a time (flipped comparisons, swapped operators, changed constants, `return None`, removed `raise`) with its own AST engine, then reruns your suite. Every mutant that survives is a bug your tests would miss.
 - 🧪 **Writes the missing tests.** `repoguard fix` hands each file's surviving mutants to IBM watsonx.ai, one file at a time, through a guarded tool that can only write under `tests/` — never source. A second watsonx.ai call critiques the new test before the suite is re-measured for real.
-- 🌐 **API checks.** Reads the OpenAPI schema of a FastAPI app, flags endpoints no test calls, and smoke-tests every `GET` endpoint for 5xx errors.
-- 👁️ **Visual regression.** Starts the app, takes screenshots at desktop (1280 px) and mobile (390 px) widths, and diffs them pixel by pixel against a baseline. Also reports console errors and basic accessibility issues.
-- 📊 **Risk ranking and report.** Ranks functions by `complexity × git churn × (1 − detection rate)` and builds an HTML dashboard.
+- 🌐 **API checks.** Finds a FastAPI app's routes by parsing its source (AST), flags endpoints no test calls, and smoke-tests `GET` endpoints for 5xx errors.
+- 👁️ **Visual regression.** Takes a screenshot of a running page (Playwright/Chromium, any viewport, 1280×720 by default) and diffs it pixel by pixel against a baseline. Also reports console errors and basic accessibility issues. Available as MCP tools, not yet as a CLI command.
+- 📊 **Risk ranking and report.** Ranks files by the share of their lines left uncovered (`uncovered lines / non-blank lines`) and builds an HTML dashboard. Extra terms such as git churn are planned only if stored run history shows they predict surviving mutants better — see [`docs/DATA_PLATFORM.md` §5](docs/DATA_PLATFORM.md#5-risk-model-v2--calibrated-not-invented).
 
 **Design principle:** the AI decides what to test, and deterministic tools do the measuring. No number in the report is estimated by a model.
 
@@ -105,7 +111,18 @@ flowchart TB
 
 ## Is it multi-agent?
 
-**No — one process, two AI calls per file.** `repoguard fix` is a single orchestrator loop, not parallel subagents: for each of up to 3 prioritized files it asks watsonx.ai to write a test (through a tool that can only write under `tests/`), then asks watsonx.ai again to critique that test, then re-measures for real. Measurement itself never uses AI.
+**Yes: two agents working in sequence. It is not a parallel swarm.** `repoguard fix` runs an orchestrator that, for each of up to 3 files prioritized by risk, runs two agents one after the other:
+
+- **Test writer agent:** its own system prompt, and a tool-calling loop over `read_source_file` and `write_test_file`. The write tool is hard-guarded to `tests/`.
+- **Critic agent:** a separate system prompt, with the same guarded tools, reviewing what the writer produced.
+
+After both, the orchestrator re-measures deterministically. Both agents use the same watsonx.ai model, and measurement itself never uses AI.
+
+The engine is also exposed through **MCP** (9 tools), so external agents such as Claude Code or any other MCP client can call the same measurements. The fix loop itself calls the engine directly rather than through MCP.
+
+**What it is not (yet):**
+- **Not a parallel swarm yet.** A parallel multi-agent design for IBM Bob exists in `.bob/`, but it was retired before its first full run (`.bob/DEPRECATED.md`). Its return, rebuilt on watsonx.ai, is planned: see [Multi-agent swarm (planned)](#multi-agent-swarm-planned).
+- **Not provider-agnostic.** watsonx.ai is the only AI provider in the code today. A `ChatProvider` abstraction that would add Google Vertex AI is designed but not built: see [`docs/MULTICLOUD_AI.md`](docs/MULTICLOUD_AI.md) (`PENDING.md` Phase 16).
 
 ```mermaid
 flowchart TB
@@ -123,13 +140,36 @@ flowchart TB
 | `repoguard analyze [--summarize]` | Only with `--summarize` | Deterministic pipeline; `--summarize` adds one watsonx.ai call for prose, never a metric |
 | `repoguard gate` (CI) | No | Deterministic pipeline |
 
+## Multi-agent swarm (planned)
+
+> Design only (`PENDING.md` Phase 18). Full plan: [`docs/MULTI_AGENT_SWARM.md`](docs/MULTI_AGENT_SWARM.md).
+
+The swarm IBM Bob was designed to run (`.bob/custom_modes.yaml`: Orchestrator, Test Writer, Critic, Gate, Publisher…), rebuilt in-process on watsonx.ai. Instead of one loop working file by file, the Orchestrator opens **one lane per source file** and runs the lanes **in parallel**. Each lane has three agents:
+
+- **Test Writer (LLM):** writes tests aimed at that file's surviving mutants, in its own sandbox copy of the repo. It can only write its own test file.
+- **Verifier (deterministic):** runs mutation testing on that file and reports which mutants the new tests killed.
+- **Critic (LLM, read-only):** reviews the tests and returns APPROVED or NEEDS_WORK. NEEDS_WORK triggers one revision round.
+
+After all lanes finish, their files are merged, and the **Gate** re-measures the whole repo once. That number is the only one reported. The **Publisher** opens a PR if the score improved. Agents talk through files in `repoguard-out/swarm/<run_id>/`, like Bob's subagents did, so every run is auditable. Mutation testing itself also runs in parallel.
+
+The swarm has to earn its place with two measurements: it must be faster than the sequential loop, and reach at least the same final mutation score. Until then, `repoguard fix` keeps the sequential loop as its default, and the swarm runs behind `--swarm`.
+
+| Doc section | What it covers |
+|---|---|
+| [§2](docs/MULTI_AGENT_SWARM.md#2-bob-then-today-target) | Bob's modes mapped one by one to the new agents |
+| [§3](docs/MULTI_AGENT_SWARM.md#3-problems-in-todays-loop-the-swarm-must-fix) | Six problems in today's loop the swarm fixes |
+| [§5](docs/MULTI_AGENT_SWARM.md#5-parallelism) | Two levels of parallelism, and per-lane isolation |
+| [§6](docs/MULTI_AGENT_SWARM.md#6-communication-contract-the-blackboard) | The file contract between agents |
+| [§10](docs/MULTI_AGENT_SWARM.md#10-build-order) | Build order and cut line |
+| [§11](docs/MULTI_AGENT_SWARM.md#11-verification-scriptsverifypy-phase18) | Verification, including a credential-free end-to-end test |
+
 ## Quick start
 
 ```bash
 pip install -e .                    # installs the `repoguard` command
 playwright install chromium         # only needed for visual checks
 
-repoguard analyze ./demo-repo       # measure: tests, coverage, mutation, API, visual
+repoguard analyze ./demo-repo --mutation   # coverage, gaps, risk + mutation score (slow)
 repoguard serve                     # web UI at http://127.0.0.1:8765
 ```
 
@@ -137,7 +177,7 @@ repoguard serve                     # web UI at http://127.0.0.1:8765
 
 | Command | What it does |
 |---|---|
-| `repoguard analyze <path \| git-url> [--summarize]` | Measures tests, coverage, mutation score, API and visual. No AI unless `--summarize` is passed. |
+| `repoguard analyze <path> [--mutation] [--endpoints] [--summarize]` | Runs the tests and measures coverage, gaps and risk. `--mutation` adds the mutation score (slow), and `--endpoints` flags untested FastAPI endpoints. No AI unless `--summarize` is passed. Visual checks are MCP tools only. |
 | `repoguard fix <path> [--publish] [--threshold N]` | Measures, has watsonx.ai write the missing tests (guarded to `tests/`), critiques them, measures again |
 | `repoguard gate <path> --threshold 80` | CI gate: exits with code 1 if coverage is below the threshold |
 | `repoguard serve [--port 8000]` | Web UI with live progress, metrics and the report |
@@ -172,16 +212,62 @@ same way `web/server.py` does — no MCP round-trip needed for its own use.
 | fastmcp | MCP server for external MCP clients | For `repoguard mcp` |
 | fastapi, uvicorn, httpx | Web UI and API checks | For UI and API |
 | playwright + Chromium, pillow, axe-playwright-python | Screenshots, visual diffs and accessibility | For visual checks |
-| git | Churn for the risk score; cloning by URL | Recommended |
+| git | `repoguard fix` creates a branch, commits and pushes the new tests | For `repoguard fix` |
 | `ibm-watsonx-ai` (`pip install -e ".[ai]"`) + IBM Cloud credentials | Writing tests (`repoguard fix`) and the optional `--summarize` prose | For AI features only — measurement never needs it |
 
 The mutation engine is built on Python's standard `ast` module. It doesn't depend on mutmut or Stryker.
+
+## Tech stack
+
+Status key: ✅ implemented and running in this repo · ⚠️ implemented but not verified end to end · 🗺️ planned (design doc only, no code yet)
+
+| Area | Technology | Used for | Status |
+|---|---|---|---|
+| Language | Python ≥ 3.10 | Engine, CLI, API, MCP server | ✅ |
+| Test execution | pytest, pytest-cov | Running the target repo's suite | ✅ |
+| Coverage | coverage.py | Line coverage per file | ✅ |
+| Mutation testing | Python stdlib `ast` (own engine, 6 operators) | Injecting bugs, mutation score (16/79 on demo-repo, deterministic) | ✅ |
+| CLI | Click, Rich | `repoguard analyze · fix · gate · serve · mcp` | ✅ |
+| Web API | FastAPI 0.141.1, Starlette 1.7.0 (pinned together), Uvicorn | `repoguard serve`: `/api/analyze`, `/api/summary` | ✅ |
+| Live progress | Server-Sent Events (`StreamingResponse` → browser `EventSource`) | `/api/stream` step-by-step progress | ✅ |
+| API checks | stdlib `ast` + httpx | Finding FastAPI routes, flagging untested ones, `GET` smoke tests | ✅ |
+| Visual checks | Playwright (Chromium), Pillow | Screenshots and pixel diff (MCP tools) | ✅ locally · not in the Docker image (no Chromium) |
+| Accessibility | axe-playwright-python (axe-core) | Accessibility violations (MCP tool) | ✅ locally · not in the Docker image |
+| Agent protocol | MCP via FastMCP (stdio) | 9 tools for any MCP client | ✅ |
+| AI agents | IBM watsonx.ai (`ibm-watsonx-ai`), default model `meta-llama/llama-3-3-70b-instruct` | Writer and critic agents with tool calling (`repoguard fix`), `--summarize` prose | ⚠️ SDK call shapes checked against the real package; no live run with real credentials yet |
+| Multi-agent swarm | Parallel agent lanes (`ThreadPoolExecutor`), per-lane sandboxes, file-based agent contract | Parallel Test Writer / Verifier / Critic per file, parallel mutation workers | 🗺️ Phase 18 ([design](docs/MULTI_AGENT_SWARM.md)) |
+| AI provider abstraction | `ChatProvider` protocol | Switching between providers without touching the agents | 🗺️ Phase 16 ([design](docs/MULTICLOUD_AI.md)) |
+| AI (second provider) | Google Vertex AI | Alternative model provider + model benchmarking by mutation-score delta | 🗺️ Phase 16 ([design](docs/MULTICLOUD_AI.md)) |
+| Frontend | Next.js 16.3.6, React 19.2.8, TypeScript 5, ESLint 9 | `web-next/` dashboard | ✅ (lint + build pass; end-to-end checked in a browser locally) |
+| Legacy UI | Static HTML served by FastAPI | `repoguard serve` dashboard | ✅ |
+| Charts (docs) | matplotlib (`[docs]` extra) | README before/after image | ✅ |
+| Charts (dashboard) | Recharts | Trend, survival-by-operator and fix-effect charts | 🗺️ Phase 17 ([design](docs/DATA_PLATFORM.md#6-charts-web-next-dashboard)) |
+| Container | Docker (`python:3.11-slim`) | Single image for Cloud Run | ⚠️ Dockerfile written; the served command was tested directly, the image build hasn't run yet |
+| CI | GitHub Actions: `ci.yml`, `frontend-ci.yml` | Verify checks, tests, coverage gate, mutation determinism, frontend lint/build | ✅ green on `main` |
+| CD | GitHub Actions: `cd.yml` | Build → Artifact Registry → Cloud Run | ⚠️ fails at the Google auth step on every push to `main` until the one-time GCP setup is done ([`docs/DEPLOY.md`](docs/DEPLOY.md)) |
+| Cloud (backend) | Google Cloud Run, Artifact Registry | Hosting the API + dashboard | ⚠️ not deployed yet (human GCP setup pending) |
+| Cloud (frontend) | Vercel | Hosting `web-next/` | 🗺️ not deployed yet (human step, Phase 14) |
+| Database | PostgreSQL 16 on Cloud SQL; SQLite locally | Run history per commit | 🗺️ Phase 17 ([design](docs/DATA_PLATFORM.md#4-database-design)) |
+| Data access | SQLAlchemy 2 (Core), psycopg 3 | One code path for SQLite and Postgres | 🗺️ Phase 17 |
+| Infrastructure as code | Terraform (google, random providers), GCS remote state | Provisioning GCP | 🗺️ Phase 17 ([design](docs/DATA_PLATFORM.md#8-infrastructure-as-code-terraform)) |
+| Secrets | Google Secret Manager | Database password | 🗺️ Phase 17 |
+| CD authentication | Workload Identity Federation (GitHub OIDC) | Replacing the JSON service-account key | 🗺️ Phase 17 |
+| User accounts | Google Identity Platform | Optional sign-in for the dashboard | 🗺️ Phase 17, below the cut line |
+| Version control | git | `repoguard fix --publish`: branch, commit, push | ✅ |
+| Diagrams | Mermaid | Architecture and ER diagrams in the docs | ✅ |
+| Built with | IBM Bob IDE | Authored Phases 0–8 ([evidence](docs/IBM_BOB_USAGE.md)) | ✅ (retired afterwards) |
+| Built with | Claude Code | Authored Phase 13 onward | ✅ |
 
 ## Project structure
 
 ```
 ibm-bob-mcp-agent-guard/
 ├── .bob/                           Where IBM Bob built Phases 0–8 (docs/IBM_BOB_USAGE.md); config kept for history
+├── .github/workflows/
+│   ├── ci.yml                      Backend CI: verify.py checks, demo-repo tests, coverage gate, mutation determinism
+│   ├── frontend-ci.yml             web-next/ lint + build (path-filtered)
+│   └── cd.yml                      Build image → Artifact Registry → deploy to Cloud Run on push to main
+├── Dockerfile                      Single image: `repoguard serve` + bundled demo-repo/
 │
 ├── repoguard_engine/               Core library + all entry points
 │   ├── __init__.py
@@ -216,6 +302,8 @@ ibm-bob-mcp-agent-guard/
 ├── docs/
 │   ├── ARCHITECTURE.md             Layer diagram, data flow, MCP tool list
 │   ├── DEMO.md                     3-minute demo script
+│   ├── DEPLOY.md                   One-time GCP setup for the Cloud Run deploy
+│   ├── DATA_PLATFORM.md            Design (Phase 17): run history on Postgres, Terraform, data-driven charts
 │   ├── WATSONX_SETUP.md            Getting IBM Cloud credentials for narrative.py / watson_agent
 │   ├── AI_ASSISTED_DEVELOPMENT_FRAMEWORK.md  How this project itself is built (Claude, file-based contract)
 │   ├── make_results_chart.py       Generates the before/after results chart
@@ -233,6 +321,85 @@ ibm-bob-mcp-agent-guard/
 ├── .gitignore
 └── .bobignore
 ```
+
+## CI/CD
+
+Three GitHub Actions workflows, split so a frontend-only change never
+triggers the Python/mutation pipeline or a Cloud Run deploy:
+
+| Workflow | Trigger | What it runs |
+|---|---|---|
+| [`ci.yml`](.github/workflows/ci.yml) | Push to `main`, every PR (ignores `web-next/**`) | `verify.py phase0` + `phase7`, demo-repo pytest, `repoguard gate demo-repo --threshold 60`; a separate slower job runs `verify.py phase3` (two full mutation runs, must match 16/79) |
+| [`frontend-ci.yml`](.github/workflows/frontend-ci.yml) | Changes under `web-next/**` | `npm run lint` + `npm run build` |
+| [`cd.yml`](.github/workflows/cd.yml) | Push to `main` (ignores `web-next/**`), or manual | Builds the `Dockerfile`, pushes to Artifact Registry, deploys to Cloud Run |
+
+The coverage gate threshold (60%) sits just under the measured 65.1%
+baseline, so it fails on a real regression instead of always or never.
+
+## Deploy to Google Cloud
+
+The backend (`repoguard serve`: API + dashboard + bundled `demo-repo/`)
+deploys to **Cloud Run** through `cd.yml`. The workflow is in the repo; the
+one-time GCP setup (project, Artifact Registry, service account, GitHub
+secrets and variables) needs a person with GCP access and is written out
+step by step in [`docs/DEPLOY.md`](docs/DEPLOY.md). That setup has not been
+run yet, so there is no live URL, and `cd.yml` currently fails at its Google
+authentication step on every push to `main`, because the GCP credentials
+(`GCP_SA_KEY`) aren't configured yet. It stops before building anything.
+
+Known limits of today's deploy: the service is public
+(`--allow-unauthenticated`, fine for a judged demo), CD authenticates with
+a long-lived JSON key, and the container's filesystem is ephemeral, so
+results in `repoguard-out/` are lost when an instance stops. The next two
+sections plan fixes for the last two.
+
+The Next.js dashboard (`web-next/`) is a separate Vercel project — see
+[`docs/ARCHITECTURE-front.md`](docs/ARCHITECTURE-front.md).
+
+## Database (planned)
+
+> Design only (`PENDING.md` Phase 17). Nothing below exists in code yet.
+
+Today every run writes `repoguard-out/*.json` and keeps no history. The
+plan stores every measured run per commit in **PostgreSQL** (Cloud SQL on
+GCP, SQLite locally and in tests, one SQLAlchemy code path), so trends,
+persistent surviving mutants, flaky tests and the fix loop's before/after
+effect become queryable. Rules carried over from `AGENTS.md §4`:
+
+- The engine measures; the database only stores. Deltas and trends are SQL views, never stored numbers.
+- Persistence is off unless `REPOGUARD_DATABASE_URL` is set, and cannot change a measured number.
+- Runs are compared only when they used the same mutation operator set.
+
+Before the schema can hold anything useful, the engine must stop discarding
+two things: the outcome of each mutant (today only the positional IDs of
+surviving mutants are kept) and the outcome of each test.
+
+| Topic | Link |
+|---|---|
+| Why a database, and what "data-driven" QA uses history for | [§1](docs/DATA_PLATFORM.md#1-why-a-database-now) |
+| Engine changes the schema depends on | [§4.1](docs/DATA_PLATFORM.md#41-engine-changes-the-schema-depends-on) |
+| ER diagram (12 tables) | [§4.2](docs/DATA_PLATFORM.md#42-entity-relationship-diagram) |
+| SQL views behind every chart | [§4.4](docs/DATA_PLATFORM.md#44-views-all-derived-values-live-here) |
+| Risk model v2 — calibrated against stored data | [§5](docs/DATA_PLATFORM.md#5-risk-model-v2--calibrated-not-invented) |
+| Dashboard charts | [§6](docs/DATA_PLATFORM.md#6-charts-web-next-dashboard) |
+| API additions | [§7](docs/DATA_PLATFORM.md#7-api-additions-webserverpy-thin-over-store) |
+| Build order and cut line | [§10](docs/DATA_PLATFORM.md#10-build-steps-two-day-hackathon-order) |
+| Verification (`verify.py phase17`) | [§11](docs/DATA_PLATFORM.md#11-verification) |
+
+## Infrastructure as code (planned)
+
+> Design only (`PENDING.md` Phase 17, blocks B1–B2).
+
+**Terraform** (`infra/terraform/`, not created yet) will replace the manual
+`gcloud` steps in `docs/DEPLOY.md` and add the database: Artifact Registry,
+Cloud SQL PostgreSQL 16, Secret Manager for the DB password, the Cloud Run
+service (with the Cloud SQL socket and a 900 s timeout for mutation runs),
+and Workload Identity Federation so `cd.yml` no longer needs a JSON key.
+Terraform owns the service definition; CD keeps deploying the image.
+Terraform covers the backend only: the frontend stays on Vercel.
+`terraform apply` needs a person with GCP access and billing, the same as
+today's `docs/DEPLOY.md`. Full layout and decisions:
+[`docs/DATA_PLATFORM.md` §8](docs/DATA_PLATFORM.md#8-infrastructure-as-code-terraform).
 
 ## IBM Bob Usage
 
@@ -337,6 +504,10 @@ The rest of this section is about the first one — how the repo itself gets bui
 - [Hackathon submission status](docs/HACKATHON_SUBMISSION_STATUS.md): checklist tracking against the lablab.ai submission requirements
 - [Architecture](docs/ARCHITECTURE.md): diagrams, the sequence of a run, MCP tools and the data contract
 - [Demo script](docs/DEMO.md): 3-minute pitch and backup plan
+- [Deploy to Cloud Run](docs/DEPLOY.md): one-time GCP setup for the CD workflow
+- [Data platform (design)](docs/DATA_PLATFORM.md): run history on Postgres, Terraform on GCP, data-driven charts
+- [Multi-agent swarm (design)](docs/MULTI_AGENT_SWARM.md): parallel Test Writer / Verifier / Critic lanes per file, the return of IBM Bob's swarm design on watsonx.ai
+- [Frontend architecture](docs/ARCHITECTURE-front.md): the Next.js dashboard on Vercel
 - [watsonx.ai setup](docs/WATSONX_SETUP.md): IBM Cloud credentials for `narrative.py` / `watson_agent`
 - [Multicloud AI (design)](docs/MULTICLOUD_AI.md): adding Google Vertex AI alongside watsonx.ai, and benchmarking models
 - [AI-Assisted Development Framework](docs/AI_ASSISTED_DEVELOPMENT_FRAMEWORK.md): how this repo itself is built — contract files and git workflow
@@ -355,10 +526,19 @@ AI-provider labeling); CI for `web-next/` is split from the backend's
 (`.github/workflows/frontend-ci.yml`, path-filtered) so frontend-only
 changes don't trigger the Python/mutation pipeline or a Cloud Run deploy.
 
-We're deliberately not adopting Terraform or new GCP infrastructure for
-this: the existing Cloud Run deploy (`docs/DEPLOY.md`, Phase 13) is left
-as-is, and the new frontend ships as a plain Vercel project (no IaC). See
-`PENDING.md` Phase 14 and `docs/ARCHITECTURE-front.md` for the full tracker.
+The frontend itself gets no Terraform or GCP infrastructure: it ships as a
+plain Vercel project (no IaC). See `PENDING.md` Phase 14 and
+`docs/ARCHITECTURE-front.md` for the full tracker.
+
+**Also planned: run history, Postgres and Terraform for the backend.** See
+[Database](#database-planned) and
+[Infrastructure as code](#infrastructure-as-code-planned) above
+(`PENDING.md` Phase 17). Design only.
+
+**Also planned: a real multi-agent swarm.** Parallel Test Writer / Verifier /
+Critic lanes, one per file, bringing back IBM Bob's swarm design on
+watsonx.ai. See [Multi-agent swarm (planned)](#multi-agent-swarm-planned)
+(`PENDING.md` Phase 18). Design only.
 
 **Also planned: multicloud AI.** watsonx.ai is the only provider today. See
 [`docs/MULTICLOUD_AI.md`](docs/MULTICLOUD_AI.md) (`PENDING.md` Phase 16) for
