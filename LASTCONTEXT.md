@@ -449,6 +449,8 @@ both merged to `main`.
 |---|---|---|
 | 1 | Wrote the design for storing every measured run: ER schema, SQL views, risk-model calibration plan, six dashboard charts, API routes, Terraform layout for GCP, two-day build order with an explicit cut line | `docs/DATA_PLATFORM.md` |
 | 2 | Added Phase 17 tracker | `PENDING.md` |
+| 3 | README: new sections + ToC entries for CI/CD, Deploy to Google Cloud, Database (planned), Infrastructure as code (planned); `DEPLOY.md`, `DATA_PLATFORM.md`, `ARCHITECTURE-front.md` added to Documentation; `.github/workflows/`, `Dockerfile`, both docs added to the tree. All anchors checked against GitHub slug rules | `README.md` |
+| 4 | Corrected two false claims: risk score described as `complexity × churn × (1 − detection)` (README, PENDING Phase 4) — real formula is `uncovered / non-blank lines`; `git` listed as used for churn and cloning by URL — neither exists, only `repoguard fix` uses git (branch/commit/push) | `README.md`, `PENDING.md` |
 
 Key decisions (design only, nothing built):
 - Database stores, engine measures: all derived values (deltas, trends) are SQL views, never stored columns. Persistence is off unless `REPOGUARD_DATABASE_URL` is set.

@@ -79,7 +79,7 @@ Build plan and task tracker. Update status as work progresses; never delete comp
 
 | Deliverable | Description | Status |
 |---|---|---|
-| `risk_score()` | Ranks functions: complexity × git churn × (1 − detection rate) | 🟢 |
+| `risk_score()` | Ranks files by `uncovered lines / non-blank lines` (what `compute_risk` actually does). The earlier "complexity × git churn × (1 − detection rate)" description was never implemented; extra terms are Phase 17 §5, added only if stored data shows they predict surviving mutants better | 🟢 |
 | `render_dashboard()` | HTML report with before/after, gaps, risk, surviving mutants | 🟡 |
 
 ---

@@ -35,6 +35,10 @@ IBM Bob Hackaton Ranking (Bob IDE ussage):
 - [Using the watsonx.ai fix loop](#using-the-watsonxai-fix-loop)
 - [Requirements](#requirements)
 - [Project structure](#project-structure)
+- [CI/CD](#cicd)
+- [Deploy to Google Cloud](#deploy-to-google-cloud)
+- [Database (planned)](#database-planned)
+- [Infrastructure as code (planned)](#infrastructure-as-code-planned)
 - [IBM Bob Usage](#ibm-bob-usage)
 - [AI-Assisted Development](#ai-assisted-development)
 - [Documentation](#documentation)
@@ -70,7 +74,7 @@ that don't affect the tested inputs — see `AGENTS.md §9`.
 - 🧪 **Writes the missing tests.** `repoguard fix` hands each file's surviving mutants to IBM watsonx.ai, one file at a time, through a guarded tool that can only write under `tests/` — never source. A second watsonx.ai call critiques the new test before the suite is re-measured for real.
 - 🌐 **API checks.** Reads the OpenAPI schema of a FastAPI app, flags endpoints no test calls, and smoke-tests every `GET` endpoint for 5xx errors.
 - 👁️ **Visual regression.** Starts the app, takes screenshots at desktop (1280 px) and mobile (390 px) widths, and diffs them pixel by pixel against a baseline. Also reports console errors and basic accessibility issues.
-- 📊 **Risk ranking and report.** Ranks functions by `complexity × git churn × (1 − detection rate)` and builds an HTML dashboard.
+- 📊 **Risk ranking and report.** Ranks files by the share of their lines left uncovered (`uncovered lines / non-blank lines`) and builds an HTML dashboard. Extra terms such as git churn are planned only if stored run history shows they predict surviving mutants better — see [`docs/DATA_PLATFORM.md` §5](docs/DATA_PLATFORM.md#5-risk-model-v2--calibrated-not-invented).
 
 **Design principle:** the AI decides what to test, and deterministic tools do the measuring. No number in the report is estimated by a model.
 
@@ -172,7 +176,7 @@ same way `web/server.py` does — no MCP round-trip needed for its own use.
 | fastmcp | MCP server for external MCP clients | For `repoguard mcp` |
 | fastapi, uvicorn, httpx | Web UI and API checks | For UI and API |
 | playwright + Chromium, pillow, axe-playwright-python | Screenshots, visual diffs and accessibility | For visual checks |
-| git | Churn for the risk score; cloning by URL | Recommended |
+| git | `repoguard fix` creates a branch, commits and pushes the new tests | For `repoguard fix` |
 | `ibm-watsonx-ai` (`pip install -e ".[ai]"`) + IBM Cloud credentials | Writing tests (`repoguard fix`) and the optional `--summarize` prose | For AI features only — measurement never needs it |
 
 The mutation engine is built on Python's standard `ast` module. It doesn't depend on mutmut or Stryker.
@@ -182,6 +186,11 @@ The mutation engine is built on Python's standard `ast` module. It doesn't depen
 ```
 ibm-bob-mcp-agent-guard/
 ├── .bob/                           Where IBM Bob built Phases 0–8 (docs/IBM_BOB_USAGE.md); config kept for history
+├── .github/workflows/
+│   ├── ci.yml                      Backend CI: verify.py checks, demo-repo tests, coverage gate, mutation determinism
+│   ├── frontend-ci.yml             web-next/ lint + build (path-filtered)
+│   └── cd.yml                      Build image → Artifact Registry → deploy to Cloud Run on push to main
+├── Dockerfile                      Single image: `repoguard serve` + bundled demo-repo/
 │
 ├── repoguard_engine/               Core library + all entry points
 │   ├── __init__.py
@@ -216,6 +225,8 @@ ibm-bob-mcp-agent-guard/
 ├── docs/
 │   ├── ARCHITECTURE.md             Layer diagram, data flow, MCP tool list
 │   ├── DEMO.md                     3-minute demo script
+│   ├── DEPLOY.md                   One-time GCP setup for the Cloud Run deploy
+│   ├── DATA_PLATFORM.md            Design (Phase 17): run history on Postgres, Terraform, data-driven charts
 │   ├── WATSONX_SETUP.md            Getting IBM Cloud credentials for narrative.py / watson_agent
 │   ├── AI_ASSISTED_DEVELOPMENT_FRAMEWORK.md  How this project itself is built (Claude, file-based contract)
 │   ├── make_results_chart.py       Generates the before/after results chart
@@ -233,6 +244,83 @@ ibm-bob-mcp-agent-guard/
 ├── .gitignore
 └── .bobignore
 ```
+
+## CI/CD
+
+Three GitHub Actions workflows, split so a frontend-only change never
+triggers the Python/mutation pipeline or a Cloud Run deploy:
+
+| Workflow | Trigger | What it runs |
+|---|---|---|
+| [`ci.yml`](.github/workflows/ci.yml) | Push to `main`, every PR (ignores `web-next/**`) | `verify.py phase0` + `phase7`, demo-repo pytest, `repoguard gate demo-repo --threshold 60`; a separate slower job runs `verify.py phase3` (two full mutation runs, must match 16/79) |
+| [`frontend-ci.yml`](.github/workflows/frontend-ci.yml) | Changes under `web-next/**` | `npm run lint` + `npm run build` |
+| [`cd.yml`](.github/workflows/cd.yml) | Push to `main` (ignores `web-next/**`), or manual | Builds the `Dockerfile`, pushes to Artifact Registry, deploys to Cloud Run |
+
+The coverage gate threshold (60%) sits just under the measured 65.1%
+baseline, so it fails on a real regression instead of always or never.
+
+## Deploy to Google Cloud
+
+The backend (`repoguard serve`: API + dashboard + bundled `demo-repo/`)
+deploys to **Cloud Run** through `cd.yml`. The workflow is in the repo; the
+one-time GCP setup (project, Artifact Registry, service account, GitHub
+secrets and variables) needs a person with GCP access and is written out
+step by step in [`docs/DEPLOY.md`](docs/DEPLOY.md). That setup has not been
+run yet, so there is no live URL.
+
+Known limits of today's deploy: the service is public
+(`--allow-unauthenticated`, fine for a judged demo), CD authenticates with
+a long-lived JSON key, and the container's filesystem is ephemeral, so
+results in `repoguard-out/` are lost when an instance stops. The next two
+sections plan fixes for the last two.
+
+The Next.js dashboard (`web-next/`) is a separate Vercel project — see
+[`docs/ARCHITECTURE-front.md`](docs/ARCHITECTURE-front.md).
+
+## Database (planned)
+
+> Design only (`PENDING.md` Phase 17). Nothing below exists in code yet.
+
+Today every run writes `repoguard-out/*.json` and keeps no history. The
+plan stores every measured run per commit in **PostgreSQL** (Cloud SQL on
+GCP, SQLite locally and in tests, one SQLAlchemy code path), so trends,
+persistent surviving mutants, flaky tests and the fix loop's before/after
+effect become queryable. Rules carried over from `AGENTS.md §4`:
+
+- The engine measures; the database only stores. Deltas and trends are SQL views, never stored numbers.
+- Persistence is off unless `REPOGUARD_DATABASE_URL` is set, and cannot change a measured number.
+- Runs are compared only when they used the same mutation operator set.
+
+Before the schema can hold anything useful, the engine must stop discarding
+two things: the outcome of each mutant (today only the positional IDs of
+surviving mutants are kept) and the outcome of each test.
+
+| Topic | Link |
+|---|---|
+| Why a database, and what "data-driven" QA uses history for | [§1](docs/DATA_PLATFORM.md#1-why-a-database-now) |
+| Engine changes the schema depends on | [§4.1](docs/DATA_PLATFORM.md#41-engine-changes-the-schema-depends-on) |
+| ER diagram (12 tables) | [§4.2](docs/DATA_PLATFORM.md#42-entity-relationship-diagram) |
+| SQL views behind every chart | [§4.4](docs/DATA_PLATFORM.md#44-views-all-derived-values-live-here) |
+| Risk model v2 — calibrated against stored data | [§5](docs/DATA_PLATFORM.md#5-risk-model-v2--calibrated-not-invented) |
+| Dashboard charts | [§6](docs/DATA_PLATFORM.md#6-charts-web-next-dashboard) |
+| API additions | [§7](docs/DATA_PLATFORM.md#7-api-additions-webserverpy-thin-over-store) |
+| Build order and cut line | [§10](docs/DATA_PLATFORM.md#10-build-steps-two-day-hackathon-order) |
+| Verification (`verify.py phase17`) | [§11](docs/DATA_PLATFORM.md#11-verification) |
+
+## Infrastructure as code (planned)
+
+> Design only (`PENDING.md` Phase 17, blocks B1–B2).
+
+**Terraform** (`infra/terraform/`, not created yet) will replace the manual
+`gcloud` steps in `docs/DEPLOY.md` and add the database: Artifact Registry,
+Cloud SQL PostgreSQL 16, Secret Manager for the DB password, the Cloud Run
+service (with the Cloud SQL socket and a 900 s timeout for mutation runs),
+and Workload Identity Federation so `cd.yml` no longer needs a JSON key.
+Terraform owns the service definition; CD keeps deploying the image.
+Terraform covers the backend only: the frontend stays on Vercel.
+`terraform apply` needs a person with GCP access and billing, the same as
+today's `docs/DEPLOY.md`. Full layout and decisions:
+[`docs/DATA_PLATFORM.md` §8](docs/DATA_PLATFORM.md#8-infrastructure-as-code-terraform).
 
 ## IBM Bob Usage
 
@@ -337,6 +425,9 @@ The rest of this section is about the first one — how the repo itself gets bui
 - [Hackathon submission status](docs/HACKATHON_SUBMISSION_STATUS.md): checklist tracking against the lablab.ai submission requirements
 - [Architecture](docs/ARCHITECTURE.md): diagrams, the sequence of a run, MCP tools and the data contract
 - [Demo script](docs/DEMO.md): 3-minute pitch and backup plan
+- [Deploy to Cloud Run](docs/DEPLOY.md): one-time GCP setup for the CD workflow
+- [Data platform (design)](docs/DATA_PLATFORM.md): run history on Postgres, Terraform on GCP, data-driven charts
+- [Frontend architecture](docs/ARCHITECTURE-front.md): the Next.js dashboard on Vercel
 - [watsonx.ai setup](docs/WATSONX_SETUP.md): IBM Cloud credentials for `narrative.py` / `watson_agent`
 - [Multicloud AI (design)](docs/MULTICLOUD_AI.md): adding Google Vertex AI alongside watsonx.ai, and benchmarking models
 - [AI-Assisted Development Framework](docs/AI_ASSISTED_DEVELOPMENT_FRAMEWORK.md): how this repo itself is built — contract files and git workflow
@@ -355,10 +446,14 @@ AI-provider labeling); CI for `web-next/` is split from the backend's
 (`.github/workflows/frontend-ci.yml`, path-filtered) so frontend-only
 changes don't trigger the Python/mutation pipeline or a Cloud Run deploy.
 
-We're deliberately not adopting Terraform or new GCP infrastructure for
-this: the existing Cloud Run deploy (`docs/DEPLOY.md`, Phase 13) is left
-as-is, and the new frontend ships as a plain Vercel project (no IaC). See
-`PENDING.md` Phase 14 and `docs/ARCHITECTURE-front.md` for the full tracker.
+The frontend itself gets no Terraform or GCP infrastructure: it ships as a
+plain Vercel project (no IaC). See `PENDING.md` Phase 14 and
+`docs/ARCHITECTURE-front.md` for the full tracker.
+
+**Also planned: run history, Postgres and Terraform for the backend.** See
+[Database](#database-planned) and
+[Infrastructure as code](#infrastructure-as-code-planned) above
+(`PENDING.md` Phase 17). Design only.
 
 **Also planned: multicloud AI.** watsonx.ai is the only provider today. See
 [`docs/MULTICLOUD_AI.md`](docs/MULTICLOUD_AI.md) (`PENDING.md` Phase 16) for
