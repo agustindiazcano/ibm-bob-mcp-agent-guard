@@ -465,7 +465,7 @@ change (§14 R2).
 | S0 | Groundwork: `_run_chat_stage` → `StageResult` with injectable toolset; `run_fix_loop(model=...)`; wall time per phase/stage in `FixResult` + evidence; `testing/ScriptedProvider`; `verify.py phase18-seq-stub` + CI job `fix-loop-stub` | 🟢 Session 23. Measured with no credentials: 86.08% (68/79), 362/367 lines, 56 passed, identical across 3 runs |
 | S1 | Parallel mutation workers (`mutation.py`, split out of `core.py`); `paths_to_mutate` accepts a single file; empty scope raises `NoMutantsError`; sham-mutant control (`MutationEnvironmentError`) | 🟢 PR #62 — `verify.py phase18-s1` PASS: workers=1 and workers=4 both score 20.25% (16/79), identical surviving-mutant IDs; file-scoped runs sum to 79/16; not yet wired into `ci.yml` (see Phase 17's `verify.py phase17` row) |
 | S2 | Per-mutant records (same as Phase 17 A2) | 🟢 PR #62, same commit as A2 above |
-| S3 | Per-lane sandbox + owned-path write guard | 🔴 next up for the swarm |
+| S3 | Per-lane sandbox + owned-path write guard | 🟢 `swarm/sandbox.py` (`lane_sandbox`, `SandboxLeak`, import-isolation probe) + `swarm/guard.py` (`writer_toolset`/`critic_toolset`, wraps `watson_agent/tools.py` without modifying it); `verify.py phase18-s3` PASS: owned write succeeds, 6 out-of-scope paths (source, another lane's file, `conftest.py`, `..` escape, absolute path into the real repo) all `SourceEditRejected`, critic has no write tool, sandbox cleaned up on both normal exit and an exception, real demo-repo byte-identical throughout |
 | S4 | Lane state machine, thread pool, blackboard files, `timeline.jsonl` | 🔴 |
 | S5 | Read-only critic with JSON verdict; one revision round | 🔴 |
 | S6 | Fan-in, Gate, Publisher, Reporter | 🔴 |

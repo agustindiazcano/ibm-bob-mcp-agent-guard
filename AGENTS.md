@@ -80,6 +80,9 @@ ibm-bob-mcp-agent-guard/
 │   │   ├── prompts.py        TEST_WRITER_PROMPT, CRITIC_PROMPT — carried forward from .bob/rules,skills
 │   │   └── orchestrator.py   run_fix_loop — measure → write → critique → re-measure → evidence (wall time per phase/stage)
 │   ├── testing/          Credential-free test doubles — ScriptedProvider (never wired into get_provider(); used by verify.py phase18-seq-stub)
+│   ├── swarm/            Multi-agent fix loop (Phase 18) — one lane per source file, parallel sandboxes, fan-in behind a single Gate
+│   │   ├── sandbox.py        lane_sandbox() — per-lane temp copy outside the target repo, cleanup, import-isolation probe (SandboxLeak)
+│   │   └── guard.py          writer_toolset/critic_toolset — stricter wrapper over watson_agent/tools.py (never edits it, AGENTS.md §8)
 │   ├── store/            Run history, optional [db] extra (Phase 17, docs/DATA_PLATFORM.md) — no SQLAlchemy import in __init__
 │   │   ├── context.py        collect_context — project slug, git sha/branch/dirty, versions, operators hash
 │   │   ├── record.py         build_run_record / validate_run_record — the plain-dict run record

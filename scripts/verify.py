@@ -29,6 +29,7 @@ Phase checks implemented:
     phase17-api       — Phase 17 A3: read routes, POST /api/runs ingest tokens, a real
                         `repoguard analyze --push` against a real `repoguard serve`
                         (needs the [db] extra; see scripts/verify_phase17.py)
+    phase18-s3        — lane sandbox + owned-path write guard (see scripts/verify_phase18.py)
 """
 
 from __future__ import annotations
@@ -47,6 +48,7 @@ from pathlib import Path
 from verify_phase17 import (  # scripts/ is sys.path[0]
     check_phase17_api, check_phase17_endpoints, check_phase17_pipeline, check_phase17_store,
 )
+from verify_phase18 import check_phase18_s3
 
 
 def run(cmd: list[str], timeout: int = 30) -> tuple[int, str]:
@@ -790,6 +792,7 @@ CHECKS: dict[str, callable] = {
     "phase18-s1": check_phase18_s1,
     "phase17-engine": check_phase17_engine,
     "phase18-s2": check_phase17_engine,
+    "phase18-s3": check_phase18_s3,
 }
 
 
