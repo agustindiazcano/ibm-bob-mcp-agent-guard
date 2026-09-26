@@ -274,6 +274,7 @@ contract. (This section absorbed the former satellite `PENDING-front.md`.)
 | Error messages | Unreachable backend → "Can't reach the backend at `<URL>`…" naming both causes (stopped backend / CORS rejection look identical to the browser) (PR #48); non-2xx → the backend's `detail` instead of "analyze failed: 400" (PR #50) | 🟢 verified live |
 | Docs | `docs/ARCHITECTURE-front.md` updated to what's built (real `/api/summary` contract, closed gaps); `docs/ARCHITECTURE.md`'s section now a short summary pointing to it (kept as a satellite so front/back sessions don't edit the same paragraphs); deployed URL in `README.md` and `web-next/README.md`; real dashboard screenshots (light/dark, production build, `demo-repo` with mutation: 65.1%, 20.25% 16/79) in `README.md` → `docs/img/dashboard-*.png` | 🟢 |
 | Visual design | Layout, stat cards, gaps list, risk table with score bars, live-progress states, advisory-tagged summary, empty/error states, light + dark, mobile — CSS Modules, no new dependency; display-only formatting (numbers stay verbatim from the API) | 🟢 checked in Chrome against a real `repoguard serve` at 1280px light/dark and 390px, no console errors |
+| Site restructure | Shared `SiteNav`/`SiteFooter` (`web-next/app/components/site/`) + four screens: **Analyze** (`/`, existing dashboard), **Results** (`/results` — reads `fetchProjects`/`fetchView` from `history.ts`, shows "Run history isn't on this backend yet" until Phase 17 A3 exists), **Project** (`/project`), **Technical** (`/technical`), **AI-assisted dev** (`/ai-development`) — the last three mirror this README's own sections for someone landing on the deployed site | 🟢 PR #58, not verified live in a browser here (`README.md` was found out of date on this — see Session sync below) |
 
 **Verified so far:** `npm run lint` and `npm run build` pass. End-to-end on
 `main` (`50fe2e6`): headless Chrome (Playwright) clicked Analyze against
@@ -384,6 +385,7 @@ false 100% mutation score). See `docs/VERTEX_SETUP.md` for credentials.
 | `ai_providers/vertex.py` | Google Vertex AI implementation against `google-genai==2.25.0`; live-verified with real GCP credentials (text call + tool-calling round trip) | 🟢 |
 | `narrative.py` / `orchestrator.py` switched to `get_provider()` | No behavior change for watsonx.ai — confirmed live (`phase15`/`phase16`/new `multicloud` check all PASS; a real `--summarize` call with real watsonx credentials still returns real text) | 🟢 |
 | `--provider` CLI flag | `repoguard fix --provider` / `repoguard analyze --summarize --provider` override `REPOGUARD_AI_PROVIDER` per call | 🟢 |
+| `DEFAULT_PROVIDER` | Vertex AI is now the default provider (was watsonx) — `DEFAULT_PROVIDER` + `resolve_provider_name()` in `ai_providers/`, one place `narrative.py`/`web/fix_job.py` read the provider actually used from. `--provider watsonx` still works | 🟢 PR #62 |
 | `scripts/benchmark_models.py` | Runs the fix loop against fresh `demo-repo` copies per `(provider, model_id)`, compares real mutation-score deltas | 🔴 superseded by Phase 19 step 9 (`scripts/eval_fixloop.py`: same idea plus repeats, integrity counts and a held-out fixture) |
 
 Live cross-provider benchmarking needs real credentials for at least two
@@ -412,14 +414,14 @@ check) in its new §13. Build from §13, not the original design sketch.
 | — | `docs/DATA_PLATFORM.md` — schema, views, charts, Terraform layout, build order | 🟢 corrected + step-by-step plan added, §13 |
 | A1 | `repoguard_engine/store/` (SQLAlchemy Core, SQLite + Postgres), `[db]` extra; `run_pipeline(persist, project)` stores when `REPOGUARD_DATABASE_URL` is set, opening the DB *before* measuring; `--project` on `analyze`/`gate`; web `/api/analyze`, the fix loop and `tool_generate_summary` never store | 🟢 Session 23 — `verify.py phase17-store` PASS on SQLite **and** a real PostgreSQL 16 (exact equality: stored coverage `65.11627906976744`); `phase17-pipeline` PASS (outputs byte-identical stored vs. not, stored 16/79 = 20.25, bad URL fails in 0.37 s); CI job `store` with a `postgres:16` service |
 | A1-gap | **`endpoint_results` has no consumer.** The table is written (decision #6: keep the skeleton) but no route or chart reads it. Build one — e.g. `GET /api/projects/{slug}/endpoints` (A3.1) or an "untested endpoints over time" chart (C1) — or drop the table | 🔴 must be done |
-| A2 | Engine: per-mutant outcomes + stable fingerprints, `junit.xml` per-test outcomes; `pipeline.py` persists | 🔴 |
-| A3 | API read routes + `POST /api/runs` ingest (project token) + `repoguard analyze --push` | 🔴 |
+| A2 | Engine: per-mutant outcomes + stable fingerprints (`MutantRecord` → `repoguard-out/mutants.json`), `junit.xml` per-test outcomes (→ `repoguard-out/tests.json`); built as one commit with Phase 18 S1 (`mutation.py` split out of `core.py`, re-exported) since S2 and A2 are the same work | 🟢 PR #62 — `verify.py phase17-engine` PASS: 79 unique/stable fingerprints identical across 2 runs, fingerprint-stability check on an added function, per-test outcomes 5→71 passed baseline→after-reference, JUnit pass/fail/skip/xfail mapping correct. **A2 doesn't persist per-mutant/per-test rows to the SQL store yet** — only to `repoguard-out/*.json`, same contract as everything else; wiring these into `store/` (new tables, or extending A1's schema) is still open |
+| A3 | API read routes + `POST /api/runs` ingest (project token) + `repoguard analyze --push` | 🔴 next up. `web-next/app/results/` (PR #58) already has the frontend scaffolding (`fetchProjects`/`fetchView` in `history.ts`) expecting these routes — it currently shows "Run history isn't on this backend yet" |
 | B1 | `infra/terraform/` — Artifact Registry, deployer service account + roles, WIF pool/provider; `infra-ci.yml` (fmt/validate) | 🟢 codifies the Phase 13 identity that already existed for real; `terraform plan` against the live project confirmed "No changes" after `terraform import` — see `infra/terraform/README.md`. Cloud SQL/Secret Manager stay out until Block A (the DB store itself) is built — no infra ahead of the app that would use it |
 | B2 | `cd.yml` on Workload Identity Federation (drop `GCP_SA_KEY`) | 🟢 done early, as part of Phase 13 — see `docs/DEPLOY.md` |
 | C1 | web-next charts: trend, survival by operator, fix effect, survivors, flaky | 🔴 |
 | C2 | Risk heatmap (below the cut line) | 🔴 |
 | D | User accounts (below the cut line — optional) | 🔴 |
-| — | `verify.py phase17` (round-trip, determinism, after-reference delta 69.62 pp, Postgres service container) | 🟡 `phase17-store` + `phase17-pipeline` built (A1) with the Postgres service container in CI; the aggregate `phase17` (per-mutant determinism, after-reference delta) waits for A2 |
+| — | `verify.py phase17` (round-trip, determinism, after-reference delta 69.62 pp, Postgres service container) | 🟡 `phase17-store` + `phase17-pipeline` (A1) and `phase17-engine` (A2) all exist and PASS individually; only A1's are wired into `ci.yml` (job `store`) — **`phase17-engine` and `phase18-s1` run nowhere in CI yet**, PR #62 added the checks but not a job. No single aggregate `phase17` check either |
 
 `terraform apply` and a GCP billing account are human steps — same
 situation as `docs/DEPLOY.md`.
@@ -427,8 +429,11 @@ situation as `docs/DEPLOY.md`.
 Decisions #2–#6 were resolved by the user in Session 23 (raise on write
 failure; slug precedence as recommended; `passed_gate` only in views; no web
 writes until per-project tokens; keep `endpoint_results` as a skeleton) —
-see `docs/DATA_PLATFORM.md` §13. #1 (JUnit test id) is still open, needed
-at A2.2. Next step: **A2.1** (per-mutant records + stable fingerprints).
+see `docs/DATA_PLATFORM.md` §13. #1 (JUnit test id) is still open. A2 landed
+in PR #62 (see A2 row above — JSON-only, not persisted to the SQL store).
+Next step: **A3** (read routes + ingest), or wiring `phase17-engine`/
+`phase18-s1` into CI first (currently unwired — see the `verify.py phase17`
+row above).
 
 ---
 
@@ -452,9 +457,9 @@ change (§14 R2).
 |---|---|---|
 | — | `docs/MULTI_AGENT_SWARM.md` — agents, parallelism, file contract, build order, verification | 🟢 corrected against real Phase 11 result + 4 new bugs found, step-by-step plan added, §14 |
 | S0 | Groundwork: `_run_chat_stage` → `StageResult` with injectable toolset; `run_fix_loop(model=...)`; wall time per phase/stage in `FixResult` + evidence; `testing/ScriptedProvider`; `verify.py phase18-seq-stub` + CI job `fix-loop-stub` | 🟢 Session 23. Measured with no credentials: 86.08% (68/79), 362/367 lines, 56 passed, identical across 3 runs |
-| S1 | Parallel mutation workers; `paths_to_mutate` accepts a file (today it silently finds 0 mutants); zero mutants is an error | 🔴 |
-| S2 | Per-mutant records (same as Phase 17 A2) | 🔴 |
-| S3 | Per-lane sandbox + owned-path write guard | 🔴 |
+| S1 | Parallel mutation workers (`mutation.py`, split out of `core.py`); `paths_to_mutate` accepts a single file; empty scope raises `NoMutantsError`; sham-mutant control (`MutationEnvironmentError`) | 🟢 PR #62 — `verify.py phase18-s1` PASS: workers=1 and workers=4 both score 20.25% (16/79), identical surviving-mutant IDs; file-scoped runs sum to 79/16; not yet wired into `ci.yml` (see Phase 17's `verify.py phase17` row) |
+| S2 | Per-mutant records (same as Phase 17 A2) | 🟢 PR #62, same commit as A2 above |
+| S3 | Per-lane sandbox + owned-path write guard | 🔴 next up for the swarm |
 | S4 | Lane state machine, thread pool, blackboard files, `timeline.jsonl` | 🔴 |
 | S5 | Read-only critic with JSON verdict; one revision round | 🔴 |
 | S6 | Fan-in, Gate, Publisher, Reporter | 🔴 |

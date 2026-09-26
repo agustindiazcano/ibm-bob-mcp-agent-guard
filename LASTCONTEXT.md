@@ -724,32 +724,89 @@ Run still say "not deployed", and "Infrastructure as code (planned)" says
 
 ---
 
+### Session 24 — branch cleanup: merged A1, rescued the last real work off `eager-gauss-ifyd8w`, fixed README drift
+
+User asked for a status check across all open branches before touching
+anything. Found 6: `#56`/`#58`/`#59` already merged, `claude/eloquent-fermat-4e9gir`
+(#57) already merged, and two genuinely pending: `claude/gifted-archimedes-3yrywk`
+(Phase 17 A1, this session's PR #60) and `claude/eager-gauss-ifyd8w`.
+
+| # | Action | Files affected / PR |
+|---|---|---|
+| 1 | Merged `origin/main` into `claude/gifted-archimedes-3yrywk`; resolved 9 conflicting files (main had advanced past it via #56/#58/#59) | `ci.yml`, `AGENTS.md`/`CLAUDE.md`, `LASTCONTEXT.md`, `PENDING.md`, `README.md`, `orchestrator.py`, `web/server.py`, `verify.py` — **PR #60** |
+| 2 | Audited `eager-gauss-ifyd8w` (a long-lived branch reused across Sessions 16/17/22, 4 commits, never opened as a PR): 2 of its 4 commits were obsolete — its own `S0` (`ScriptedProvider`/injectable-provider) had already been superseded by a *different, incompatible* implementation merged via #59, and its own Phase 17 A1 store duplicated #60's with a different schema. The other 2 (Vertex-as-default-provider, and S1+S2/A2 parallel mutation + per-mutant records) were still genuinely unbuilt anywhere | analysis only, no commit |
+| 3 | Rebuilt those 2 commits as a fresh branch off updated `main`: `feat/17-18-vertex-default-parallel-mutation`. Cherry-pick 1 (Vertex default) applied clean; cherry-pick 2 hit 4 conflicts (`cli.py`, `core.py`, `pipeline.py`, `verify.py`) — mechanical, since `core.py`'s ~380-line inline mutation engine was fully replaced by the new `mutation.py` module, and A1's `MUTATION_OPERATORS_HASH` import kept working unchanged (the new module defines the identical hash) | `mutation.py`, `_common.py` (new), `core.py`, `cli.py`, `pipeline.py`, `verify.py`, `mcp_server.py`, `orchestrator.py` — **PR #62** |
+| 4 | Verified PR #62 for real before merging: `verify.py phase18-s1` PASS (workers=1/4 both 20.25%, 16/79, identical survivor IDs) and `phase17-engine` PASS (79 unique/stable fingerprints, per-test outcomes 5→71 passed) | — |
+| 5 | Audited `README.md` against actual repo state — closed the exact gap Session 23 flagged above as "noticed, not fixed": CD/Cloud Run tech-stack rows said "not deployed" while the Deploy section itself said it was live; "Infrastructure as code (planned)" said `infra/terraform/` didn't exist when it's applied for real (`terraform plan` = "No changes"); `infra-ci.yml` was missing from the CI/CD table entirely; the swarm section still said "design only" after Step 0 merged (#59); the project tree was missing `infra/`, `scripts/`, `repoguard_engine/testing/`, and several already-linked `docs/` files; the frontend Roadmap paragraph didn't mention the new 5-page site (nav/footer + Analyze/Results/Project/Technical/AI-assisted-dev, #58) | `README.md` — **PR #61** |
+| 6 | Checked the `ibm-bob-mcp-agent-guard-frontend` worktree before editing shared docs (per the front/back parallel-session convention): clean, on `docs/14-live-deploy-context`, already an ancestor of `main` — stale but nothing in progress, nothing to reconcile | — |
+| 7 | Updated `PENDING.md`: A2/S1/S2 flipped 🔴→🟢 with PR #62's real numbers; noted A2's per-mutant/per-test records are JSON-only (`repoguard-out/`), not yet in the SQL store; flagged that `phase17-engine`/`phase18-s1` exist but run in **no CI job** (PR #62 added the checks, not a job); added the site-restructure row to Phase 14; added `DEFAULT_PROVIDER` row to Phase 16 | `PENDING.md` |
+
+Real bug caught mid-session, not by a check: the `bab8fd2` cherry-pick's
+conflicts were resolved and syntax-validated, but `git cherry-pick
+--continue` was never run — the commit sat unfinished for several turns
+before pushing. Caught only because `git log` showed one commit where two
+were expected. Lesson: after resolving a cherry-pick's conflicts, verify the
+commit actually landed (`git log` / `git status`), don't just trust that the
+files look right.
+
+No PRs were merged blindly: #60 was pushed only after both `phase17-store`
+and `phase17-pipeline` PASSed post-merge; #62 only after `phase18-s1` and
+`phase17-engine` PASSed on the rebuilt branch. `eager-gauss-ifyd8w` itself
+is now superseded and safe to delete — everything worth keeping from it is
+in `main` via #60/#62; nothing else in it is real, unmerged work.
+
+---
+
 ## Current repo state
 
-- Session 22 (Autofix) merged to `main` as PR #55.
-- **Session 23 (Phase 19 plan, docs only) is on `claude/pensive-rubin-7nhvkh`.** Phase 19 is 🔴 apart from its docs. Decisions D1/D3/D4/D9 are waiting on the user (`docs/EVAL_GUARDRAILS_PLAN.md` §9).
-- **Session 23 (frontend gaps) is on `claude/eloquent-fermat-4e9gir`, pushed, not merged.**
-- Branch: `main` — PR #37 (Phase 16 + 13 WIF), #38 (doc fixes), #39 (Phase 17 B1 Terraform), #40 (session log), #41 (cd.yml trim fix), #42 (cli graceful failure), #43 (frontend context docs), #44 (dashboard visual design), #45 (Phase 11 Gemini 3 + `run_tests` + `thought_signature` fixes), #46 (Phase 17/18 planning corrections), #47 (`/api/analyze` 400-vs-500 fix), #48 (frontend: clear backend-unreachable error + real screenshots) all merged
-- All Session 21 fixes merged: PR #49 (CORS), #51 (ImportError detail), #52 (`Dockerfile` `[vertex]` extra + docs — recovered after #49/#51 both dropped commits pushed post-merge, see Session 21 item 5), #53 (frontend live-deploy docs). `ok: true` summary path verified live for real
-- Phase 0/3/7/8/9/13/15/16: 🟢. Phase 11: 🟢 (see Session 20) — first genuinely successful live AI fix-loop run, 89.87%/71/79. Phase 17 B1/B2: 🟢 (Terraform-managed WIF)
-- Phase 14: 🟡 — PR #43 closed gaps 4/5/6, PR #44 added visual design, PR #48 added a clear backend-unreachable error + real production screenshots, PR #50 shows the backend's error `detail`. `NEXT_PUBLIC_REPOGUARD_API_BASE` now points at the real Cloud Run URL (Vercel, type "Config" not "Secret" since it's not sensitive), verified end-to-end including CORS (Session 21-front). Remaining: gap 3 (Autofix) is built (Session 22), and its live run is waiting on `REPOGUARD_FIX_TOKEN` being attached on Cloud Run (`docs/DEPLOY.md` §5). The summary's `ok=true` path is verified live (Session 21). Analyze *with* mutation against Cloud Run's request timeout is unchecked
-- Phase 17 A1 (store + pipeline hook) 🟢 on `claude/gifted-archimedes-3yrywk` (Session 23), merged to `main` as PR #60. A2 (per-mutant/per-test data), A3 (routes, ingest, `--push`), C (charts) still 🔴; `endpoint_results` needs a consumer (A1-gap). Build from `docs/DATA_PLATFORM.md` §13
-- Phase 18 (swarm): Step 0 🟢 (Session 23, `claude/inspiring-cannon-zy5v80`), merged to `main` as PR #59; S1–S8 still 🔴. `docs/MULTI_AGENT_SWARM.md` §14 now has a corrected S0–S8 plan + 15 risks (Session 20) — Phase 11's merge (PR #45) clears its §14 R1 blocker; demo-repo's 71/79 ceiling still means H2 can only tie there (§14 R2)
+- `main` is at PR #62. All of Sessions 22–24's work is merged: #55 (Autofix),
+  #56 (Phase 19 plan docs, `claude/pensive-rubin-7nhvkh`), #57 (frontend gaps:
+  endpoints card, honest mutation progress, Gate, `phase14ui`,
+  `claude/eloquent-fermat-4e9gir`), #58 (frontend site restructure: nav/footer
+  + Analyze/Results/Project/Technical/AI-assisted-dev), #59 (Phase 18 Step 0
+  groundwork, `claude/inspiring-cannon-zy5v80`), #60 (Phase 17 A1 store,
+  `claude/gifted-archimedes-3yrywk`), #61 (README accuracy fixes, Session 24),
+  #62 (Vertex-as-default + Phase 17 A2/Phase 18 S1-S2, rebuilt from
+  `eager-gauss-ifyd8w` in Session 24). Nothing is open and unmerged right now.
+- **`claude/eager-gauss-ifyd8w` is superseded — safe to delete.** Session 24
+  found its 4 commits split into 2 obsolete (an `S0`/`ScriptedProvider` that
+  duplicated #59 with an incompatible implementation, and a Phase 17 A1 store
+  that duplicated #60 with a different schema) and 2 real
+  (Vertex-as-default, S1+S2/A2), both of which are now in `main` via #62.
+  Nothing left in that branch is unmerged, real work.
+- Prior `main` history: PR #37 (Phase 16 + 13 WIF) through #55 — see earlier
+  session entries above for the full list.
+- Phase 0/3/7/8/9/13/15/16: 🟢. Phase 11: 🟢 (Session 20) — 89.87%/71/79.
+  Phase 17 B1/B2: 🟢 (Terraform-managed WIF).
+- Phase 14: 🟡 — the dashboard (gaps 1–8) and the new 5-page site (#58) are
+  done. Remaining: Autofix's (gap 3) live run is waiting on
+  `REPOGUARD_FIX_TOKEN` being attached on Cloud Run (`docs/DEPLOY.md` §5).
+  Analyze *with* mutation against Cloud Run's request timeout is unchecked.
+- **Phase 17: A1 🟢, A2 🟢 (Session 24, PR #62 — per-mutant/per-test records,
+  JSON-only, not yet in the SQL store), A1-gap 🔴 (`endpoint_results` has no
+  consumer), A3 🔴 (next step — the frontend's `/results` page already
+  expects it, #58), B1/B2 🟢, C 🔴.** `phase17-engine` PASSes but runs in no
+  CI job yet.
+- **Phase 18: S0 🟢, S1 🟢, S2 🟢 (Session 24, PR #62 — same commit as
+  Phase 17 A2), S3–S10 🔴 (S3, per-lane sandbox, is next).** `phase18-s1`
+  PASSes but also runs in no CI job yet — wiring both new checks into
+  `ci.yml` is a cheap, real next step before building further on top.
 - IBM Bob is retired. `.bob/` stays on disk as inert legacy (`.bob/DEPRECATED.md`); `repoguard_engine/watson_agent/` is the live replacement.
 - GCP Cloud Run: identity is Terraform-managed and a real deploy has succeeded. `GCP_PROJECT_ID`'s raw value in GitHub Settings still has the leading space (cosmetic — `cd.yml` auto-trims it every run; clean it up next time you're in Settings)
 - **Done, human-run:** `roles/aiplatform.user` granted to the Cloud Run runtime SA (`993240087609-compute@developer.gserviceaccount.com`) — confirmed in the real IAM policy. Was blocked for an agent session (Claude Code's auto-mode classifier blocks IAM permission grants regardless of scope), so the user ran `gcloud projects add-iam-policy-binding ...` directly
 - Open, not yet decided: repo rename; tightening `repoguard-deployer`'s 3 project-wide IAM roles (`infra/terraform/README.md`); whether the new `aiplatform.user` grant above should also move into `infra/terraform/` for consistency (suggested by the frontend session); the 6 Phase 17 decisions (now listed with recommendations in `docs/DATA_PLATFORM.md` §13's table) and 15 Phase 18 risks (`docs/MULTI_AGENT_SWARM.md` §14)
-- Unexplained, found mid-session: an auto-generated `bobalytics` usage-stats update to `README.md` (badge reorder + a new dated impact row) sitting uncommitted in the working tree, origin unknown — left alone, not folded into any PR
+- The `ibm-bob-mcp-agent-guard-frontend` worktree is stale (on `docs/14-live-deploy-context`, already merged into `main`) but clean — nothing in progress there as of Session 24.
 
 ---
 
 ## How to resume
 
 1. Read `PENDING.md` for the task list (Phase 11 is now 🟢 — read its "3 attempts, 3 bugs" narrative before touching `watson_agent/` again, it explains real, non-obvious API constraints).
-2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16`, `multicloud`, `phase14fix`, `phase14ui` (needs `npm ci` in `web-next/`) (and, with `[db]`, `phase17-store`, `phase17-pipeline`) to confirm baseline holds. (`ci.yml` doesn't run `phase14fix` yet; it's credential-free, so it could.)
-3. Frontend punch-list items 1-4 are all done and verified live (Session 21). Autofix (`POST /api/fix`, Phase 14 gap 3) is built (Session 22); what's left is the human token step plus a first live run. When pushing follow-up commits to a branch mid-session, confirm with `git log origin/main..<branch>` that nothing merged out from under you first (Session 21 item 5 — happened 3 times).
-4. Build Phase 17/18 from `docs/DATA_PLATFORM.md` §13 / `docs/MULTI_AGENT_SWARM.md` §14, not their original sketches. Phase 17 next step: **A2.1** (per-mutant records + fingerprints; also Phase 18's S2). Needs `pip install -e ".[db]"`; for a Postgres check set `REPOGUARD_TEST_DATABASE_URL` (a local `postgresql` 16 service works: `service postgresql start`). Decision #1 (JUnit test id) must be asked before A2.2. Don't forget the A1-gap: `endpoint_results` has no reader yet. `core.py` is at 586 lines — A2.1 adds `MutantRecord`/fingerprints, so split the mutation engine into its own module first (`CLAUDE.md §6`, ~600-line limit). Phase 18's S1 (`core.run_mutation` workers, file scope, `NoMutantsError`, `COPY_IGNORE`, sham-mutant control) also edits `core.py` and shares S2 with Phase 17 A2 — coordinate before starting either, build the shared per-mutant-record work once.
+2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16`, `multicloud`, `phase14fix`, `phase14ui` (needs `npm ci` in `web-next/`), `phase18-seq-stub` (and, with `[db]`, `phase17-store`, `phase17-pipeline`, `phase18-s1`, `phase17-engine`) to confirm baseline holds. `phase18-s1`/`phase17-engine` run nowhere in CI yet (Session 24 finding) — a cheap first task is adding them to `ci.yml`, e.g. a new job or folding into `store`, before building S3/A3 on top.
+3. Frontend punch-list items 1-4 are all done and verified live (Session 21). Autofix (`POST /api/fix`, Phase 14 gap 3) is built (Session 22); what's left is the human token step plus a first live run. When pushing follow-up commits to a branch mid-session, confirm with `git log origin/main..<branch>` that nothing merged out from under you first (Session 21 item 5, and again in Session 24 — a cherry-pick's conflicts were resolved but `--continue` was never run; always check `git log`/`git status` after resolving conflicts, don't trust that the files look right).
+4. Phase 17/18 next steps (A2/S1/S2 landed in Session 24, PR #62): **A3** (read routes + ingest — the frontend's `/results` page already expects `fetchProjects`/`fetchView`, #58) and **S3** (per-lane sandbox + write guard). Both still build from `docs/DATA_PLATFORM.md` §13 / `docs/MULTI_AGENT_SWARM.md` §14, not their original sketches. Decision #1 (JUnit test id) is still open. Don't forget the A1-gap: `endpoint_results` has no reader yet.
 5. Autofix: attach `REPOGUARD_FIX_TOKEN` (`docs/DEPLOY.md` §5), then run it from the Vercel demo against `demo-repo` and record the measured before/after. If you change a Vercel env var, Redeploy the **newest `main`** deployment, never an older row (`docs/ARCHITECTURE-front.md`, Session 21-front item 5).
 6. If tightening `repoguard-deployer`'s IAM roles, or moving the new `aiplatform.user` grant into Terraform: read `infra/terraform/README.md`'s "Known gap" section first — real permissions change against a live project, own PR.
 7. The repo-rename decision is open and low-urgency — decide whenever, it's cosmetic.
-8. Phase 19: build from `docs/EVAL_GUARDRAILS_IMPLEMENTATION.md` in step order. Steps 1, 3, 4, 5, 7 and 8 need no approval; step 2 needs D1, step 6 needs D9. Step 4 is shared with Phase 18 S1/S2, so check which phase built it first.
+8. Phase 19: build from `docs/EVAL_GUARDRAILS_IMPLEMENTATION.md` in step order. Steps 1, 3, 4, 5, 7 and 8 need no approval; step 2 needs D1, step 6 needs D9. Step 4 (sham mutant + outcome classes) overlaps what Phase 18 S1/S2 already built (Session 24) — check `mutation.py`'s `MutationEnvironmentError` before rebuilding it.
+9. `claude/eager-gauss-ifyd8w` is superseded (Session 24) — delete it whenever convenient, nothing in it is unmerged real work. If a new session gets assigned that branch name again by the harness, don't assume its history is relevant; diff it against `main` first.
