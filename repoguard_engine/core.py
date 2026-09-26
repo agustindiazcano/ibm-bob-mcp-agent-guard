@@ -15,6 +15,23 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
+def _require_repo_dir(repo_path: str | Path) -> Path:
+    """
+    Validate repo_path up front, with a message a caller can act on.
+
+    Without this, a bad path reaches subprocess.run(cwd=repo, ...) instead
+    and raises a raw OS-level error (NotADirectoryError: [WinError 267] The
+    directory name is invalid, or FileNotFoundError on Linux) -- accurate,
+    but useless to whoever's holding a typo'd path, and on web/server.py's
+    /api/analyze (no try/except) it surfaced as an unhandled 500 instead of
+    a 400 with a clear reason.
+    """
+    repo = Path(repo_path)
+    if not repo.is_dir():
+        raise NotADirectoryError(f"repo_path does not exist or is not a directory: {repo_path}")
+    return repo
+
+
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
@@ -69,7 +86,7 @@ def _write_out(repo_path: Path, name: str, data: object) -> None:
 
 def measure_coverage(repo_path: str | Path) -> CoverageResult:
     """Run pytest with coverage on *repo_path*, write repoguard-out/coverage.json, return CoverageResult."""
-    repo = Path(repo_path)
+    repo = _require_repo_dir(repo_path)
     # Per-run data/report paths: concurrent measurements of the same repo
     # (e.g. /api/analyze + /api/stream) would otherwise erase each other's
     # .coverage and read a half-written coverage.json.
@@ -413,7 +430,7 @@ def run_mutation(
     Run own AST mutation engine on *repo_path*.
     Writes repoguard-out/mutation.json. Returns MutationResult.
     """
-    repo = Path(repo_path).resolve()
+    repo = _require_repo_dir(repo_path).resolve()
     mutate_root = (repo / paths_to_mutate).resolve()
 
     # A mutation score only means anything relative to a passing baseline --
