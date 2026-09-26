@@ -5,10 +5,12 @@ import styles from "./Controls.module.css";
 type Props = {
   onAnalyze: () => void;
   onGate: () => void;
+  onAutofix: () => void;
   busy: boolean;
+  canAutofix: boolean;
 };
 
-export function ActionBar({ onAnalyze, onGate, busy }: Props) {
+export function ActionBar({ onAnalyze, onGate, onAutofix, busy, canAutofix }: Props) {
   return (
     <div className={styles.bar}>
       <button type="button" className={`${styles.button} ${styles.primary}`} onClick={onAnalyze} disabled={busy}>
@@ -20,10 +22,11 @@ export function ActionBar({ onAnalyze, onGate, busy }: Props) {
       <button
         type="button"
         className={styles.button}
-        disabled
-        title="Needs POST /api/fix — PENDING.md Phase 14, gap 3"
+        onClick={onAutofix}
+        disabled={busy || !canAutofix}
+        title={canAutofix ? "Write missing tests with AI, on a copy of the repo" : "Enter the Autofix token first"}
       >
-        Autofix <span className={styles.soon}>Soon</span>
+        Autofix
       </button>
     </div>
   );

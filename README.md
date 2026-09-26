@@ -253,7 +253,7 @@ Status key: ✅ implemented and running in this repo · ⚠️ implemented but n
 | Coverage | coverage.py | Line coverage per file | ✅ |
 | Mutation testing | Python stdlib `ast` (own engine, 6 operators) | Injecting bugs, mutation score (16/79 on demo-repo, deterministic) | ✅ |
 | CLI | Click, Rich | `repoguard analyze · fix · gate · serve · mcp` | ✅ |
-| Web API | FastAPI 0.141.1, Starlette 1.7.0 (pinned together), Uvicorn | `repoguard serve`: `/api/analyze`, `/api/summary` | ✅ |
+| Web API | FastAPI 0.141.1, Starlette 1.7.0 (pinned together), Uvicorn | `repoguard serve`: `/api/analyze`, `/api/summary`, `/api/fix` (Autofix, token-gated, streamed NDJSON) | ✅ |
 | Live progress | Server-Sent Events (`StreamingResponse` → browser `EventSource`) | `/api/stream` step-by-step progress | ✅ |
 | API checks | stdlib `ast` + httpx | Finding FastAPI routes, flagging untested ones, `GET` smoke tests | ✅ |
 | Visual checks | Playwright (Chromium), Pillow | Screenshots and pixel diff (MCP tools) | ✅ locally · not in the Docker image (no Chromium) |
@@ -553,11 +553,13 @@ backend on Cloud Run; checked end to end in a real browser (Analyze on
 `web/static/index.html`) stays as the reference implementation — the new
 frontend consumes the same endpoints rather than replacing them.
 
-Still open: the AI summary on the public demo, which shows "unavailable"
-until the Cloud Run image includes the Vertex AI SDK (the service account
-already has Vertex access); and the "Autofix" button, disabled until there's a
-`POST /api/fix` — both its prerequisites (a verified live fix-loop run,
-Phase 11, and the `ChatProvider` layer, Phase 16) are now done. The frontend gets no Terraform or
+The AI summary works on the public demo (`provider: vertex`). **Autofix** is
+built: with a token, the button runs the AI fix loop through `POST /api/fix`
+on a temporary copy of the repo. Progress streams live, and the result shows
+the engine-measured before → after plus the test files written. Nothing is
+committed. It's off on Cloud Run until `REPOGUARD_FIX_TOKEN` is attached
+(`docs/DEPLOY.md` §5), and its first live run from the public demo is still
+pending. The frontend gets no Terraform or
 GCP infrastructure: it ships as a plain Vercel project, with its own
 path-filtered CI (`.github/workflows/frontend-ci.yml`). See `PENDING.md`
 Phase 14 and `docs/ARCHITECTURE-front.md`.

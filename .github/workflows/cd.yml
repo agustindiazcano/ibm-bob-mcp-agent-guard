@@ -99,7 +99,14 @@ jobs:
           # get_provider() fails loud with "google-genai is not installed"
           # regardless of these env vars.
           env_vars: REPOGUARD_CORS_ORIGINS=https://ibm-bob-mcp-agent-guard.vercel.app,REPOGUARD_AI_PROVIDER=vertex,VERTEX_PROJECT_ID=project-e0ad10c9-0b2f-4dc0-ac6
-          flags: --allow-unauthenticated
+          # --timeout=1800: POST /api/fix (Autofix) streams one run of the AI
+          # fix loop over a single request -- two mutation runs plus model
+          # calls, several minutes -- and Cloud Run's default 300 s would cut
+          # it off. An open request also keeps the instance's CPU allocated,
+          # so no --no-cpu-throttling is needed. The endpoint itself stays
+          # off (503) until REPOGUARD_FIX_TOKEN is attached as a secret
+          # (docs/DEPLOY.md section 5, a human step).
+          flags: --allow-unauthenticated --timeout=1800
 
       - name: Show live URL
         run: echo "Deployed — check the Cloud Run console or the deploy step output above for the service URL."
