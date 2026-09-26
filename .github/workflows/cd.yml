@@ -86,7 +86,19 @@ jobs:
           # browser — no localhost origin needed here, that's only for local
           # dev against a local `repoguard serve` (already covered by
           # web/server.py's own default).
-          env_vars: REPOGUARD_CORS_ORIGINS=https://ibm-bob-mcp-agent-guard.vercel.app
+          #
+          # REPOGUARD_AI_PROVIDER=vertex + VERTEX_PROJECT_ID: makes
+          # /api/summary's ok=true path work on the deployed service, via
+          # Application Default Credentials from the Cloud Run runtime
+          # service account (993240087609-compute@developer.gserviceaccount.com)
+          # -- which also needs roles/aiplatform.user granted to it once,
+          # by hand (`gcloud projects add-iam-policy-binding`), not something
+          # this workflow can grant itself. Not a secret: useless without
+          # that IAM grant on this exact project. Dockerfile's [vertex]
+          # extra (google-genai) is the other half of this — without it
+          # get_provider() fails loud with "google-genai is not installed"
+          # regardless of these env vars.
+          env_vars: REPOGUARD_CORS_ORIGINS=https://ibm-bob-mcp-agent-guard.vercel.app,REPOGUARD_AI_PROVIDER=vertex,VERTEX_PROJECT_ID=project-e0ad10c9-0b2f-4dc0-ac6
           flags: --allow-unauthenticated
 
       - name: Show live URL
