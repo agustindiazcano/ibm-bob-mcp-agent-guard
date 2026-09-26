@@ -38,6 +38,7 @@ def run_pipeline(
     include_mutation: bool = False,
     include_endpoints: bool = True,
     gate_threshold: float = 80.0,
+    mutation_workers: int = 1,
 ) -> PipelineResult:
     """
     Full measurement pipeline.
@@ -45,7 +46,7 @@ def run_pipeline(
     Steps:
     1. Run pytest + coverage
     2. Derive gap report
-    3. Optionally run mutmut
+    3. Optionally run mutation testing (mutation_workers in parallel)
     4. Optionally detect untested FastAPI endpoints
     5. Compute risk scores
     6. Assemble dashboard data
@@ -62,7 +63,7 @@ def run_pipeline(
 
     # 3. Mutation (optional — slow)
     if include_mutation:
-        result.mutation = run_mutation(repo)
+        result.mutation = run_mutation(repo, workers=mutation_workers)
 
     # 4. Untested endpoints (optional)
     if include_endpoints:

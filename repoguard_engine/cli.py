@@ -24,6 +24,10 @@ def main() -> None:
 @click.option("--endpoints", is_flag=True, default=False, help="Detect untested FastAPI endpoints.")
 @click.option("--json-output", is_flag=True, default=False, help="Print raw JSON instead of formatted output.")
 @click.option(
+    "--workers", default=1, show_default=True, type=click.IntRange(min=1),
+    help="Run mutants on this many parallel workers (same results, less wall time).",
+)
+@click.option(
     "--summarize", is_flag=True, default=False,
     help="Also ask an AI provider for a plain-English summary of the measured numbers "
          "(requires credentials for the selected provider — see docs/WATSONX_SETUP.md / "
@@ -34,16 +38,24 @@ def main() -> None:
     help="AI provider for --summarize: 'vertex' (default) or 'watsonx'. "
          "Overrides REPOGUARD_AI_PROVIDER for this call.",
 )
-def analyze(repo_path: str, mutation: bool, endpoints: bool, json_output: bool, summarize: bool, provider: str | None) -> None:
+def analyze(
+    repo_path: str, mutation: bool, endpoints: bool, json_output: bool, workers: int, summarize: bool, provider: str | None
+) -> None:
     """Measure test coverage and quality gaps in REPO_PATH."""
+    from .mutation import NoMutantsError
     from .pipeline import run_pipeline
 
     console.print(f"[bold cyan]Analysing[/] {repo_path} …")
-    result = run_pipeline(
-        repo_path,
-        include_mutation=mutation,
-        include_endpoints=endpoints,
-    )
+    try:
+        result = run_pipeline(
+            repo_path,
+            include_mutation=mutation,
+            include_endpoints=endpoints,
+            mutation_workers=workers,
+        )
+    except (NoMutantsError, RuntimeError) as exc:
+        console.print(f"[bold red]✗ Mutation testing couldn't produce a score:[/] {exc}")
+        sys.exit(1)
 
     if json_output:
         click.echo(json.dumps(result.dashboard, indent=2))
@@ -95,6 +107,7 @@ def fix(repo_path: str, threshold: float, publish: bool, provider: str | None) -
     docs/VERTEX_SETUP.md.
     """
     from .ai_providers import AIProviderError
+    from .mutation import NoMutantsError
     from .watson_agent import run_fix_loop
 
     console.print(f"[bold cyan]Fix loop[/] {repo_path} …")
@@ -103,8 +116,10 @@ def fix(repo_path: str, threshold: float, publish: bool, provider: str | None) -
     except AIProviderError as exc:
         console.print(f"[bold red]✗ {exc}[/]")
         sys.exit(1)
-    except RuntimeError as exc:
-        console.print(f"[bold red]✗ Gate failed:[/] {exc}")
+    except (NoMutantsError, RuntimeError) as exc:
+        # Baseline guard, sham-mutant control or an empty mutation scope:
+        # the loop stops rather than report a meaningless score.
+        console.print(f"[bold red]✗ Measurement failed:[/] {exc}")
         sys.exit(1)
 
     console.print(f"Files attempted: {', '.join(result.files_attempted) or '(none)'}")

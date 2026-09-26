@@ -15,6 +15,8 @@ Phase checks implemented:
     phase16     — fix-loop write guard + fail-loud credential check
     multicloud  — ai_providers.get_provider() dispatch, defaults, and unknown-provider handling
     phase18-seq-stub — sequential fix loop driven by ScriptedProvider (no credentials), pinned after-numbers
+    phase18-s1  — parallel mutation workers, single-file scope, NoMutantsError, sham-mutant control
+    phase17-engine / phase18-s2 — per-mutant records + stable fingerprints, per-test JUnit outcomes
     phase14fix  — POST /api/fix: token gate, single-run lock, NDJSON events, sandbox leaves the target repo untouched
 """
 
@@ -400,6 +402,146 @@ finally:
     return ok
 
 
+_TEMP_DEMO_COPY = """
+import shutil, tempfile
+from pathlib import Path
+from repoguard_engine.core import COPY_IGNORE
+def temp_demo_copy():
+    tmp = Path(tempfile.mkdtemp(prefix='repoguard_verify_')) / 'demo-repo'
+    shutil.copytree('demo-repo', tmp, ignore=COPY_IGNORE)
+    return tmp
+"""
+
+
+def check_phase18_s1() -> bool:
+    """Mutation engine S1: parallel workers give identical results, single-
+    file scope works and sums to the whole-repo run, an empty scope fails
+    loud, and the sham-mutant control catches a suite that only fails in a
+    copy (the false-100% class). All on a temp copy of demo-repo."""
+    print("=== Phase 18 S1: parallel mutation, file scope, zero-mutant and sham guards ===")
+
+    script = _TEMP_DEMO_COPY + """
+import time
+from repoguard_engine.core import run_mutation, NoMutantsError, MutationEnvironmentError
+tmp = temp_demo_copy()
+try:
+    t = time.perf_counter(); r1 = run_mutation(tmp, 'shop'); w1 = time.perf_counter() - t
+    t = time.perf_counter(); r4 = run_mutation(tmp, 'shop', workers=4); w4 = time.perf_counter() - t
+    for r in (r1, r4):
+        assert (r.score, r.killed, r.survived, r.total) == (20.25, 16, 63, 79), (r.score, r.killed, r.total)
+    assert r1.surviving_mutant_ids == r4.surviving_mutant_ids
+    print(f'workers=1 {w1:.1f} s, workers=4 {w4:.1f} s, both 20.25% 16/79, identical survivors')
+
+    total = killed = 0
+    for f in ('api', 'cart', 'inventory', 'pricing'):
+        r = run_mutation(tmp, f'shop/{f}.py', workers=4)
+        assert r.total > 0, f
+        total += r.total; killed += r.killed
+    assert (total, killed) == (79, 16), (total, killed)
+    print('file-scoped runs sum to 79 mutants, 16 killed')
+
+    try:
+        run_mutation(tmp, 'shop/__init__.py')
+        raise AssertionError('expected NoMutantsError for a file with no mutation sites')
+    except NoMutantsError:
+        pass
+
+    probe = tmp / 'tests' / 'test_copy_probe.py'
+    probe.write_text("def test_not_in_a_copy():\\n    assert 'repoguard_mutant_' not in __file__\\n")
+    try:
+        run_mutation(tmp, 'shop/pricing.py')
+        raise AssertionError('expected MutationEnvironmentError: suite fails only in a copy')
+    except MutationEnvironmentError:
+        pass
+    probe.unlink()
+
+    assert not list(tmp.rglob('__pycache__')), 'bytecode written into the target repo'
+    print('OK: empty scope -> NoMutantsError, copy-only failure -> MutationEnvironmentError, no __pycache__')
+finally:
+    shutil.rmtree(tmp.parent, ignore_errors=True)
+"""
+
+    rc, out = run([sys.executable, "-c", script], timeout=900)
+    ok = rc == 0
+    print("  " + out.strip().replace("\n", "\n  "))
+    print(f"  S1 engine checks -> {'PASS' if ok else 'FAIL'}")
+    return ok
+
+
+def check_phase17_engine() -> bool:
+    """Per-mutant records (Phase 17 A2.1 / Phase 18 S2) and per-test outcomes
+    (A2.2): 79 records, unique and stable fingerprints, identical across
+    runs, 5 passing tests on demo-repo, correct JUnit outcome mapping, and
+    the after-reference suite's 71 passing tests."""
+    print("=== Phase 17 A2 / Phase 18 S2: per-mutant and per-test records ===")
+
+    script = _TEMP_DEMO_COPY + """
+import json
+from repoguard_engine.core import run_mutation, measure_coverage
+from repoguard_engine.mutation import _generate_mutants
+tmp = temp_demo_copy()
+try:
+    a = run_mutation(tmp, 'shop', workers=4)
+    b = run_mutation(tmp, 'shop', workers=4)
+    rec = lambda r: [(m.index, m.fingerprint, m.outcome) for m in r.mutants]
+    assert rec(a) == rec(b), 'two runs gave different per-mutant records'
+    assert len(a.mutants) == 79 and sum(m.outcome != 'survived' for m in a.mutants) == 16
+    assert [m.index for m in a.mutants if m.outcome == 'survived'] == a.surviving_mutant_ids
+    assert len({m.fingerprint for m in a.mutants}) == 79, 'fingerprints not unique'
+    assert all(m.file and m.function and m.lineno > 0 and m.operator and m.description for m in a.mutants)
+    counts = a.outcome_counts()
+    out = json.loads((tmp / 'repoguard-out' / 'mutants.json').read_text())
+    assert len(out['mutants']) == 79 and out['counts'] == counts
+    assert sorted(json.loads((tmp / 'repoguard-out' / 'mutation.json').read_text())) == ['killed', 'score', 'survived', 'surviving_mutant_ids', 'total']
+    print(f"79 records, 16 killed, unique fingerprints, identical across 2 runs, timeouts={counts['timeout']} errors={counts['error']}")
+
+    # Stability: adding a new function to a copy of cart.py keeps every
+    # existing fingerprint; only the new function's mutants are new.
+    cart = tmp / 'shop' / 'cart.py'
+    before = {m.fingerprint for m in _generate_mutants(cart, 'shop/cart.py', 0)}
+    original_cart = cart.read_text()
+    cart.write_text(original_cart + '\\n\\ndef _added_later(x):\\n    return x + 1 if x > 0 else 0\\n')
+    after = _generate_mutants(cart, 'shop/cart.py', 0)
+    new = [m for m in after if m.fingerprint not in before]
+    assert before <= {m.fingerprint for m in after}, 'an existing fingerprint changed'
+    assert new and all(m.function == '_added_later' for m in new), [m.function for m in new]
+    cart.write_text(original_cart)
+    print(f'fingerprint stability: {len(before)} kept, {len(new)} new (all in the added function)')
+
+    cov = measure_coverage(tmp)
+    assert round(cov.percent, 1) == 65.1 and len(cov.tests) == 5 and {t.outcome for t in cov.tests} == {'passed'}
+    assert sorted(json.loads((tmp / 'repoguard-out' / 'coverage.json').read_text())) == ['covered_lines', 'missing_lines', 'percent', 'total_lines']
+    for f in Path('docs/expected-after-tests').glob('test_*.py'):
+        shutil.copy(f, tmp / 'tests' / f.name)
+    cov = measure_coverage(tmp)
+    passed = sum(t.outcome == 'passed' for t in cov.tests)
+    assert passed == 71, passed
+    print(f'per-test outcomes: baseline 5 passed (65.1%), after-reference {passed} passed ({cov.percent:.1f}%)')
+
+    mix = tmp.parent / 'mix'
+    (mix / 'tests').mkdir(parents=True)
+    (mix / 'tests' / '__init__.py').write_text('')
+    (mix / 'tests' / 'test_mix.py').write_text(
+        'import pytest\\n'
+        'def test_pass(): assert True\\n'
+        'def test_fail(): assert 1 == 2\\n'
+        '@pytest.mark.skip(reason="s")\\ndef test_skip(): pass\\n'
+        '@pytest.mark.xfail(reason="x")\\ndef test_xfail(): assert False\\n'
+    )
+    got = {t.test_id.split('::')[1]: t.outcome for t in measure_coverage(mix).tests}
+    assert got == {'test_pass': 'passed', 'test_fail': 'failed', 'test_skip': 'skipped', 'test_xfail': 'skipped'}, got
+    print('OK: junit mapping pass/fail/skip/xfail correct')
+finally:
+    shutil.rmtree(tmp.parent, ignore_errors=True)
+"""
+
+    rc, out = run([sys.executable, "-c", script], timeout=900)
+    ok = rc == 0
+    print("  " + out.strip().replace("\n", "\n  "))
+    print(f"  per-mutant / per-test records -> {'PASS' if ok else 'FAIL'}")
+    return ok
+
+
 CHECKS: dict[str, callable] = {
     "phase0": check_phase0,
     "phase3": check_phase3,
@@ -409,6 +551,9 @@ CHECKS: dict[str, callable] = {
     "multicloud": check_multicloud,
     "phase14fix": check_phase14fix,
     "phase18-seq-stub": check_phase18_seq_stub,
+    "phase18-s1": check_phase18_s1,
+    "phase17-engine": check_phase17_engine,
+    "phase18-s2": check_phase17_engine,
 }
 
 
