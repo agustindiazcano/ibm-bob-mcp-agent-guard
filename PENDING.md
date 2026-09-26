@@ -110,26 +110,31 @@ Build plan and task tracker. Update status as work progresses; never delete comp
 
 | Deliverable | Description | Status |
 |---|---|---|
-| `mcp_server.py` | Exposes 8 tools (scan, tests, coverage, mutation, API, visual, risk, dashboard) to Bob | 🟢 |
-| `.bob/mcp.json` | MCP server connection config | 🟢 |
+| `mcp_server.py` | Exposes 9 tools (scan, tests, coverage, mutation, API, visual, risk, dashboard, watsonx.ai summary) to any MCP client | 🟢 |
+| MCP server connection config | Point any client's config at `repoguard mcp` (`.bob/mcp.json` was the Bob-specific example; retired, see `.bob/DEPRECATED.md`) | 🟢 |
 | Compact responses | Short summaries by default; full detail only on request | 🟢 |
 
-This phase is the Bob integration: without it, Bob has no way to call the engine.
+This phase is the generic MCP integration — usable by any MCP client, not tied to any one agent platform.
 
 ---
 
-## Phase 8 — Bob modes, rules and skills
+## Phase 8 — watsonx.ai fix-loop orchestrator (was: Bob modes, rules and skills)
 **Priority: 1 (critical) · Depends on: 7**
+
+IBM Bob is retired (`.bob/DEPRECATED.md`); `repoguard_engine/watson_agent/` is
+the replacement, built by Claude on `feat/15-watsonx-migration`. It's one
+in-process orchestrator, not parallel subagents — see `docs/ARCHITECTURE.md`.
 
 | Deliverable | Description | Status |
 |---|---|---|
-| Orchestrator mode | Runs the full pipeline (diagnose → fix → verify → close) | 🟢 |
-| Test Writer subagent | Writes tests that kill specific mutants, in parallel per file | 🟢 |
-| Fixer subagent | Repairs failing tests without touching source code | 🟢 |
-| Critic subagent | Audits tests it didn't write (independent reviewer) | 🟢 |
-| Publisher subagent | Creates a branch and PR with the new tests | 🟢 |
-| Rules | Never edit source code, never estimate numbers, minimum assert quality | 🟢 |
-| Skills | pytest conventions, how to prioritize mutants by risk | 🟢 |
+| Orchestrator loop | `run_fix_loop()`: measure → prioritize by risk → write → critique → re-measure → evidence | 🟢 |
+| Test-writer stage | watsonx.ai writes tests that target specific surviving mutants, one file at a time | 🟢 |
+| Write guard | `write_test_file` hard-rejects any path outside `tests/` — a tool property, not a prompt rule | 🟢 |
+| Critic stage | A second watsonx.ai call reviews the new test against the quality prompt | 🟢 |
+| Publisher | `--publish` branches, commits `tests/`, pushes, opens a PR if the gate passes | 🟢 |
+| Prompts | Test-writer and critic system prompts, carried forward from `.bob/rules`,`.bob/skills` | 🟢 |
+| `scripts/verify.py phase16` | Confirms the write guard and the fail-loud credential check — not a live watsonx.ai call | 🟢 |
+| Live tool-calling round trip with real credentials | Not verified — no IBM Cloud account available here; same gap as Phase 15's narrative summary | 🟡 |
 
 ---
 
@@ -140,7 +145,7 @@ This phase is the Bob integration: without it, Bob has no way to call the engine
 |---|---|---|
 | `pipeline.py` | Orchestrates step order, shared by the CLI and the web UI | 🟢 |
 | `repoguard analyze` | Measures only, no AI | 🟢 |
-| `repoguard fix` | Measures, has Bob write tests, measures again | 🔴 |
+| `repoguard fix` | Measures, has watsonx.ai write tests (guarded to `tests/`), critiques, measures again | 🟢 |
 | `repoguard gate` | Fails CI if the mutation score is below a minimum | 🟢 |
 
 ---
@@ -157,14 +162,20 @@ This phase is the Bob integration: without it, Bob has no way to call the engine
 
 ---
 
-## Phase 11 — Real run in Bob
+## Phase 11 — Real run via watsonx.ai (was: Real run in Bob)
 **Priority: 1 (critical) · Depends on: 8**
+
+The old Bob-swarm plan (`phase11-swarm-run-plan.md`) is superseded — Bob is
+retired, and the orchestrator is no longer parallel subagents to screenshot.
+This phase's actual blocker is the same as Phase 8's/15's: a real IBM Cloud
+account, which no agent working on this repo holds (same situation as
+`docs/DEPLOY.md`'s GCP setup).
 
 | Deliverable | Description | Status |
 |---|---|---|
-| First full run | The orchestrator mode improves demo-repo's tests end to end | 🔴 |
-| Evidence | Screenshot of subagents working in parallel | 🔴 |
-| Number verification | Confirm the mutation score rises measurably | 🔴 |
+| First full run | `repoguard fix demo-repo` improves demo-repo's tests end to end, with real credentials | 🔴 |
+| Evidence | `demo-repo/watson-evidence/01-fix-loop.md`, auto-written by the orchestrator | 🔴 |
+| Number verification | Confirm the mutation score rises measurably above the 20.25% (16/79) baseline | 🔴 |
 
 This is what gets recorded for the demo: it's the proof that the system works as described.
 
@@ -222,7 +233,7 @@ Vercel that consumes the existing `/api/analyze` and `/api/stream` endpoints
 |---|---|---|
 | Next.js app scaffold | New `web-next/` (or similar), calling the existing FastAPI backend, not replacing it | 🔴 |
 | Dashboard charts | Coverage, mutation score, risk ranking — sourced from the same JSON the current dashboard uses, no new numbers invented | 🔴 |
-| Action buttons | "Analyze", "Gate", "Autofix with Bob" — call the existing `repoguard` commands/endpoints | 🔴 |
+| Action buttons | "Analyze", "Gate", "Autofix (watsonx.ai)" — call the existing `repoguard` commands/endpoints | 🔴 |
 | Vercel deploy | Connect repo/subfolder to Vercel; no IaC, config lives in `vercel.json` / project settings | 🔴 |
 | Docs | Update this file, `README.md` and `docs/ARCHITECTURE.md` with the real deployed URL and measured screenshots once built | 🔴 |
 
@@ -247,6 +258,30 @@ of any number, per `AGENTS.md §4`. Optional dependency (`pip install -e
 
 ---
 
+## Phase 16 — Multicloud AI: watsonx.ai + Google Vertex AI
+**Priority: 2 · Depends on: 8, 15** (design only — see `docs/MULTICLOUD_AI.md`; nothing in this phase is implemented yet)
+
+The user asked for this project to not be single-cloud: watsonx.ai is the
+only provider today (`narrative.py`, `watson_agent/client.py`). This phase
+extracts a small `ChatProvider` abstraction so Google Vertex AI (or any
+future provider) can be added without touching `tools.py`, `prompts.py`, or
+the orchestrator loop, plus a way to benchmark models against each other
+using the engine's own mutation-score measurement, not a subjective opinion.
+
+| Deliverable | Description | Status |
+|---|---|---|
+| `docs/MULTICLOUD_AI.md` | Design doc: architecture, env vars, refactor steps, benchmarking plan, open questions | 🟢 |
+| `ai_providers/base.py` | `ChatProvider` protocol | 🔴 |
+| `ai_providers/watsonx.py` | Today's `watson_agent/client.py` logic, moved unchanged | 🔴 |
+| `ai_providers/vertex.py` | Google Vertex AI implementation; SDK call shapes to be verified against the real installed package before shipping, same rigor as `client.py` | 🔴 |
+| `narrative.py` / `orchestrator.py` switched to `get_provider()` | No behavior change for watsonx.ai; re-run `phase15`/`phase16` after | 🔴 |
+| `scripts/benchmark_models.py` | Runs the fix loop against fresh `demo-repo` copies per `(provider, model_id)`, compares real mutation-score deltas | 🔴 |
+
+Live cross-provider benchmarking needs real credentials for at least two
+clouds — same human-gated situation as `docs/WATSONX_SETUP.md` and Phase 11.
+
+---
+
 ## Standalone tasks (not phase-blocked)
 
 - [ ] **Create `scripts/verify.py`** — accepts a phase name, runs the relevant checks, outputs PASS/FAIL with numbers pasteable into a PR description
@@ -254,7 +289,8 @@ of any number, per `AGENTS.md §4`. Optional dependency (`pip install -e
 - [ ] **Write engine tests** — `repoguard_engine/` has no `tests/` of its own; run `repoguard gate .` and reach ≥ 80% coverage
 - [x] **Verify demo-repo baseline numbers** — measured 65.1% coverage, 20.25% mutation (16/79), 4 files with gaps (AST engine; old mutmut numbers were 74.5%/23.6% — now stale)
 - [x] **Add `.gitattributes`** — normalize line endings (CRLF warnings on every commit)
-- [ ] **Populate `bob-evidence/`** — export first real Bob session to `bob-evidence/01-initial-build.md`
+- [x] ~~Populate `bob-evidence/`~~ — moot: `bob-evidence/` is retired along with the rest of `.bob/` (see `.bob/DEPRECATED.md`); `repoguard fix` now auto-writes its own run report to `<target-repo>/watson-evidence/` instead
+- [ ] **Decide on renaming the GitHub repo/local directory** (`ibm-bob-mcp-agent-guard`) now that IBM Bob is retired — an external-visible identity change, deliberately not done as part of the watsonx.ai migration; needs an explicit human decision
 - [x] **Populate `docs/img/`** — `docs/make_results_chart.py` rewritten (it previously printed hardcoded fictional numbers, not a real chart) to render both PNGs from the real AGENTS.md §7 numbers via matplotlib (`docs` optional dependency, added to `pyproject.toml`)
 - [x] **CI workflow** — done as part of Phase 13 above (`.github/workflows/ci.yml`), not the standalone `gate.yml` originally sketched in `RUNBOOK.md §7`
 - [x] **Write the missing `docs/expected-after-tests/*.py` reference tests** — all 4 files written (`test_pricing_complete.py`, `test_cart_complete.py`, `test_inventory_complete.py`, `test_api_complete.py`). Measured against the real engine: 71 passed, 100% coverage, 89.87% mutation (71/79), 7 of 7 API endpoints tested. Never left inside `demo-repo/tests/` after measuring, per AGENTS.md §7. Also corrected a pre-existing doc error found along the way: `api.py` has 7 endpoints, not the 8 documented everywhere (README, AGENTS.md's directory tree and old baseline table).

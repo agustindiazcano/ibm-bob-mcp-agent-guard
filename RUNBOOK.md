@@ -11,7 +11,7 @@ Operational reference for installing, running, and troubleshooting RepoGuard in 
 3. [CLI Reference](#3-cli-reference)
 4. [Running the Web Dashboard](#4-running-the-web-dashboard)
 5. [Running the MCP Server](#5-running-the-mcp-server)
-6. [Bob Integration (Swarm)](#6-bob-integration-swarm)
+6. [watsonx.ai Fix Loop](#6-watsonxai-fix-loop)
 7. [CI Gate Setup](#7-ci-gate-setup)
 8. [Demo Fixture](#8-demo-fixture)
 9. [Troubleshooting](#9-troubleshooting)
@@ -24,10 +24,10 @@ Operational reference for installing, running, and troubleshooting RepoGuard in 
 |---|---|---|
 | Python | 3.11 | Required by `pyproject.toml` |
 | pip | 23+ | For `pip install -e .` |
-| IBM Bob IDE | current | Required for `fix` mode and MCP integration |
-| Node.js | 18+ | Only needed if Bob's MCP transport is stdio |
+| `ibm-watsonx-ai` + IBM Cloud credentials | current | Required for `repoguard fix` and `analyze --summarize` only (`pip install -e ".[ai]"`, see `docs/WATSONX_SETUP.md`) |
 | Playwright | latest | Only needed for visual / a11y checks |
-| mutmut | latest | Only needed for `--mutation` flag |
+
+The mutation engine is built on Python's own `ast` module — no `mutmut` dependency.
 
 ---
 
@@ -102,10 +102,12 @@ Exit codes:
 
 ### `repoguard fix`
 
-Instructs the user to use Bob's MCP integration. This command does not run autonomously from the terminal; it is designed to be invoked by Bob as an MCP tool.
+Runs the watsonx.ai fix loop: measures, has watsonx.ai write tests (guarded to `tests/` only), critiques them, measures again. Requires `WATSONX_APIKEY`/`WATSONX_PROJECT_ID` — see [section 6](#6-watsonxai-fix-loop).
 
 ```bash
-repoguard fix ./my-project   # Prints instructions; use Bob instead
+repoguard fix ./my-project
+repoguard fix ./my-project --publish            # also branch, commit and open a PR if the gate passes
+repoguard fix ./my-project --threshold 90       # gate threshold for the after-measurement
 ```
 
 ### `repoguard serve`
@@ -119,7 +121,7 @@ repoguard serve --host 0.0.0.0 --port 9000
 
 ### `repoguard mcp`
 
-Start the MCP server over stdio transport so Bob can connect.
+Start the MCP server over stdio transport for any MCP client.
 
 ```bash
 repoguard mcp
@@ -148,7 +150,7 @@ repoguard mcp
 
 ## 5. Running the MCP Server
 
-The MCP server exposes **8 tools** over stdio transport. Start it with:
+The MCP server exposes **9 tools** over stdio transport. Start it with:
 
 ```bash
 repoguard mcp
@@ -160,62 +162,63 @@ repoguard mcp
 |---|---|
 | `tool_measure_coverage` | Run pytest with coverage; return percent, line counts |
 | `tool_find_gaps` | Coverage measurement + structured gap report |
-| `tool_run_mutation` | Run mutation testing via mutmut; return score |
+| `tool_run_mutation` | Run mutation testing with the own AST engine; return score |
 | `tool_find_untested_endpoints` | Detect FastAPI routes with no corresponding test |
 | `tool_smoke_test_endpoints` | Fire minimal HTTP requests at each detected endpoint |
 | `tool_full_pipeline` | Full pipeline: coverage → gaps → risk → gate |
 | `tool_capture_screenshot` | Playwright screenshot of a URL |
 | `tool_check_accessibility` | axe-core a11y checks on a URL |
+| `tool_generate_summary` | watsonx.ai prose summary of already-measured numbers (advisory only) |
 
-### Connecting Bob to the MCP server
+### Connecting an MCP client
 
-Add an entry to Bob's MCP configuration (`.bob/mcp.json`) pointing to the stdio process:
+Point any MCP client's server config at the stdio process, e.g.:
 
 ```json
 {
   "mcpServers": {
     "repoguard": {
       "command": "repoguard",
-      "args": ["mcp"]
+      "args": ["mcp"],
+      "timeout": 600000
     }
   }
 }
 ```
 
+The `timeout` matters: a full mutation run on `demo-repo`'s 79 mutants takes
+several minutes, and the default client timeout is usually much shorter
+(`AGENTS.md §9`).
+
 ---
 
-## 6. Bob Integration (Swarm)
+## 6. watsonx.ai Fix Loop
 
-RepoGuard ships six custom Bob modes defined in [`.bob/custom_modes.yaml`](.bob/custom_modes.yaml).
-
-### Agent roles
-
-| Mode slug | Name | Responsibility |
-|---|---|---|
-| `orchestrator` | RepoGuard Orchestrator | Coordinates the full swarm; never writes code |
-| `analyzer` | RepoGuard Analyzer | Measures coverage, gaps, and mutation score |
-| `fixer` | RepoGuard Fixer | Writes tests to close the gaps reported by Analyzer |
-| `gate` | RepoGuard Gate | Validates thresholds after fixes; pass/fail verdict |
-| `visual-agent` | RepoGuard Visual Agent | Screenshots, pixel diffs, console logs, a11y |
-| `reporter` | RepoGuard Reporter | Produces the final report in `bob-evidence/` |
-
-### Recommended swarm workflow
+`repoguard fix` runs `repoguard_engine/watson_agent/`'s orchestrator — the
+functional replacement for what used to be IBM Bob's custom modes (see
+`.bob/DEPRECATED.md`). It's a single process, not parallel subagents:
 
 ```
-Orchestrator
+Baseline measure (coverage, mutation, risk)
   │
-  ├─ 1. Analyzer  →  measure_coverage / find_gaps / find_untested_endpoints
-  ├─ 2. Fixer     →  write tests under tests/
-  ├─ 3. Gate      →  re-run full_pipeline, check threshold
-  ├─ 4. Visual Agent  →  screenshot / a11y (optional, web UI repos only)
-  └─ 5. Reporter  →  write summary to bob-evidence/
+  ├─ Prioritize up to 3 files by risk score
+  ├─ Per file: watsonx.ai writes a test  →  write_test_file (tests/ only, guarded)
+  ├─ Per file: watsonx.ai critiques it   →  same guard applies to any rewrite
+  ├─ Re-measure for real (deterministic, no AI)
+  └─ --publish + gate passes  →  branch, commit tests/, push, gh pr create
 ```
 
-### Key rules enforced on the Fixer sub-agent
+Requires `WATSONX_APIKEY` and `WATSONX_PROJECT_ID` (`pip install -e ".[ai]"`,
+see `docs/WATSONX_SETUP.md`). Without them, `get_chat_model()` raises before
+any measurement runs, so the failure is immediate, not after several minutes
+of mutation testing.
 
-- **Rule 01** — only create or modify files inside `tests/`
-- **Rule 02** — always run measurement before proposing any fix
-- **Rule 03** — tests must be mutation-resistant with specific assertions
+### The write guard
+
+`watson_agent/tools.py`'s `write_test_file` is the only tool watsonx.ai is
+given that can write anything, and it rejects any path that doesn't resolve
+under `<repo_path>/tests/` — a property of the tool itself, not a rule the
+model is merely asked to follow.
 
 ---
 
@@ -281,11 +284,15 @@ pytest found no tests or the `tests/` directory is missing. Ensure:
 
 Check the actual coverage percentage in the table output and compare against your `--threshold`. Use `repoguard analyze` for a detailed gap report to identify which files need more tests.
 
-### MCP server not connecting to Bob
+### MCP server not connecting
 
 1. Confirm `repoguard mcp` starts without error when run manually.
-2. Check that the MCP entry in `.bob/mcp.json` uses the correct command and path.
-3. Restart Bob after updating `mcp.json`.
+2. Check that the client's MCP server entry uses the correct command and an absolute path if `repoguard` isn't on that client's PATH.
+3. Restart the client after updating its MCP config.
+
+### `repoguard fix` fails immediately with a credentials error
+
+Expected with no `WATSONX_APIKEY`/`WATSONX_PROJECT_ID` set — see `docs/WATSONX_SETUP.md`. This is a fail-loud check that runs before the baseline measurement, not a bug.
 
 ### Visual tools fail (`capture_screenshot`, `check_accessibility`)
 

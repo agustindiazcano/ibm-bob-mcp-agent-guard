@@ -1,10 +1,10 @@
-[![Built for IBM Bob](https://img.shields.io/badge/Built%20for-IBM%20Bob-0f62fe?style=for-the-badge)](https://bob.ibm.com)
+[![Built with watsonx.ai](https://img.shields.io/badge/Built%20with-watsonx.ai-0f62fe?style=for-the-badge)](https://www.ibm.com/watsonx)
 [![MCP server](https://img.shields.io/badge/Protocol-MCP-4a4a4a?style=for-the-badge)](https://modelcontextprotocol.io/)
 [![Python | FastAPI](https://img.shields.io/badge/Engine-Python%20%7C%20FastAPI-009688?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
 
 # TestMind AI
 
-**A QA agent swarm for IBM Bob that proves whether your tests catch bugs, then writes the ones that are missing.**
+**A test-quality tool that proves whether your tests catch bugs, then uses IBM watsonx.ai to write the ones that are missing.**
 
 > Coverage tells you which lines ran. It doesn't tell you whether your tests would notice a bug.
 > TestMind AI injects bugs into your code on purpose and measures how many your tests catch.
@@ -17,11 +17,11 @@
 - [Is it multi-agent?](#is-it-multi-agent)
 - [Quick start](#quick-start)
 - [Commands](#commands)
-- [Using it in IBM Bob](#using-it-in-ibm-bob)
+- [Using the watsonx.ai fix loop](#using-the-watsonxai-fix-loop)
 - [Requirements](#requirements)
 - [Project structure](#project-structure)
+- [IBM Bob Usage](#ibm-bob-usage)
 - [AI-Assisted Development](#ai-assisted-development)
-- [Development Framework: Working with IBM Bob](#development-framework-working-with-ibm-bob)
 - [Documentation](#documentation)
 - [Roadmap](#roadmap)
 - [Limitations](#limitations)
@@ -52,7 +52,7 @@ that don't affect the tested inputs — see `AGENTS.md §9`.
 ## What it does
 
 - 🧬 **Mutation testing.** Injects one small bug at a time (flipped comparisons, swapped operators, changed constants, `return None`, removed `raise`) with its own AST engine, then reruns your suite. Every mutant that survives is a bug your tests would miss.
-- 🧪 **Writes the missing tests.** Inside IBM Bob, an orchestrator hands each file's surviving mutants to parallel Test Writer subagents. A Fixer repairs red tests without touching source code, and a Critic audits tests it didn't write.
+- 🧪 **Writes the missing tests.** `repoguard fix` hands each file's surviving mutants to IBM watsonx.ai, one file at a time, through a guarded tool that can only write under `tests/` — never source. A second watsonx.ai call critiques the new test before the suite is re-measured for real.
 - 🌐 **API checks.** Reads the OpenAPI schema of a FastAPI app, flags endpoints no test calls, and smoke-tests every `GET` endpoint for 5xx errors.
 - 👁️ **Visual regression.** Starts the app, takes screenshots at desktop (1280 px) and mobile (390 px) widths, and diffs them pixel by pixel against a baseline. Also reports console errors and basic accessibility issues.
 - 📊 **Risk ranking and report.** Ranks functions by `complexity × git churn × (1 − detection rate)` and builds an HTML dashboard.
@@ -65,63 +65,48 @@ One engine, three ways to use it.
 
 ```mermaid
 flowchart TB
-    IDE["IBM Bob IDE<br/>🛡️ TestMind mode"]
     CLI["Terminal<br/>repoguard analyze · fix · gate"]
     WEB["Web UI<br/>repoguard serve"]
+    EXT["Any MCP client<br/>(Claude Code, etc.)"]
 
-    MCP["MCP server<br/>8 tools"]
     PIPE["Pipeline<br/>step order"]
-    BOBSH["Bob Shell<br/>bob run --mode repoguard"]
+    MCP["MCP server<br/>9 tools"]
+    WATSON["watsonx.ai fix loop<br/>repoguard_engine/watson_agent/"]
 
     MED["Measurements<br/>tests · coverage · mutation · gaps<br/>API · visual · risk"]
     REPO[("Target repo")]
     OUT[("repoguard-out/<br/>JSON · screenshots · dashboard.html")]
 
-    IDE -- "MCP stdio" --> MCP
     CLI --> PIPE
+    CLI -. "fix" .-> WATSON
     WEB -- "HTTP + SSE" --> PIPE
-    PIPE -. "fix / Bob button only" .-> BOBSH
-    BOBSH -- "MCP stdio" --> MCP
+    EXT -- "MCP stdio" --> MCP
     MCP --> MED
     PIPE --> MED
+    WATSON -- "writes tests/, then re-measures" --> MED
     MED -- "runs" --> REPO
     MED -- "writes" --> OUT
 ```
 
 ## Is it multi-agent?
 
-**Yes, when it runs in Bob.** The orchestrator splits the work across specialized subagents, and the ones that write tests run in parallel. Measurement never uses AI.
+**No — one process, two AI calls per file.** `repoguard fix` is a single orchestrator loop, not parallel subagents: for each of up to 3 prioritized files it asks watsonx.ai to write a test (through a tool that can only write under `tests/`), then asks watsonx.ai again to critique that test, then re-measures for real. Measurement itself never uses AI.
 
 ```mermaid
 flowchart TB
-    O["🛡️ Orchestrator"]
-    O -->|"surviving mutants in cart.py"| W1["🧪 Test Writer<br/>cart.py"]
-    O -->|"surviving mutants in pricing.py"| W2["🧪 Test Writer<br/>pricing.py"]
-    O -->|"untested endpoints"| W3["🧪 Test Writer<br/>API"]
-    O -.->|"optional"| U["🖥️ UI Explorer<br/>Playwright MCP"]
-    W1 & W2 & W3 --> T{"all green?"}
-    T -->|no| F["🔧 Fixer<br/>max 3 rounds"]
-    F --> T
-    T -->|yes| M["mutation_test after<br/>(MCP)"]
-    M --> C["⚖️ Critic<br/>read-only"]
-    C --> P["📦 Publisher<br/>branch + PR"]
+    B["Baseline measure<br/>(coverage, mutation, risk)"]
+    B --> P["Prioritize up to 3 files<br/>by risk score"]
+    P --> W["watsonx.ai: write a test<br/>(tests/ only, guarded)"]
+    W --> C["watsonx.ai: critique it<br/>(read-only unless it rewrites, tests/ only)"]
+    C --> G["Re-measure<br/>(deterministic, no AI)"]
+    G -->|"--publish, gate passes"| PR["branch + commit + PR"]
 ```
 
-| Entry point | Multi-agent? | Agents |
+| Entry point | Uses AI? | What runs |
 |---|---|---|
-| Bob IDE, 🛡️ TestMind mode | Yes | Orchestrator + parallel Test Writers + Fixer + Critic + Publisher + UI Explorer (optional) |
-| `repoguard fix` / "Improve with Bob" button | Yes | The same team, launched through Bob Shell |
-| `repoguard analyze` / "Measure" button | No | Deterministic pipeline (mutants run in 4 parallel processes) |
+| `repoguard fix` | Yes | The watsonx.ai loop above (write → critique → re-measure) |
+| `repoguard analyze [--summarize]` | Only with `--summarize` | Deterministic pipeline; `--summarize` adds one watsonx.ai call for prose, never a metric |
 | `repoguard gate` (CI) | No | Deterministic pipeline |
-
-| Agent | Role | Can edit |
-|---|---|---|
-| 🛡️ Orchestrator | Runs the pipeline, prioritizes by risk, writes the final report | What it needs |
-| 🧪 Test Writer | Writes tests that kill specific mutants | `tests/` only |
-| 🔧 Fixer | Repairs failing tests, never source code | `tests/` only |
-| ⚖️ Critic | Audits tests it didn't write | Nothing (read-only) |
-| 📦 Publisher | Branch, commit and pull request | Git |
-| 🖥️ UI Explorer | E2E tests with Playwright MCP (optional) | `tests/` only |
 
 ## Quick start
 
@@ -137,32 +122,43 @@ repoguard serve                     # web UI at http://127.0.0.1:8765
 
 | Command | What it does |
 |---|---|
-| `repoguard analyze <path \| git-url>` | Measures tests, coverage, mutation score, API and visual. No AI. |
-| `repoguard fix <path \| git-url>` | Measures, has Bob write the missing tests through Bob Shell, then measures again |
-| `repoguard gate <path> --min-score 80` | CI gate: exits with code 1 if the mutation score is below the minimum |
-| `repoguard serve [--port 8765]` | Web UI with live progress, metrics and the report |
-| `repoguard mcp` | Starts the MCP server that Bob uses |
+| `repoguard analyze <path \| git-url> [--summarize]` | Measures tests, coverage, mutation score, API and visual. No AI unless `--summarize` is passed. |
+| `repoguard fix <path> [--publish] [--threshold N]` | Measures, has watsonx.ai write the missing tests (guarded to `tests/`), critiques them, measures again |
+| `repoguard gate <path> --threshold 80` | CI gate: exits with code 1 if coverage is below the threshold |
+| `repoguard serve [--port 8000]` | Web UI with live progress, metrics and the report |
+| `repoguard mcp` | Starts the MCP server (9 tools) for any MCP client |
 
-`analyze` and `fix` accept `--no-api` and `--no-visual`.
+## Using the watsonx.ai fix loop
 
-## Using it in IBM Bob
+1. Get IBM Cloud credentials and install the optional extra — see [`docs/WATSONX_SETUP.md`](docs/WATSONX_SETUP.md):
+   ```bash
+   pip install -e ".[ai]"
+   export WATSONX_APIKEY="<your IBM Cloud API key>"
+   export WATSONX_PROJECT_ID="<your watsonx project id>"
+   ```
+2. Run it:
+   ```bash
+   repoguard fix demo-repo
+   ```
+3. Without credentials, `fix` fails immediately with a clear error — it never
+   silently skips the AI stages or fabricates a result.
 
-1. Open this folder in Bob. `.bob/mcp.json` already points to `repoguard mcp`.
-2. In **Settings → Modes**, check that the six modes load.
-3. Pick **🛡️ TestMind** and ask: `Audit and improve the tests in ./demo-repo.`
-
-The Bob setup lives in `.bob/`: custom modes (`custom_modes.yaml`), rules (tests only, measure don't guess, assert quality, token budget) and skills (`pytest-conventions`, `mutation-hunting`).
+`repoguard_engine/watson_agent/` is the whole implementation: `client.py`
+(the watsonx.ai chat connection), `tools.py` (the one write tool, hard-guarded
+to `tests/`), `prompts.py` (the writer/critic system prompts), and
+`orchestrator.py` (the loop itself). It calls `pipeline`/`core` directly, the
+same way `web/server.py` does — no MCP round-trip needed for its own use.
 
 ## Requirements
 
 | Dependency | Used for | Required |
 |---|---|---|
 | Python ≥ 3.10, pytest, coverage | Running and measuring the suite | Yes |
-| mcp | MCP server for Bob | For Bob |
+| fastmcp | MCP server for external MCP clients | For `repoguard mcp` |
 | fastapi, uvicorn, httpx | Web UI and API checks | For UI and API |
-| playwright + Chromium, pillow | Screenshots and visual diffs | For visual checks |
+| playwright + Chromium, pillow, axe-playwright-python | Screenshots, visual diffs and accessibility | For visual checks |
 | git | Churn for the risk score; cloning by URL | Recommended |
-| IBM Bob IDE / Bob Shell 2.x | Writing tests with agents | For `fix` and the Bob mode |
+| `ibm-watsonx-ai` (`pip install -e ".[ai]"`) + IBM Cloud credentials | Writing tests (`repoguard fix`) and the optional `--summarize` prose | For AI features only — measurement never needs it |
 
 The mutation engine is built on Python's standard `ast` module. It doesn't depend on mutmut or Stryker.
 
@@ -170,25 +166,18 @@ The mutation engine is built on Python's standard `ast` module. It doesn't depen
 
 ```
 ibm-bob-mcp-agent-guard/
-├── .bob/                           Bob IDE configuration
-│   ├── custom_modes.yaml           Six agent mode definitions (Orchestrator, Analyzer, Fixer, Gate, Visual, Reporter)
-│   ├── mcp.json                    MCP server config — points Bob to `repoguard mcp`
-│   ├── rules/
-│   │   ├── 01-tests-only.md        Fixer may only write files under tests/
-│   │   ├── 02-measure-dont-guess.md  Always measure before proposing a fix
-│   │   └── 03-test-quality.md      Mutation-resistant assertion standards
-│   └── skills/
-│       ├── mutation-hunting/SKILL.md   Patterns for killing surviving mutants
-│       └── pytest-conventions/SKILL.md Fixture, parametrize, and conftest conventions
+├── .bob/                           Where IBM Bob built Phases 0–8 (docs/IBM_BOB_USAGE.md); config kept for history
 │
 ├── repoguard_engine/               Core library + all entry points
 │   ├── __init__.py
 │   ├── core.py                     Coverage measurement, gap detection, mutation testing, risk score, dashboard
 │   ├── api_check.py                FastAPI endpoint discovery (AST) + HTTP smoke tests
 │   ├── visual.py                   Playwright screenshots, pixel diff, console logs, axe-core a11y
+│   ├── narrative.py                watsonx.ai prose summary of an already-measured dashboard (never a metric source)
+│   ├── watson_agent/               watsonx.ai fix loop: client, guarded tools, prompts, orchestrator
 │   ├── pipeline.py                 Ordered pipeline: measure → gaps → risk → gate
 │   ├── cli.py                      CLI entry point: analyze | fix | gate | serve | mcp
-│   ├── mcp_server.py               8 MCP tools via FastMCP (stdio transport)
+│   ├── mcp_server.py               9 MCP tools via FastMCP (stdio transport)
 │   └── web/
 │       ├── __init__.py
 │       ├── server.py               FastAPI app — REST + SSE stream
@@ -212,15 +201,17 @@ ibm-bob-mcp-agent-guard/
 ├── docs/
 │   ├── ARCHITECTURE.md             Layer diagram, data flow, MCP tool list
 │   ├── DEMO.md                     3-minute demo script
-│   ├── BUILD_WITH_BOB.md           Phase-by-phase prompts used to build this project with Bob
+│   ├── WATSONX_SETUP.md            Getting IBM Cloud credentials for narrative.py / watson_agent
+│   ├── AI_ASSISTED_DEVELOPMENT_FRAMEWORK.md  How this project itself is built (Claude, file-based contract)
 │   ├── make_results_chart.py       Generates the before/after results chart
 │   ├── expected-after-tests/       Reference tests (copy here to verify "after" numbers)
 │   └── img/                        README badge images
 │
-├── bob-evidence/                   Exported Bob task session reports
-│   └── README.md
+├── bob-evidence/                   Template for exporting IBM Bob session reports (never populated — see docs/IBM_BOB_USAGE.md
+│                                    for the real evidence instead); repoguard fix now writes its own run report to
+│                                    <target-repo>/watson-evidence/, same convention as repoguard-out/ (AGENTS.md §4)
 │
-├── AGENTS.md                       Agent context and coding rules for Bob
+├── AGENTS.md                       Agent context and coding rules (kept byte-identical to CLAUDE.md)
 ├── RUNBOOK.md                      Operational runbook (install, run, troubleshoot)
 ├── README.md                       This file
 ├── pyproject.toml                  Package metadata and dependencies
@@ -228,114 +219,112 @@ ibm-bob-mcp-agent-guard/
 └── .bobignore
 ```
 
+## IBM Bob Usage
+
+TestMind AI was built with **IBM Bob**, which authored the project's
+foundation and all of Phases 0–8: the initial engine (`core.py`,
+`api_check.py`, `visual.py`, `cli.py`, `pipeline.py`, `mcp_server.py`), the
+`demo-repo/` fixture, and its own `.bob/` swarm configuration, then
+completed the mutation engine (Phase 3), MCP compact responses (Phase 7)
+and the Test Writer/Critic/Publisher subagent modes (Phase 8). Full
+PR-by-PR and commit-by-commit evidence — including the exact "Made with IBM
+Bob" / "PR description generated by IBM Bob" footers — is in
+[`docs/IBM_BOB_USAGE.md`](docs/IBM_BOB_USAGE.md); the raw dashboard export
+is in [`bob-evidence/README.md`](bob-evidence/README.md).
+
+### Bob's own dashboard numbers (Bobalytics)
+
+Team Argentina, hackathon ranking position:
+
+| Metric | Value | Ranking |
+|---|---|---|
+| Bob commits | 12 | 1st of 6 |
+| Bob lines | 820 | 14th of 14 |
+| Bob factor | 16.0% | 21st of 21 |
+
+Bob's repository impact for this repo specifically:
+
+| Repository | Bob lines | User lines | Total lines | Bob factor | Bob commits |
+|---|---|---|---|---|---|
+| `agustindiazcano/ibm-bob-mcp-agent-guard` | 820 | 4,314 | 5,134 | 16.0% | 12 |
+
+<table>
+<tr>
+<td><img src="bob-evidence/bob-images/b/10-bob-ide-2026-09-25_16-42-home-welcome-screen-recent-tasks.png" width="220" alt="IBM Bob IDE welcome screen"><br/><sub>IBM Bob IDE, this project's workspace</sub></td>
+<td><img src="bob-evidence/bob-images/a/3-bob-ide-2026-09-25_15-05-github-pr-title-description-draft-markdown.png" width="220" alt="IBM Bob drafting a GitHub PR description"><br/><sub>Bob drafting a PR description</sub></td>
+<td><img src="bob-evidence/bob-images/a/9-bob-ide-2026-09-25_15-45-phase0-complete-summary-verification-pass.png" width="220" alt="IBM Bob completing Phase 0 with a verify.py PASS"><br/><sub>Phase 0 closed, verify.py PASS</sub></td>
+</tr>
+<tr>
+<td><img src="bob-evidence/bob-images/b/11-bob-ide-2026-09-25_16-35-phase8-test-writer-subagent-mode-setup.png" width="220" alt="IBM Bob setting up the Phase 8 Test Writer subagent mode"><br/><sub>Phase 8: Test Writer subagent mode</sub></td>
+<td><img src="bob-evidence/bob-images/bob-stats/ranking-bob-commits.png" width="220" alt="Bobalytics repository-impact table sorted by Bob commits, this repo ranked 1st with 12 commits"><br/><sub>Ranked 1st by Bob commits (12)</sub></td>
+<td align="center"><a href="bob-evidence/bob-images/"><sub>32 screenshots total →<br/>bob-evidence/bob-images/</sub></a></td>
+</tr>
+</table>
+
+### Phases 0–8
+
+| Phase | What | Built by |
+|---|---|---|
+| 0 — Project skeleton | `pyproject.toml`, `AGENTS.md`, `scripts/verify.py` | IBM Bob |
+| 1 — demo-repo fixture | `shop/*.py`, `tests/*`, `web/index.html` | IBM Bob |
+| 2 — Core measurement | `core.py` (tests, coverage, gaps) | IBM Bob |
+| 3 — Mutation engine | Own AST engine, replacing `mutmut` | IBM Bob |
+| 4 — Risk score & dashboard | `compute_risk()` | IBM Bob |
+| 5 — API check | `api_check.py` | IBM Bob |
+| 6 — Visual testing | `visual.py` | IBM Bob |
+| 7 — MCP server | `mcp_server.py`, compact responses | IBM Bob |
+| 8 — Bob modes, rules, skills | `.bob/custom_modes.yaml`, guardrail hooks, subagent modes | IBM Bob |
+
+### Bob's PRs
+
+| PR | Title | Footer (exact) | Commits |
+|---|---|---|---|
+| #1 | feat(guardrails): safety hook, evidence export, verify-before-pr skill & AI dev framework | 🤖 *Created with IBM Bob* | 3 |
+| #2 | feat(skeleton): Phase 0 — project skeleton verified | "Made with IBM Bob" (commit + PR body) | 1 |
+| #4 | feat(engine): replace mutmut with own AST mutation engine; MCP compact responses | 🤖 *PR description generated by IBM Bob* | 2 |
+| #6 | feat(modes): Phase 8 — Test Writer, Critic and Publisher subagent modes + test-writer skill | 🤖 *PR description generated by IBM Bob* | 3 |
+
+Full commit-level breakdown (including 3 pre-PR-#1 direct pushes and the
+initial commit) is in [`docs/IBM_BOB_USAGE.md`](docs/IBM_BOB_USAGE.md).
+
+From Phase 13 onward (containerization, reference tests, the results chart,
+and this session's watsonx.ai fix loop), Claude continued the build — see
+[AI-Assisted Development](#ai-assisted-development) below for how that
+handoff is documented and how the repo is built today.
+
 ## AI-Assisted Development
 
-This project is built with IBM Bob as the primary coding agent, working under an explicit, versioned contract rather than ad-hoc prompting. Bob writes the code, tests and docs, and drives the git workflow. The human sets direction, approves risky changes, and checks Bob's claims against `scripts/verify.py`'s output.
+Two separate things in this project use AI, and it's worth being precise about which is which:
+
+- **Building this repo**: IBM Bob authored Phases 0–8 (above); Claude has authored every engine/docs change from Phase 13 onward, working under the same explicit, file-based contract Bob used rather than ad-hoc prompting.
+- **The product's own AI feature** is IBM watsonx.ai, used at runtime for two things: `repoguard fix` (writes tests, guarded to `tests/` only) and `repoguard analyze --summarize` (plain-English prose from already-measured numbers, never a metric source). See [Using the watsonx.ai fix loop](#using-the-watsonxai-fix-loop) above.
+
+The rest of this section is about the first one — how the repo itself gets built.
 
 ### The contract: context files in the repo
 
 | File | Role |
 |---|---|
-| `AGENTS.md` | Architecture rules, layer boundaries, the token budget, and the actions that need human sign-off (Section 8). Bob loads this on every task. |
-| `PENDING.md` | The prioritized roadmap, phase by phase. Bob reads it to pick the next task and checks items off as they land. The safety hook refuses to delete or empty it. |
+| `AGENTS.md` (kept byte-identical to `CLAUDE.md`) | Architecture rules, layer boundaries, the token budget, and the actions that need human sign-off (Section 8). Loaded on every task. |
+| `PENDING.md` | The prioritized roadmap, phase by phase. Read to pick the next task; items are checked off as they land. Never delete or empty it. |
 | `LASTCONTEXT.md` | Current state, kept short: which phase is done, which is in progress, decisions in force, what's waiting on the user, known gotchas (e.g. "mutation score flakes without `PYTHONDONTWRITEBYTECODE`"). A new session reads this instead of re-deriving context. |
-| `docs/worklog/` | History: each session's decisions and validation results, moved out of `LASTCONTEXT.md` once superseded. |
-| `docs/BUILD_WITH_BOB.md` | The build runbook: one phase, one prompt, one acceptance check. |
-| `docs/ARCHITECTURE.md` | Operational knowledge Bob must follow — the data contract in `repoguard-out/`, the MCP tool list, the agent team. |
+| `docs/ARCHITECTURE.md` | Operational knowledge — the data contract in `repoguard-out/`, the MCP tool list, the watsonx.ai fix loop. |
 
-### What Bob does, end to end
-- **Verify before claiming done:** every phase in `PENDING.md` has a matching check in `scripts/verify.py` (`core`, `mutation`, `api`, `visual`, `mcp`, `cli`, `web`, `after`). Bob runs the relevant check and pastes its output before marking a phase complete — a claim without a PASS doesn't count.
-- **Git workflow:** one short-lived branch per phase (`feat/03-mutation`, `feat/07-mcp-server`), Conventional Commits, a PR description with the verify output as the test plan. Every commit carries a `Co-Authored-By` trailer. PRs are opened by Bob, merged by the human.
-- **Documentation:** keeps README, `AGENTS.md`, `PENDING.md` and the measured numbers in `docs/` in sync with each change — a number in the docs must always match what `verify.py` just measured.
-- **Diagnosis:** when a check fails (e.g. the mutation score isn't deterministic), Bob's job is to find the real cause before patching around it — see `AGENTS.md` Section 9, "Known pitfalls," for the ones already found (bytecode caching, animation timing in visual checks).
-
-### Guardrails on Bob itself
-Hooks live in `.bob/hooks/`:
-- **`safety_guard` (before each tool call), three tiers:**
-  - *Deny*, which never runs: deleting or emptying `PENDING.md`; editing `demo-repo/shop/` or `demo-repo/web/` from a test-writing mode.
-  - *Ask*: force push, `git reset --hard`, `git clean -f`, renaming or deleting anything under `.bob/`.
-  - *Ask before editing* protected files: the mutation operators, the visual diff threshold, the MCP tool signatures (a breaking change for live agents).
-- **`evidence_export` (after each `repoguard` mode task):** exports the task session report to `bob-evidence/NN-short-name.md` automatically.
-
-Skills live in `.bob/skills/`. They are procedures Bob must follow for this repo's risky or repetitive operations:
-- **`pytest-conventions`:** how to write a test that kills a specific mutant (per operator type).
-- **`mutation-hunting`:** how to read `mutation_*.json`, prioritize by risk, and tell an equivalent mutant from a real gap.
-- **`verify-before-pr`:** run the phase's `scripts/verify.py` check and attach its output before opening a PR.
-
-## Development Framework: Working with IBM Bob
-
-TestMind AI is built by a single agent — **IBM Bob** — running under an explicit, file-based contract instead of ad-hoc prompting. Bob plans the change, writes the code and tests, reviews its own diff, runs the verification suite, and drives the full git workflow: branch, commit, push, PR. The human sets direction, approves risky changes, and checks Bob's claims against `scripts/verify.py`'s output — never against Bob's own summary of what it did.
-
-### The session loop
-
-Every unit of work starts the same way, whether it's a new phase or a bug fix:
-
-```mermaid
-flowchart LR
-    A["New feature or task"] --> B["Fresh Bob session<br/>(clean context)"]
-    B --> C["Bob reads:<br/>AGENTS.md · PENDING.md · LASTCONTEXT.md"]
-    C --> D["git checkout -b feat/…"]
-    D --> E["Plan → code → tests"]
-    E --> F["scripts/verify.py &lt;check&gt;"]
-    F -->|FAIL| E
-    F -->|PASS| G["Commit · push · PR<br/>(verify output as the test plan)"]
-    G --> H["Human reviews & merges"]
-    H --> I["Update PENDING.md + LASTCONTEXT.md"]
-    I -.->|next task| A
-```
-
-The context reset is deliberate: a long-running session accumulates dead ends and half-finished reasoning that cost tokens on every turn. Starting clean and re-reading three short files is cheaper than carrying that history forward — and it's what makes the contract files necessary in the first place, not optional documentation.
-
-### The contract: context files in the repo
-
-| File | Role |
-|---|---|
-| `AGENTS.md` | Architecture rules, layer boundaries, the token budget, and which actions need human sign-off. Bob loads this on every task — it's the one file that never gets summarized away. |
-| `PENDING.md` | The prioritized backlog, phase by phase, with a traffic-light priority. Bob reads it to pick the next task and checks items off as they land. Protected from deletion by a hook (below), not just a request. |
-| `LASTCONTEXT.md` | The current state, kept short: which phase is done, which is in progress, decisions already made, what's waiting on the user, and any gotcha still in effect (e.g. "mutation score flakes without `PYTHONDONTWRITEBYTECODE=1`"). A new session reads this instead of re-deriving context from the diff history. |
-| `docs/worklog/` | The history: each session's decisions and validation results, moved out of `LASTCONTEXT.md` once superseded — so `LASTCONTEXT.md` stays short and worklog stays complete. |
-| `docs/BUILD_WITH_BOB.md` | The build runbook: one phase, one prompt, one acceptance check, in dependency order. |
-| `docs/ARCHITECTURE.md` | Operational reference — the `repoguard-out/` data contract, the MCP tool list, the agent team — for anything a session needs mid-task, not at start. |
-
-*`LASTCONTEXT.md` and `docs/worklog/` aren't created yet — add them alongside `PENDING.md` before the first multi-session build.*
-
-### What Bob does, end to end
-
-| Stage | What happens |
-|---|---|
-| **Plan** | Reads `PENDING.md` for the next unblocked phase, `AGENTS.md` for the rules that apply, `LASTCONTEXT.md` for anything left mid-flight. States which reading it's taking before writing code. |
-| **Code** | Implements inside the layer boundaries in `AGENTS.md` §4 — engine code never imports web/MCP/CLI code, and vice versa. |
-| **Test** | Runs the matching `scripts/verify.py` check (`core`, `mutation`, `api`, `visual`, `mcp`, `cli`, `web`, `after`). A claim without a PASS in hand doesn't count as done. |
-| **Review** | Re-reads its own diff against `AGENTS.md` §8 (ask-before-editing list) before committing — this is Bob checking Bob, not a substitute for the human's review on the PR. |
-| **Commit** | Conventional Commits (`feat(engine): …`), one concern per commit, `Co-Authored-By` trailer so authorship is transparent. |
-| **Push & PR** | One short-lived branch per phase (`feat/03-mutation`, `fix/…`, `docs/…`). PR description carries the `verify.py` output as the test plan — not a prose description of what changed. |
-| **Merge** | The human merges. Bob updates `PENDING.md` and `LASTCONTEXT.md` in the same PR, so the next session (or the next person) inherits accurate state. |
-
-### Guardrails on Bob itself
-
-Hooks live in `.bob/hooks/` and run without asking, not as a suggestion:
-
-| Hook | Tier | Blocks |
-|---|---|---|
-| `safety_guard` | Deny | Deleting or emptying `PENDING.md`; editing `demo-repo/shop/` or `demo-repo/web/` from a test-writing mode |
-| `safety_guard` | Ask | Force push, `git reset --hard`, `git clean -f`, renaming or deleting anything under `.bob/` |
-| `safety_guard` | Ask before editing | Mutation operators, the visual diff threshold, MCP tool signatures (a breaking change for live agents) |
-| `evidence_export` | After each `repoguard`-mode task | Exports the task session report to `bob-evidence/NN-short-name.md` automatically |
-
-Skills live in `.bob/skills/` — procedures Bob must follow for this repo's risky or repetitive operations, rather than reasoning them out fresh each time:
-
-| Skill | Covers |
-|---|---|
-| `pytest-conventions` | How to write a test that kills a specific mutant, by operator type |
-| `mutation-hunting` | How to read `mutation_*.json`, prioritize by risk, and tell an equivalent mutant from a real gap |
-| `verify-before-pr` | Run the phase's `scripts/verify.py` check and attach its output before opening a PR |
+### What happens end to end
+- **Verify before claiming done:** every phase in `PENDING.md` has a matching check in `scripts/verify.py`. The relevant check's output is pasted into the PR before marking a phase complete — a claim without a PASS doesn't count.
+- **Git workflow:** one short-lived branch per phase (`feat/03-mutation`, `feat/15-watsonx-migration`, …), Conventional Commits, a PR description with the verify output as the test plan. Every commit carries a `Co-Authored-By` trailer.
+- **Documentation:** keeps README, `AGENTS.md`/`CLAUDE.md`, `PENDING.md` and the measured numbers in `docs/` in sync with each change — a number in the docs must always match what `verify.py` just measured.
+- **Diagnosis:** when a check fails (e.g. the mutation score isn't deterministic), the job is to find the real cause before patching around it — see `AGENTS.md` Section 9, "Known pitfalls," for the ones already found (bytecode caching, animation timing, ambient-PATH subprocess calls, missing watsonx.ai credentials).
 
 ## Documentation
 
+- [IBM Bob Usage](docs/IBM_BOB_USAGE.md): full PR- and commit-level evidence for Phases 0–8
+- [Hackathon submission status](docs/HACKATHON_SUBMISSION_STATUS.md): checklist tracking against the lablab.ai submission requirements
 - [Architecture](docs/ARCHITECTURE.md): diagrams, the sequence of a run, MCP tools and the data contract
 - [Demo script](docs/DEMO.md): 3-minute pitch and backup plan
-- [AI-Assisted Development Framework](docs/AI_ASSITED_DEVELOPMENT_FRAMEWORK_BOB.md): how IBM Bob drives the full build cycle — session loop, contract files, guardrails, and git workflow
-- [Bob usage evidence](bob-evidence/README.md)
+- [watsonx.ai setup](docs/WATSONX_SETUP.md): IBM Cloud credentials for `narrative.py` / `watson_agent`
+- [Multicloud AI (design)](docs/MULTICLOUD_AI.md): adding Google Vertex AI alongside watsonx.ai, and benchmarking models
+- [AI-Assisted Development Framework](docs/AI_ASSISTED_DEVELOPMENT_FRAMEWORK.md): how this repo itself is built — contract files and git workflow
 
 ## Roadmap
 
@@ -344,7 +333,7 @@ Skills live in `.bob/skills/` — procedures Bob must follow for this repo's ris
 implementation and keeps serving `/api/analyze` and `/api/stream`. Planned
 on top of it: a richer Next.js frontend — charts for coverage/mutation/risk,
 a surviving-mutants table, and one-click buttons for "Analyze", "Gate" and
-"Autofix with Bob" — deployed to Vercel, consuming the same FastAPI
+"Autofix (watsonx.ai)" — deployed to Vercel, consuming the same FastAPI
 endpoints rather than replacing them.
 
 We're deliberately not adopting Terraform or new GCP infrastructure for
@@ -352,12 +341,19 @@ this: the existing Cloud Run deploy (`docs/DEPLOY.md`, Phase 13) is left
 as-is, and the new frontend ships as a plain Vercel project (no IaC). See
 `PENDING.md` Phase 14 and `docs/ARCHITECTURE.md` for details. Not built yet.
 
+**Also planned: multicloud AI.** watsonx.ai is the only provider today. See
+[`docs/MULTICLOUD_AI.md`](docs/MULTICLOUD_AI.md) (`PENDING.md` Phase 16) for
+the design — a small `ChatProvider` abstraction so Google Vertex AI can be
+added without touching the write-guarded tools or the orchestrator loop,
+plus a benchmark script to compare models by measured mutation-score deltas
+rather than opinion. Design only; nothing under `ai_providers/` exists yet.
+
 ## Limitations
 
 - Python + pytest only. API checks support FastAPI only.
 - Equivalent mutants (changes with no observable effect) are reported, not filtered out automatically.
 - The accessibility check is basic. Use axe-core for a full audit.
-- `repoguard fix` and the Bob button in the web UI need Bob Shell (`bob run`). Without it, use the Bob IDE.
+- `repoguard fix` needs real IBM Cloud credentials (`docs/WATSONX_SETUP.md`); without them it fails with a clear error rather than degrading silently. An actual live generation with real credentials hasn't been verified yet — see `PENDING.md` Phase 16.
 
 ## Author
 
@@ -368,7 +364,3 @@ as-is, and the new frontend ships as a plain Vercel project (no IaC). See
 ## Team
 
 Argentina Team
-
-## IBM Bob 2.0 Hackathon - 25 September 2026 at 11:00 GMT-4
-
-https://developer.ibm.com/events/ibm-bob-20-hackathon/

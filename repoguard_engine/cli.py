@@ -76,10 +76,33 @@ def gate(repo_path: str, threshold: float) -> None:
 
 @main.command()
 @click.argument("repo_path", default=".", type=click.Path(exists=True))
-def fix(repo_path: str) -> None:
-    """Start a Bob-driven fix loop for REPO_PATH. (Requires Bob IDE or Bob Shell.)"""
-    console.print("[bold yellow]fix[/] mode is designed to be called by Bob as an MCP tool.")
-    console.print("Run [bold]repoguard mcp[/] to start the MCP server and connect Bob.")
+@click.option("--threshold", default=80.0, show_default=True, help="Coverage % gate threshold for the after-measurement.")
+@click.option("--publish", is_flag=True, default=False, help="If the gate passes, commit tests/ to a new branch and open a PR.")
+def fix(repo_path: str, threshold: float, publish: bool) -> None:
+    """Run the watsonx.ai fix loop on REPO_PATH: measure, write tests, critique, re-measure.
+
+    Requires WATSONX_APIKEY and WATSONX_PROJECT_ID -- see docs/WATSONX_SETUP.md.
+    """
+    from .watson_agent import run_fix_loop
+    from .watson_agent.client import WatsonxCredentialsError
+
+    console.print(f"[bold cyan]Fix loop[/] {repo_path} …")
+    try:
+        result = run_fix_loop(repo_path, gate_threshold=threshold, publish=publish)
+    except WatsonxCredentialsError as exc:
+        console.print(f"[bold red]✗ {exc}[/]")
+        sys.exit(1)
+
+    console.print(f"Files attempted: {', '.join(result.files_attempted) or '(none)'}")
+    before = result.baseline.get("mutation") or {}
+    after = (result.after or {}).get("mutation") or {}
+    if before or after:
+        console.print(
+            f"Mutation score: {before.get('score', 'n/a')}% -> {after.get('score', 'n/a')}%"
+        )
+    console.print(f"Evidence: {result.evidence_path}")
+    if publish:
+        console.print("[bold green]PR opened[/]" if result.published else "[yellow]Gate failed — nothing published[/]")
 
 
 @main.command()

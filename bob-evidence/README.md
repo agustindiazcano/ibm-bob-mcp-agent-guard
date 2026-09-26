@@ -20,3 +20,53 @@ Each file is a task session report exported from Bob. Name it `NN-stage.md`, sav
 - A row only counts once its file exists here with the real exported report — a written summary is not evidence.
 - If `evidence_export` (the after-task hook) is working, rows 07–11 should populate automatically as the 🛡️ TestMind mode runs; rows 01–06 are exported by hand from each setup/build session.
 - Keep the numbering sequential even if a stage gets re-run (e.g. a second diagnosis run is `12-diagnosis-rerun.md`, not a second `07`).
+
+# Bob IDE Usage Dashboard (IBM)
+
+**Team:** Team Argentina
+**Member:** Agustin
+**Repository:** agustindiazcano/ibm-bob-mcp-agent-guard
+
+---
+
+## 1. Hackathon Ranking Position
+
+| Metric | Value | Ranking |
+|---|---|---|
+| Bob Commits | 12 | 1st of 6 |
+| Bob Lines | 820 | 14th of 14 |
+| Bob Factor | 16.0% | 21st of 21 |
+
+---
+
+## 2. Spending
+
+| Team Name | Spending limit | Usage | Remaining |
+|---|---|---|---|
+| Team Argentina | 40 Bobcoins | 40 Bobcoins | 0 Bobcoins |
+
+---
+
+## 3. Bob's Repository Impact
+
+| Repository | Bob Lines | User Lines | Total Lines | Bob factor | Bob commits |
+|---|---|---|---|---|---|
+| agustindiazcano/ibm-bob-mcp-agent-guard | 820 | 4,314 | 5,134 | 16.0% | 12 |
+
+---
+
+## 4. Modes (42 tasks total)
+
+| Mode | Tasks | % |
+|---|---|---|
+| agent | 37 | 88.1% |
+| plan | 5 | 11.9% |
+
+---
+
+## 5. Bob's Language Contribution (1.2k LOC total)
+
+| Language | LOC | % |
+|---|---|---|
+| md | 1.1k | 97.8% |
+| unknown | 25 | 2.2% |
