@@ -42,6 +42,7 @@ and the SSE stream are pure measurement and don't change either way; gaps
 | `SummaryPanel` | AI prose, labeled advisory + which provider generated it — blocked on backend gaps 4 and 6 | 🔴 |
 | Vercel deploy | Connect repo/subfolder to Vercel; no IaC, config lives in `vercel.json` / project settings; `NEXT_PUBLIC_REPOGUARD_API_BASE` env var per environment | 🔴 |
 | Docs | Fold this file and `docs/ARCHITECTURE-front.md` back into `PENDING.md`/`docs/ARCHITECTURE.md`, update `README.md`, once built | 🔴 |
+| CI split | `frontend-ci.yml` (lint+build, `web-next/**` paths only) separate from backend `ci.yml`/`cd.yml` (now `paths-ignore: web-next/**`) — monorepo stays one repo per hackathon rules, but front/back CI runs never trigger each other | 🟢 |
 
 **Verified so far:** `npm run lint` and `npm run build` both pass; `next dev`
 was run directly and served the real page (200, title "TestMind AI"). Not

@@ -1,9 +1,19 @@
 name: CI
 
+# Backend only — path-filtered so a frontend-only change (web-next/) doesn't
+# trigger a Python/mutation run; see .github/workflows/frontend-ci.yml.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "web-next/**"
+      - "docs/ARCHITECTURE-front.md"
+      - "PENDING-front.md"
   pull_request:
+    paths-ignore:
+      - "web-next/**"
+      - "docs/ARCHITECTURE-front.md"
+      - "PENDING-front.md"
 
 jobs:
   quality-gate:
