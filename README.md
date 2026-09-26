@@ -1,6 +1,6 @@
 # TestMind AI
 
-**A test-quality tool that proves whether your tests catch bugs, then uses IBM watsonx.ai to write the ones that are missing.**
+**A test-quality tool that proves whether your tests catch bugs, then runs two IBM watsonx.ai agents (a test writer and a critic) to write the ones that are missing. Its measurement engine is also an MCP server, so any MCP-capable AI agent can drive it.**
 
 > Coverage tells you which lines ran. It doesn't tell you whether your tests would notice a bug.
 > TestMind AI injects bugs into your code on purpose and measures how many your tests catch.
@@ -34,6 +34,7 @@ IBM Bob Hackaton Ranking (Bob IDE ussage):
 - [Commands](#commands)
 - [Using the watsonx.ai fix loop](#using-the-watsonxai-fix-loop)
 - [Requirements](#requirements)
+- [Tech stack](#tech-stack)
 - [Project structure](#project-structure)
 - [CI/CD](#cicd)
 - [Deploy to Google Cloud](#deploy-to-google-cloud)
@@ -72,8 +73,8 @@ that don't affect the tested inputs — see `AGENTS.md §9`.
 
 - 🧬 **Mutation testing.** Injects one small bug at a time (flipped comparisons, swapped operators, changed constants, `return None`, removed `raise`) with its own AST engine, then reruns your suite. Every mutant that survives is a bug your tests would miss.
 - 🧪 **Writes the missing tests.** `repoguard fix` hands each file's surviving mutants to IBM watsonx.ai, one file at a time, through a guarded tool that can only write under `tests/` — never source. A second watsonx.ai call critiques the new test before the suite is re-measured for real.
-- 🌐 **API checks.** Reads the OpenAPI schema of a FastAPI app, flags endpoints no test calls, and smoke-tests every `GET` endpoint for 5xx errors.
-- 👁️ **Visual regression.** Starts the app, takes screenshots at desktop (1280 px) and mobile (390 px) widths, and diffs them pixel by pixel against a baseline. Also reports console errors and basic accessibility issues.
+- 🌐 **API checks.** Finds a FastAPI app's routes by parsing its source (AST), flags endpoints no test calls, and smoke-tests `GET` endpoints for 5xx errors.
+- 👁️ **Visual regression.** Takes a screenshot of a running page (Playwright/Chromium, any viewport, 1280×720 by default) and diffs it pixel by pixel against a baseline. Also reports console errors and basic accessibility issues. Available as MCP tools, not yet as a CLI command.
 - 📊 **Risk ranking and report.** Ranks files by the share of their lines left uncovered (`uncovered lines / non-blank lines`) and builds an HTML dashboard. Extra terms such as git churn are planned only if stored run history shows they predict surviving mutants better — see [`docs/DATA_PLATFORM.md` §5](docs/DATA_PLATFORM.md#5-risk-model-v2--calibrated-not-invented).
 
 **Design principle:** the AI decides what to test, and deterministic tools do the measuring. No number in the report is estimated by a model.
@@ -109,7 +110,18 @@ flowchart TB
 
 ## Is it multi-agent?
 
-**No — one process, two AI calls per file.** `repoguard fix` is a single orchestrator loop, not parallel subagents: for each of up to 3 prioritized files it asks watsonx.ai to write a test (through a tool that can only write under `tests/`), then asks watsonx.ai again to critique that test, then re-measures for real. Measurement itself never uses AI.
+**Yes: two agents working in sequence. It is not a parallel swarm.** `repoguard fix` runs an orchestrator that, for each of up to 3 files prioritized by risk, runs two agents one after the other:
+
+- **Test writer agent:** its own system prompt, and a tool-calling loop over `read_source_file` and `write_test_file`. The write tool is hard-guarded to `tests/`.
+- **Critic agent:** a separate system prompt, with the same guarded tools, reviewing what the writer produced.
+
+After both, the orchestrator re-measures deterministically. Both agents use the same watsonx.ai model, and measurement itself never uses AI.
+
+The engine is also exposed through **MCP** (9 tools), so external agents such as Claude Code or any other MCP client can call the same measurements. The fix loop itself calls the engine directly rather than through MCP.
+
+**What it is not (yet):**
+- **Not a parallel swarm.** A parallel multi-agent design for IBM Bob exists in `.bob/`, but it was retired before its first full run (`.bob/DEPRECATED.md`).
+- **Not provider-agnostic.** watsonx.ai is the only AI provider in the code today. A `ChatProvider` abstraction that would add Google Vertex AI is designed but not built: see [`docs/MULTICLOUD_AI.md`](docs/MULTICLOUD_AI.md) (`PENDING.md` Phase 16).
 
 ```mermaid
 flowchart TB
@@ -133,7 +145,7 @@ flowchart TB
 pip install -e .                    # installs the `repoguard` command
 playwright install chromium         # only needed for visual checks
 
-repoguard analyze ./demo-repo       # measure: tests, coverage, mutation, API, visual
+repoguard analyze ./demo-repo --mutation   # coverage, gaps, risk + mutation score (slow)
 repoguard serve                     # web UI at http://127.0.0.1:8765
 ```
 
@@ -141,7 +153,7 @@ repoguard serve                     # web UI at http://127.0.0.1:8765
 
 | Command | What it does |
 |---|---|
-| `repoguard analyze <path \| git-url> [--summarize]` | Measures tests, coverage, mutation score, API and visual. No AI unless `--summarize` is passed. |
+| `repoguard analyze <path> [--mutation] [--endpoints] [--summarize]` | Runs the tests and measures coverage, gaps and risk. `--mutation` adds the mutation score (slow), and `--endpoints` flags untested FastAPI endpoints. No AI unless `--summarize` is passed. Visual checks are MCP tools only. |
 | `repoguard fix <path> [--publish] [--threshold N]` | Measures, has watsonx.ai write the missing tests (guarded to `tests/`), critiques them, measures again |
 | `repoguard gate <path> --threshold 80` | CI gate: exits with code 1 if coverage is below the threshold |
 | `repoguard serve [--port 8000]` | Web UI with live progress, metrics and the report |
@@ -180,6 +192,46 @@ same way `web/server.py` does — no MCP round-trip needed for its own use.
 | `ibm-watsonx-ai` (`pip install -e ".[ai]"`) + IBM Cloud credentials | Writing tests (`repoguard fix`) and the optional `--summarize` prose | For AI features only — measurement never needs it |
 
 The mutation engine is built on Python's standard `ast` module. It doesn't depend on mutmut or Stryker.
+
+## Tech stack
+
+Status key: ✅ implemented and running in this repo · ⚠️ implemented but not verified end to end · 🗺️ planned (design doc only, no code yet)
+
+| Area | Technology | Used for | Status |
+|---|---|---|---|
+| Language | Python ≥ 3.10 | Engine, CLI, API, MCP server | ✅ |
+| Test execution | pytest, pytest-cov | Running the target repo's suite | ✅ |
+| Coverage | coverage.py | Line coverage per file | ✅ |
+| Mutation testing | Python stdlib `ast` (own engine, 6 operators) | Injecting bugs, mutation score (16/79 on demo-repo, deterministic) | ✅ |
+| CLI | Click, Rich | `repoguard analyze · fix · gate · serve · mcp` | ✅ |
+| Web API | FastAPI 0.141.1, Starlette 1.7.0 (pinned together), Uvicorn | `repoguard serve`: `/api/analyze`, `/api/summary` | ✅ |
+| Live progress | Server-Sent Events (`StreamingResponse` → browser `EventSource`) | `/api/stream` step-by-step progress | ✅ |
+| API checks | stdlib `ast` + httpx | Finding FastAPI routes, flagging untested ones, `GET` smoke tests | ✅ |
+| Visual checks | Playwright (Chromium), Pillow | Screenshots and pixel diff (MCP tools) | ✅ locally · not in the Docker image (no Chromium) |
+| Accessibility | axe-playwright-python (axe-core) | Accessibility violations (MCP tool) | ✅ locally · not in the Docker image |
+| Agent protocol | MCP via FastMCP (stdio) | 9 tools for any MCP client | ✅ |
+| AI agents | IBM watsonx.ai (`ibm-watsonx-ai`), default model `meta-llama/llama-3-3-70b-instruct` | Writer and critic agents with tool calling (`repoguard fix`), `--summarize` prose | ⚠️ SDK call shapes checked against the real package; no live run with real credentials yet |
+| AI provider abstraction | `ChatProvider` protocol | Switching between providers without touching the agents | 🗺️ Phase 16 ([design](docs/MULTICLOUD_AI.md)) |
+| AI (second provider) | Google Vertex AI | Alternative model provider + model benchmarking by mutation-score delta | 🗺️ Phase 16 ([design](docs/MULTICLOUD_AI.md)) |
+| Frontend | Next.js 16.3.6, React 19.2.8, TypeScript 5, ESLint 9 | `web-next/` dashboard | ✅ (lint + build pass; end-to-end checked in a browser locally) |
+| Legacy UI | Static HTML served by FastAPI | `repoguard serve` dashboard | ✅ |
+| Charts (docs) | matplotlib (`[docs]` extra) | README before/after image | ✅ |
+| Charts (dashboard) | Recharts | Trend, survival-by-operator and fix-effect charts | 🗺️ Phase 17 ([design](docs/DATA_PLATFORM.md#6-charts-web-next-dashboard)) |
+| Container | Docker (`python:3.11-slim`) | Single image for Cloud Run | ⚠️ Dockerfile written; the served command was tested directly, the image build hasn't run yet |
+| CI | GitHub Actions: `ci.yml`, `frontend-ci.yml` | Verify checks, tests, coverage gate, mutation determinism, frontend lint/build | ✅ green on `main` |
+| CD | GitHub Actions: `cd.yml` | Build → Artifact Registry → Cloud Run | ⚠️ fails at the Google auth step on every push to `main` until the one-time GCP setup is done ([`docs/DEPLOY.md`](docs/DEPLOY.md)) |
+| Cloud (backend) | Google Cloud Run, Artifact Registry | Hosting the API + dashboard | ⚠️ not deployed yet (human GCP setup pending) |
+| Cloud (frontend) | Vercel | Hosting `web-next/` | 🗺️ not deployed yet (human step, Phase 14) |
+| Database | PostgreSQL 16 on Cloud SQL; SQLite locally | Run history per commit | 🗺️ Phase 17 ([design](docs/DATA_PLATFORM.md#4-database-design)) |
+| Data access | SQLAlchemy 2 (Core), psycopg 3 | One code path for SQLite and Postgres | 🗺️ Phase 17 |
+| Infrastructure as code | Terraform (google, random providers), GCS remote state | Provisioning GCP | 🗺️ Phase 17 ([design](docs/DATA_PLATFORM.md#8-infrastructure-as-code-terraform)) |
+| Secrets | Google Secret Manager | Database password | 🗺️ Phase 17 |
+| CD authentication | Workload Identity Federation (GitHub OIDC) | Replacing the JSON service-account key | 🗺️ Phase 17 |
+| User accounts | Google Identity Platform | Optional sign-in for the dashboard | 🗺️ Phase 17, below the cut line |
+| Version control | git | `repoguard fix --publish`: branch, commit, push | ✅ |
+| Diagrams | Mermaid | Architecture and ER diagrams in the docs | ✅ |
+| Built with | IBM Bob IDE | Authored Phases 0–8 ([evidence](docs/IBM_BOB_USAGE.md)) | ✅ (retired afterwards) |
+| Built with | Claude Code | Authored Phase 13 onward | ✅ |
 
 ## Project structure
 
@@ -266,7 +318,9 @@ deploys to **Cloud Run** through `cd.yml`. The workflow is in the repo; the
 one-time GCP setup (project, Artifact Registry, service account, GitHub
 secrets and variables) needs a person with GCP access and is written out
 step by step in [`docs/DEPLOY.md`](docs/DEPLOY.md). That setup has not been
-run yet, so there is no live URL.
+run yet, so there is no live URL, and `cd.yml` currently fails at its Google
+authentication step on every push to `main`, because the GCP credentials
+(`GCP_SA_KEY`) aren't configured yet. It stops before building anything.
 
 Known limits of today's deploy: the service is public
 (`--allow-unauthenticated`, fine for a judged demo), CD authenticates with
