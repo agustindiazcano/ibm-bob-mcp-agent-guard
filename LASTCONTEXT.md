@@ -443,6 +443,20 @@ both merged to `main`.
   touched next. `docs/ARCHITECTURE-front.md` is not folded yet (still a Phase
   14 Docs deliverable).
 
+### Session 16 — Phase 17 design: measurement history on Postgres + Terraform (`claude/eager-gauss-ifyd8w`)
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Wrote the design for storing every measured run: ER schema, SQL views, risk-model calibration plan, six dashboard charts, API routes, Terraform layout for GCP, two-day build order with an explicit cut line | `docs/DATA_PLATFORM.md` |
+| 2 | Added Phase 17 tracker | `PENDING.md` |
+
+Key decisions (design only, nothing built):
+- Database stores, engine measures: all derived values (deltas, trends) are SQL views, never stored columns. Persistence is off unless `REPOGUARD_DATABASE_URL` is set.
+- Justification for a DB: Cloud Run's filesystem is ephemeral, so `repoguard-out/` history can't survive on the deployed service.
+- Engine gaps found while designing: `run_mutation` discards per-mutant outcomes (only positional surviving IDs kept), and per-test outcomes are never recorded. Both are needed before the schema can hold anything useful (block A2).
+- `compute_risk` today is `uncovered / non-blank lines` only; `PENDING.md` Phase 4's `complexity × churn × (1 − detection)` description doesn't match the code. Phase 17 proposes calibrating extra terms against stored survival data rather than adding them by assertion.
+- Terraform covers the backend only; the frontend stays on Vercel (Phase 14's decision stands). CD moves to Workload Identity Federation.
+
 ---
 
 ## Current repo state

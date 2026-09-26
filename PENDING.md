@@ -318,6 +318,32 @@ clouds — same human-gated situation as `docs/WATSONX_SETUP.md` and Phase 11.
 
 ---
 
+## Phase 17 — Measurement history: Postgres, Terraform, data-driven charts
+**Priority: 2 · Depends on: 9, 13, 14** — full design in `docs/DATA_PLATFORM.md`
+
+Stores every measured run (per commit) so trends, persistent surviving
+mutants, flaky tests and fix-loop effect become queryable. The engine still
+measures; the database only stores; derived values live in SQL views.
+Persistence is off unless `REPOGUARD_DATABASE_URL` is set.
+
+| Block | Deliverable | Status |
+|---|---|---|
+| — | `docs/DATA_PLATFORM.md` — schema, views, charts, Terraform layout, build order | 🟢 |
+| A1 | `repoguard_engine/store/` (SQLAlchemy Core, SQLite + Postgres), `[db]` extra | 🔴 |
+| A2 | Engine: per-mutant outcomes + stable fingerprints, `junit.xml` per-test outcomes; `pipeline.py` persists | 🔴 |
+| A3 | API read routes + `POST /api/runs` ingest (project token) + `repoguard analyze --push` | 🔴 |
+| B1 | `infra/terraform/` — Artifact Registry, Cloud SQL, Secret Manager, Cloud Run, WIF; `infra-ci.yml` (fmt/validate) | 🔴 |
+| B2 | `cd.yml` on Workload Identity Federation (drop `GCP_SA_KEY`) | 🔴 |
+| C1 | web-next charts: trend, survival by operator, fix effect, survivors, flaky | 🔴 |
+| C2 | Risk heatmap (below the cut line) | 🔴 |
+| D | User accounts (below the cut line — optional) | 🔴 |
+| — | `verify.py phase17` (round-trip, determinism, after-reference delta 69.62 pp, Postgres service container) | 🔴 |
+
+`terraform apply` and a GCP billing account are human steps — same
+situation as `docs/DEPLOY.md`.
+
+---
+
 ## Standalone tasks (not phase-blocked)
 
 - [ ] **Create `scripts/verify.py`** — accepts a phase name, runs the relevant checks, outputs PASS/FAIL with numbers pasteable into a PR description
