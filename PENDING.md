@@ -295,7 +295,7 @@ of any number, per `AGENTS.md §4`. Optional dependency (`pip install -e
 ---
 
 ## Phase 16 — Multicloud AI: watsonx.ai + Google Vertex AI
-**Priority: 2 · Depends on: 8, 15** (design only — see `docs/MULTICLOUD_AI.md`; nothing in this phase is implemented yet)
+**Priority: 2 · Depends on: 8, 15** (Stage A implemented — see `docs/MULTICLOUD_AI.md`; Stage B (`vertex.py`) needs real GCP credentials)
 
 The user asked for this project to not be single-cloud: watsonx.ai is the
 only provider today (`narrative.py`, `watson_agent/client.py`). This phase
@@ -304,14 +304,25 @@ future provider) can be added without touching `tools.py`, `prompts.py`, or
 the orchestrator loop, plus a way to benchmark models against each other
 using the engine's own mutation-score measurement, not a subjective opinion.
 
+Real watsonx.ai credentials were configured and live-tested this session,
+which surfaced two real findings driving this phase's urgency: the free-tier
+concurrency pool for the best tool-calling model (`llama-3-3-70b-instruct`)
+hits `429` under real load, and a smaller model that does respond
+(`mistral-small-3-1-24b-instruct-2503`) doesn't reliably honor tool-calling —
+a real `repoguard fix demo-repo` run produced zero mutation-score improvement
+because the model replied in plain text instead of calling tools. The user
+has a separate Vertex AI account with credit and no rate limits, motivating
+Vertex as the reliable/fast provider once Stage B lands.
+
 | Deliverable | Description | Status |
 |---|---|---|
 | `docs/MULTICLOUD_AI.md` | Design doc: architecture, env vars, refactor steps, benchmarking plan, open questions | 🟢 |
-| `ai_providers/base.py` | `ChatProvider` protocol | 🔴 |
-| `ai_providers/watsonx.py` | Today's `watson_agent/client.py` logic, moved unchanged | 🔴 |
-| `ai_providers/vertex.py` | Google Vertex AI implementation; SDK call shapes to be verified against the real installed package before shipping, same rigor as `client.py` | 🔴 |
-| `narrative.py` / `orchestrator.py` switched to `get_provider()` | No behavior change for watsonx.ai; re-run `phase15`/`phase16` after | 🔴 |
-| `scripts/benchmark_models.py` | Runs the fix loop against fresh `demo-repo` copies per `(provider, model_id)`, compares real mutation-score deltas | 🔴 |
+| `ai_providers/base.py` | `ChatProvider` protocol, `AIProviderError` | 🟢 |
+| `ai_providers/watsonx.py` | `watson_agent/client.py`'s logic, moved here; `narrative.py` unified onto the same `chat()` interface (previously a separate `generate_text()` call) | 🟢 |
+| `ai_providers/vertex.py` | Google Vertex AI implementation; SDK call shapes to be verified against the real installed package before shipping, same rigor as `watsonx.py` | 🔴 needs real GCP credentials |
+| `narrative.py` / `orchestrator.py` switched to `get_provider()` | No behavior change for watsonx.ai — confirmed live (`phase15`/`phase16`/new `multicloud` check all PASS; a real `--summarize` call with real watsonx credentials still returns real text) | 🟢 |
+| `--provider` CLI flag | `repoguard fix --provider` / `repoguard analyze --summarize --provider` override `REPOGUARD_AI_PROVIDER` per call | 🟢 |
+| `scripts/benchmark_models.py` | Runs the fix loop against fresh `demo-repo` copies per `(provider, model_id)`, compares real mutation-score deltas | 🔴 deferred — needs live credentials for 2+ providers |
 
 Live cross-provider benchmarking needs real credentials for at least two
 clouds — same human-gated situation as `docs/WATSONX_SETUP.md` and Phase 11.
@@ -378,7 +389,7 @@ show it's faster (H1) and at least as good (H2) as the sequential loop.
 - [x] **Verify demo-repo baseline numbers** — measured 65.1% coverage, 20.25% mutation (16/79), 4 files with gaps (AST engine; old mutmut numbers were 74.5%/23.6% — now stale)
 - [x] **Add `.gitattributes`** — normalize line endings (CRLF warnings on every commit)
 - [x] ~~Populate `bob-evidence/`~~ — moot: `bob-evidence/` is retired along with the rest of `.bob/` (see `.bob/DEPRECATED.md`); `repoguard fix` now auto-writes its own run report to `<target-repo>/watson-evidence/` instead
-- [ ] **Decide on renaming the GitHub repo/local directory** (`ibm-bob-mcp-agent-guard`) now that IBM Bob is retired — an external-visible identity change, deliberately not done as part of the watsonx.ai migration; needs an explicit human decision
+- [x] **Decide on renaming the GitHub repo/local directory** — kept as `ibm-bob-mcp-agent-guard`; it's the hackathon's name, so it stays even though IBM Bob itself is retired
 - [x] **Populate `docs/img/`** — `docs/make_results_chart.py` rewritten (it previously printed hardcoded fictional numbers, not a real chart) to render both PNGs from the real AGENTS.md §7 numbers via matplotlib (`docs` optional dependency, added to `pyproject.toml`)
 - [x] **CI workflow** — done as part of Phase 13 above (`.github/workflows/ci.yml`), not the standalone `gate.yml` originally sketched in `RUNBOOK.md §7`
 - [x] **Write the missing `docs/expected-after-tests/*.py` reference tests** — all 4 files written (`test_pricing_complete.py`, `test_cart_complete.py`, `test_inventory_complete.py`, `test_api_complete.py`). Measured against the real engine: 71 passed, 100% coverage, 89.87% mutation (71/79), 7 of 7 API endpoints tested. Never left inside `demo-repo/tests/` after measuring, per AGENTS.md §7. Also corrected a pre-existing doc error found along the way: `api.py` has 7 endpoints, not the 8 documented everywhere (README, AGENTS.md's directory tree and old baseline table).

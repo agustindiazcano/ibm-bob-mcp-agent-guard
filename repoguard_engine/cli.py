@@ -25,11 +25,16 @@ def main() -> None:
 @click.option("--json-output", is_flag=True, default=False, help="Print raw JSON instead of formatted output.")
 @click.option(
     "--summarize", is_flag=True, default=False,
-    help="Also ask watsonx.ai for a plain-English summary of the measured numbers "
-         "(requires WATSONX_APIKEY/WATSONX_PROJECT_ID — see docs/WATSONX_SETUP.md). "
-         "Advisory text only, never a source of any metric.",
+    help="Also ask an AI provider for a plain-English summary of the measured numbers "
+         "(requires credentials for the selected provider — see docs/WATSONX_SETUP.md / "
+         "docs/VERTEX_SETUP.md). Advisory text only, never a source of any metric.",
 )
-def analyze(repo_path: str, mutation: bool, endpoints: bool, json_output: bool, summarize: bool) -> None:
+@click.option(
+    "--provider", default=None,
+    help="AI provider for --summarize: 'watsonx' (default) or 'vertex'. "
+         "Overrides REPOGUARD_AI_PROVIDER for this call.",
+)
+def analyze(repo_path: str, mutation: bool, endpoints: bool, json_output: bool, summarize: bool, provider: str | None) -> None:
     """Measure test coverage and quality gaps in REPO_PATH."""
     from .pipeline import run_pipeline
 
@@ -49,9 +54,9 @@ def analyze(repo_path: str, mutation: bool, endpoints: bool, json_output: bool, 
     if summarize:
         from .narrative import generate_summary
 
-        narrative = generate_summary(result.dashboard)
+        narrative = generate_summary(result.dashboard, provider=provider)
         if narrative.ok:
-            console.print("\n[bold]AI summary (watsonx.ai — advisory, not a measurement):[/]")
+            console.print(f"\n[bold]AI summary ({narrative.provider} — advisory, not a measurement):[/]")
             console.print(narrative.text)
         else:
             console.print(f"\n[yellow]Summary unavailable:[/] {narrative.error}")
@@ -78,18 +83,24 @@ def gate(repo_path: str, threshold: float) -> None:
 @click.argument("repo_path", default=".", type=click.Path(exists=True))
 @click.option("--threshold", default=80.0, show_default=True, help="Coverage % gate threshold for the after-measurement.")
 @click.option("--publish", is_flag=True, default=False, help="If the gate passes, commit tests/ to a new branch and open a PR.")
-def fix(repo_path: str, threshold: float, publish: bool) -> None:
-    """Run the watsonx.ai fix loop on REPO_PATH: measure, write tests, critique, re-measure.
+@click.option(
+    "--provider", default=None,
+    help="AI provider to drive the fix loop: 'watsonx' (default) or 'vertex'. "
+         "Overrides REPOGUARD_AI_PROVIDER for this call.",
+)
+def fix(repo_path: str, threshold: float, publish: bool, provider: str | None) -> None:
+    """Run the AI fix loop on REPO_PATH: measure, write tests, critique, re-measure.
 
-    Requires WATSONX_APIKEY and WATSONX_PROJECT_ID -- see docs/WATSONX_SETUP.md.
+    Requires credentials for the selected provider -- see docs/WATSONX_SETUP.md /
+    docs/VERTEX_SETUP.md.
     """
+    from .ai_providers import AIProviderError
     from .watson_agent import run_fix_loop
-    from .watson_agent.client import WatsonxCredentialsError
 
     console.print(f"[bold cyan]Fix loop[/] {repo_path} …")
     try:
-        result = run_fix_loop(repo_path, gate_threshold=threshold, publish=publish)
-    except WatsonxCredentialsError as exc:
+        result = run_fix_loop(repo_path, gate_threshold=threshold, publish=publish, provider=provider)
+    except AIProviderError as exc:
         console.print(f"[bold red]✗ {exc}[/]")
         sys.exit(1)
 

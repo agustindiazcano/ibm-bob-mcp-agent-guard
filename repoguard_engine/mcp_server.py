@@ -279,12 +279,14 @@ def tool_check_accessibility(url: str, detail: bool = False) -> dict:
 @mcp_app.tool()
 def tool_generate_summary(repo_path: str, detail: bool = False) -> dict:
     """
-    Measure repo_path (coverage, gaps, risk) and ask watsonx.ai for a short
-    plain-English summary of those exact numbers. Advisory text only — never
-    a source of any metric; every number the summary can mention was already
-    measured by the engine before this tool ever calls watsonx.
+    Measure repo_path (coverage, gaps, risk) and ask the configured AI
+    provider (watsonx.ai by default, or Vertex AI) for a short plain-English
+    summary of those exact numbers. Advisory text only — never a source of
+    any metric; every number the summary can mention was already measured by
+    the engine before this tool ever calls the AI provider.
 
-    Requires WATSONX_APIKEY and WATSONX_PROJECT_ID (see docs/WATSONX_SETUP.md).
+    Requires credentials for the selected provider (see docs/WATSONX_SETUP.md
+    / docs/VERTEX_SETUP.md).
     ok=False means the summary could not be generated (missing credentials,
     SDK not installed, or an API error) — the measured numbers themselves are
     unaffected either way; call tool_full_pipeline for those.

@@ -12,9 +12,10 @@
 You are a senior Python engineer and QA specialist. You write small, typed, testable code and you never claim a result you did not measure.
 
 ## 2. What this project is
-TestMind AI measures whether a Python repo's tests actually catch bugs, then uses IBM watsonx.ai to write the missing tests.
+TestMind AI measures whether a Python repo's tests actually catch bugs, then uses an AI provider to write the missing tests.
 - **Engine** (`repoguard_engine/`, CLI `repoguard`): deterministic measurements — pytest, coverage, AST mutation testing, untested functions, FastAPI endpoint checks, visual regression, risk score, HTML dashboard.
-- **watsonx.ai layer** (`repoguard_engine/watson_agent/`): a tool-calling fix loop (`repoguard fix`) that writes tests through one hard-guarded tool restricted to `tests/`, plus `narrative.py`'s advisory-only prose summary (`--summarize`).
+- **AI provider layer** (`repoguard_engine/ai_providers/`): a `ChatProvider` abstraction behind `get_provider()` (`REPOGUARD_AI_PROVIDER`, default `watsonx`, or `--provider` per call). `watsonx.py` is implemented; `vertex.py` (Google Vertex AI) is Phase 16 Stage B, not built yet — see `docs/MULTICLOUD_AI.md`.
+- **`watson_agent/` fix loop**: a tool-calling fix loop (`repoguard fix`) that writes tests through one hard-guarded tool restricted to `tests/`, calling whichever provider `ai_providers.get_provider()` returns. `narrative.py`'s advisory-only prose summary (`--summarize`) does the same.
 - **Entry points:** terminal (`repoguard analyze | fix | gate | serve | mcp`), web UI (`repoguard serve`), any MCP client (stdio).
 - The product name is TestMind AI; the CLI, package and MCP server are still named `repoguard`.
 
@@ -28,14 +29,17 @@ TestMind AI measures whether a Python repo's tests actually catch bugs, then use
 > modes used to do.
 
 ## 3. Tech stack
-Python ≥ 3.10 · pytest · coverage.py · stdlib `ast` (own mutation engine, no mutmut/Stryker) · MCP Python SDK (FastMCP, stdio) · FastAPI + uvicorn + SSE (web UI) · httpx TestClient (API checks) · Playwright Chromium + Pillow + axe-playwright-python (visual) · matplotlib (docs chart only) · IBM watsonx.ai (`ibm-watsonx-ai`, optional `[ai]` extra) for two things: `narrative.py`'s advisory prose summary (no metric ever comes from it) and `watson_agent/`'s tool-calling fix loop (writes tests through a guarded tool, never a source file).
+Python ≥ 3.10 · pytest · coverage.py · stdlib `ast` (own mutation engine, no mutmut/Stryker) · MCP Python SDK (FastMCP, stdio) · FastAPI + uvicorn + SSE (web UI) · httpx TestClient (API checks) · Playwright Chromium + Pillow + axe-playwright-python (visual) · matplotlib (docs chart only) · IBM watsonx.ai (`ibm-watsonx-ai`, optional `[ai]` extra) as the default AI provider behind `ai_providers/get_provider()`, used for two things: `narrative.py`'s advisory prose summary (no metric ever comes from it) and `watson_agent/`'s tool-calling fix loop (writes tests through a guarded tool, never a source file).
 
-> **Planned, not built: multicloud AI.** watsonx.ai is currently the only AI
-> provider. `docs/MULTICLOUD_AI.md` (Phase 16 in `PENDING.md`) designs a
-> `ChatProvider` abstraction so Google Vertex AI can be added alongside it,
-> plus a benchmark script to compare models by real mutation-score deltas,
-> not opinion. Nothing under `ai_providers/` exists yet — don't assume it
-> does because this note is here.
+> **Multicloud AI: Stage A built, Vertex AI (Stage B) not yet.**
+> `repoguard_engine/ai_providers/` implements the `ChatProvider` abstraction
+> (`base.py`, `watsonx.py`) behind `get_provider()`; `narrative.py` and
+> `watson_agent/orchestrator.py` both call it instead of importing a cloud
+> SDK directly. `vertex.py` (Google Vertex AI) is designed in
+> `docs/MULTICLOUD_AI.md` (Phase 16 in `PENDING.md`) but not built — it
+> needs real GCP credentials to live-verify the SDK call shape first, same
+> rigor already applied to `watsonx.py`. A benchmark script comparing models
+> by real mutation-score deltas is deferred until both providers exist.
 
 ## 4. Architecture rules (non-negotiable)
 - **The AI decides, the engine measures.** Every number (coverage, mutation score, risk, endpoints, visual diff) must come from an engine function. Never estimate, round up or extrapolate a metric.
@@ -62,9 +66,12 @@ ibm-bob-mcp-agent-guard/
 │   ├── core.py           measure_coverage · find_coverage_gaps · run_mutation · compute_risk · build_dashboard_data
 │   ├── api_check.py      find_untested_endpoints (AST) · run_endpoint_smoke_tests (httpx)
 │   ├── visual.py         capture_screenshot · pixel_diff · collect_console_logs · check_accessibility
-│   ├── narrative.py      generate_summary — watsonx.ai prose from an already-measured dashboard, never a metric source
-│   ├── watson_agent/     watsonx.ai fix loop — replaces .bob/'s Orchestrator/Test Writer/Critic/Gate/Publisher modes
-│   │   ├── client.py        get_chat_model — watsonx.ai chat (tool-calling), fails loud with no credentials
+│   ├── narrative.py      generate_summary — AI prose from an already-measured dashboard, never a metric source
+│   ├── ai_providers/     ChatProvider abstraction — get_provider() reads REPOGUARD_AI_PROVIDER
+│   │   ├── base.py           ChatProvider protocol, AIProviderError
+│   │   ├── watsonx.py         watsonx.ai chat (tool-calling), fails loud with no credentials — done
+│   │   └── vertex.py          Google Vertex AI — Phase 16 Stage B, not built yet
+│   ├── watson_agent/     AI fix loop — replaces .bob/'s Orchestrator/Test Writer/Critic/Gate/Publisher modes
 │   │   ├── tools.py          TOOL_SCHEMAS/TOOL_REGISTRY — write_test_file hard-guards writes to tests/ only
 │   │   ├── prompts.py        TEST_WRITER_PROMPT, CRITIC_PROMPT — carried forward from .bob/rules,skills
 │   │   └── orchestrator.py   run_fix_loop — measure → write → critique → re-measure → evidence
@@ -101,7 +108,8 @@ ibm-bob-mcp-agent-guard/
 ├── docs/
 │   ├── ARCHITECTURE.md           Layer diagram, data flow, MCP tool list
 │   ├── DEMO.md                   3-minute demo script
-│   ├── WATSONX_SETUP.md          IBM Cloud credentials for narrative.py / watson_agent
+│   ├── WATSONX_SETUP.md          IBM Cloud credentials for the default AI provider
+│   ├── MULTICLOUD_AI.md          ChatProvider abstraction (built) + Vertex AI (Phase 16 Stage B, planned)
 │   ├── AI_ASSISTED_DEVELOPMENT_FRAMEWORK.md  How this repo itself is built
 │   ├── make_results_chart.py     Generates before/after results chart
 │   ├── expected-after-tests/     Reference tests — copy in to verify "after" numbers; remove after
@@ -147,15 +155,15 @@ When declining an action, say what to do instead.
 - **Flaky mutation score:** almost always stale bytecode — confirm `PYTHONDONTWRITEBYTECODE=1` reaches every pytest subprocess.
 - **MCP not visible in a client:** `repoguard` isn't on that client's PATH; use the absolute path in its MCP server config (this is what `.bob/mcp.json` used to do for Bob).
 - **Visual diffs with no change:** page not fully loaded or animations running.
-- **`repoguard fix` fails immediately with a credentials error:** expected behavior with no `WATSONX_APIKEY`/`WATSONX_PROJECT_ID` set — see `docs/WATSONX_SETUP.md`. `get_chat_model()` is called before the baseline measurement runs specifically so this fails in milliseconds, not after several minutes of mutation testing that would've been thrown away anyway.
+- **`repoguard fix` fails immediately with a credentials error:** expected behavior with no credentials set for the selected provider (default watsonx: `WATSONX_APIKEY`/`WATSONX_PROJECT_ID`) — see `docs/WATSONX_SETUP.md`. `ai_providers.get_provider()` is called before the baseline measurement runs specifically so this fails in milliseconds, not after several minutes of mutation testing that would've been thrown away anyway.
 - **Equivalent mutants** (e.g. `round(x, 2)` → `round(x, 3)`) can't be killed; report them, don't write artificial tests.
 - **`run_mutation` MCP tool times out:** a full run on demo-repo's 79 mutants takes several minutes; whatever MCP client config launches `repoguard mcp` needs a `timeout` of at least 600000ms to cover that. If it's ever dropped back toward the default, mutation calls through MCP fail even though the same command works fine from the CLI.
 - **FastAPI/starlette mismatch:** `fastapi` and `starlette` are pinned exactly (not `>=`) because they were previously unpinned and different environments resolved to incompatible pairs — one install got a working `fastapi 0.141.1`/`starlette 1.7.0`, another got a broken `fastapi 0.128.0` with that same `starlette 1.7.0`. If a dependency upgrade ever bumps one without the other (e.g. upgrading `fastmcp`/`mcp`, which also depends on `starlette`), reinstall from a clean venv rather than patching the mismatched pair in place.
 - **Never call `subprocess.run(["pytest", ...])` or `["python", ...])` with a bare command name.** It resolves via the *caller's ambient PATH*, not the environment `repoguard` is actually installed in — if something else (a stale system Python, an old venv) is earlier on PATH, the subprocess silently runs against a completely different, possibly dependency-less environment. This produced two real, previously undiscovered bugs in one session: (1) `measure_coverage()` fell back to a fabricated `0%`/`0`/`0` result instead of erroring when pytest-cov wasn't on the resolved PATH — silently indistinguishable from a real empty repo; (2) `scripts/verify.py`'s `phase3` check reported a false **PASS** with mutation score **100% (79/79 killed)** — internally consistent across two runs (both hit the same broken interpreter, so "deterministic"), but the number was completely wrong, because pytest itself couldn't run in every single mutant subprocess and every one was scored "killed" by default. Both are fixed by always using `sys.executable` (or `[sys.executable, "-m", "pytest", ...]`), which pins the subprocess to the exact interpreter already running the code, regardless of ambient PATH. The one deliberate exception is `verify.py`'s `phase0` check, which uses bare `repoguard` on purpose — it's specifically testing whether the console script is on PATH, the same way `.bob/mcp.json` used to invoke it for Bob (see `.bob/DEPRECATED.md`) and any current MCP client config does today.
 - **A script reporting PASS is not proof it measured the real thing** — `phase3`'s determinism check alone (do two runs agree?) let the 100%-false-positive above slip through, because two runs of the *same broken environment* agree with each other trivially. `phase3` now also asserts against the documented `AGENTS.md §7` baseline (`killed == 16`, `total == 79`) as a second, independent check — internal consistency and a known-good external value, not just internal consistency alone.
 - **`check_accessibility()` silently reported "0 violations" (a fake clean pass) instead of failing** when `axe-playwright-python` wasn't installed — it was imported in `visual.py` but never declared as a dependency anywhere, so the check has likely never actually run in any environment. Now declared as a dependency, and the function returns `ok=False` with a real `error` message (surfaced through the MCP tool's compact response) whenever the check couldn't actually run, instead of an empty result that looks identical to a genuine pass.
-- **`narrative.py` (watsonx.ai) needs `pip install -e ".[ai]"` plus `WATSONX_APIKEY`/`WATSONX_PROJECT_ID`** — see `docs/WATSONX_SETUP.md`. Without them, `generate_summary()` returns `ok=False` with a real error, same graceful-degradation pattern as `check_accessibility()` — it never fabricates summary text. Its output is advisory prose only; no code path may read a number out of it back into a measurement. The exact SDK call shapes were checked against the real installed `ibm-watsonx-ai` package, but an actual successful generation with real credentials has not been verified — only that a call with a fake key reaches the real endpoint and fails cleanly.
-- **`watson_agent/`'s fix loop degrades differently from `narrative.py`: it fails loud, not gracefully.** `get_chat_model()` raises `WatsonxCredentialsError` rather than returning an `ok=False` result — `repoguard fix` has no measurement to fall back to if the AI stage can't run, unlike `--summarize`'s advisory text. `ModelInference.chat()`'s signature and OpenAI-compatible response shape (`response["choices"][0]["message"]`, `tool_calls`) were confirmed against the real installed `ibm-watsonx-ai==1.7.2` via `inspect.signature()`/`help()`; an actual live tool-calling round trip has not been verified (same gap as `narrative.py`'s generation). `scripts/verify.py phase16` checks the write guard and the fail-loud path, not a live call.
+- **`narrative.py` needs `pip install -e ".[ai]"` plus credentials for the selected provider** (default watsonx: `WATSONX_APIKEY`/`WATSONX_PROJECT_ID`) — see `docs/WATSONX_SETUP.md`. Without them, `generate_summary()` returns `ok=False` with a real error, same graceful-degradation pattern as `check_accessibility()` — it never fabricates summary text. Its output is advisory prose only; no code path may read a number out of it back into a measurement. **Live-verified with real watsonx.ai credentials**: a real `--summarize` call returns real generated text (first confirmed successful generation, not just a clean-failure network check).
+- **`watson_agent/`'s fix loop degrades differently from `narrative.py`: it fails loud, not gracefully.** `ai_providers.get_provider()` raises `AIProviderError` (a `WatsonxCredentialsError`/`VertexCredentialsError` subclass) rather than returning an `ok=False` result — `repoguard fix` has no measurement to fall back to if the AI stage can't run, unlike `--summarize`'s advisory text. `ModelInference.chat()`'s signature and OpenAI-compatible response shape (`response["choices"][0]["message"]`, `tool_calls`) were confirmed against the real installed `ibm-watsonx-ai==1.7.2` via `inspect.signature()`/`help()` — including that its `params` dict takes `max_tokens`/`time_limit`, not `generate_text()`'s `max_new_tokens` (a real bug this session's refactor fixed: `narrative.py` had been passing the wrong param name). **Live-verified**: a real tool-calling round trip runs end to end against a real IBM Cloud account — but the current default model (`mistral-small-3-1-24b-instruct-2503`, chosen to dodge `llama-3-3-70b-instruct`'s free-tier `429`s) doesn't reliably invoke tools; a real `repoguard fix demo-repo` run produced zero mutation-score improvement because the critic replied in plain text instead of calling `read_source_file`. This is a model-choice quality gap, not a call-shape bug — motivating Vertex AI (Phase 16 Stage B) as a more reliable provider. `scripts/verify.py phase16`/`multicloud` check the write guard and fail-loud path, not model quality.
 
 ## 10. Token budget
 - Reply briefly: tables and lists, no restating tool output.

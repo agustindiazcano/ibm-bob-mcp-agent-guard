@@ -8,9 +8,12 @@ Runs the checks relevant to the specified phase and prints PASS or FAIL with
 measured numbers suitable for pasting into a PR description.
 
 Phase checks implemented:
-    phase0   — package installs cleanly, `repoguard --help` exits 0
-    phase3   — AST mutation engine is deterministic (two runs produce identical results)
-    phase7   — MCP tools accept `detail` param; compact response is the default
+    phase0      — package installs cleanly, `repoguard --help` exits 0
+    phase3      — AST mutation engine is deterministic (two runs produce identical results)
+    phase7      — MCP tools accept `detail` param; compact response is the default
+    phase15     — narrative.py degrades gracefully with no watsonx credentials
+    phase16     — fix-loop write guard + fail-loud credential check
+    multicloud  — ai_providers.get_provider() dispatch, defaults, and unknown-provider handling
 """
 
 from __future__ import annotations
@@ -150,10 +153,10 @@ print('OK:', r.error)
 
 
 def check_phase16() -> bool:
-    """Verify the watsonx.ai fix-loop orchestrator's safety guard and
-    fail-loud credential check -- the two properties that must hold with no
-    live IBM Cloud account available."""
-    print("=== Phase 16: watsonx.ai fix-loop orchestrator ===")
+    """Verify the AI fix-loop orchestrator's safety guard and fail-loud
+    credential check -- the two properties that must hold with no live
+    provider account available."""
+    print("=== Phase 16: AI fix-loop orchestrator ===")
 
     script = """
 import os, tempfile
@@ -163,7 +166,7 @@ os.environ.pop('WATSONX_APIKEY', None)
 os.environ.pop('WATSONX_PROJECT_ID', None)
 
 from repoguard_engine.watson_agent.tools import write_test_file, read_source_file, SourceEditRejected
-from repoguard_engine.watson_agent.client import get_chat_model, WatsonxCredentialsError
+from repoguard_engine.ai_providers import get_provider, AIProviderError
 
 with tempfile.TemporaryDirectory() as tmp:
     repo = Path(tmp)
@@ -191,9 +194,9 @@ with tempfile.TemporaryDirectory() as tmp:
 
 # Fail loud, not silent, with no credentials configured
 try:
-    get_chat_model()
-    raise AssertionError('expected WatsonxCredentialsError with no credentials configured')
-except WatsonxCredentialsError as exc:
+    get_provider()
+    raise AssertionError('expected AIProviderError with no credentials configured')
+except AIProviderError as exc:
     assert str(exc), 'expected a real error message'
 
 print('OK: write guard enforced, path traversal rejected, fail-loud credential check confirmed')
@@ -207,12 +210,57 @@ print('OK: write guard enforced, path traversal rejected, fail-loud credential c
     return ok
 
 
+def check_multicloud() -> bool:
+    """Verify ai_providers.get_provider()'s dispatch: default-to-watsonx
+    fail-loud behavior, an unrecognized provider name failing loud, and that
+    watson_agent/orchestrator.py + narrative.py import cleanly now that
+    watson_agent/client.py no longer exists."""
+    print("=== Multicloud: ai_providers.get_provider() dispatch ===")
+
+    script = """
+import os
+os.environ.pop('WATSONX_APIKEY', None)
+os.environ.pop('WATSONX_PROJECT_ID', None)
+os.environ.pop('REPOGUARD_AI_PROVIDER', None)
+
+from repoguard_engine.ai_providers import get_provider, AIProviderError
+
+# Default (unset REPOGUARD_AI_PROVIDER) resolves to watsonx and fails loud
+try:
+    get_provider()
+    raise AssertionError('expected AIProviderError for the default (watsonx) provider with no credentials')
+except AIProviderError as exc:
+    assert str(exc), 'expected a real error message'
+
+# An unrecognized provider name fails loud, never silently falls back
+try:
+    get_provider(provider='bogus')
+    raise AssertionError('expected AIProviderError for an unknown provider name')
+except AIProviderError as exc:
+    assert str(exc), 'expected a real error message'
+
+# Callers of the abstraction still import cleanly (watson_agent/client.py is gone)
+import repoguard_engine.narrative
+import repoguard_engine.watson_agent.orchestrator
+
+print('OK: default-provider fail-loud, unknown-provider fail-loud, callers import cleanly')
+"""
+
+    rc, out = run([sys.executable, "-c", script], timeout=30)
+    ok = rc == 0
+    status = "PASS" if ok else "FAIL"
+    print(f"  {out.strip()}")
+    print(f"  provider dispatch check -> {status}")
+    return ok
+
+
 CHECKS: dict[str, callable] = {
     "phase0": check_phase0,
     "phase3": check_phase3,
     "phase7": check_phase7,
     "phase15": check_phase15,
     "phase16": check_phase16,
+    "multicloud": check_multicloud,
 }
 
 

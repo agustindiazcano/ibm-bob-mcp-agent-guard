@@ -1,5 +1,5 @@
-"""watsonx.ai fix loop: measure -> prioritize -> write tests -> critic ->
-gate -> optional publish -> evidence report.
+"""AI fix loop: measure -> prioritize -> write tests -> critic -> gate ->
+optional publish -> evidence report.
 
 This is the direct functional replacement for .bob/custom_modes.yaml's
 Orchestrator / Test Writer / Critic / Gate / Publisher modes, now retired
@@ -7,6 +7,10 @@ Orchestrator / Test Writer / Critic / Gate / Publisher modes, now retired
 through an MCP round-trip -- same layering rule as web/server.py (AGENTS.md
 Section 4: "cli.py, mcp_server.py and web/server.py are thin adapters over
 pipeline/core").
+
+Provider-agnostic: drives whichever ai_providers.get_provider() returns
+(watsonx.ai by default, or Vertex AI via REPOGUARD_AI_PROVIDER=vertex) --
+see docs/MULTICLOUD_AI.md.
 """
 
 from __future__ import annotations
@@ -17,8 +21,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ..ai_providers import get_provider
 from ..pipeline import run_pipeline
-from .client import get_chat_model
 from .prompts import CRITIC_PROMPT, TEST_WRITER_PROMPT
 from .tools import TOOL_REGISTRY, TOOL_SCHEMAS, SourceEditRejected
 
@@ -45,8 +49,9 @@ def _priority_files(risk: list) -> list[str]:
 
 
 def _run_chat_stage(model, system_prompt: str, user_prompt: str, repo_path: str) -> str:
-    """One watsonx.ai chat-with-tools stage, looping on tool calls until the
-    model returns plain content or the round-trip cap is hit."""
+    """One chat-with-tools stage against the configured AI provider, looping
+    on tool calls until the model returns plain content or the round-trip
+    cap is hit."""
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
@@ -87,26 +92,30 @@ def run_fix_loop(
     *,
     gate_threshold: float = 80.0,
     publish: bool = False,
+    provider: str | None = None,
 ) -> FixResult:
     """
-    Run the full watsonx.ai fix loop against repo_path.
+    Run the full AI fix loop against repo_path.
 
     1. Measure a real baseline (coverage, gaps, mutation, risk).
     2. Prioritize up to MAX_FILES_PER_RUN files by risk score.
-    3. Per file: watsonx.ai reads the source and writes a killing test via
-       write_test_file (hard-guarded to tests/ only).
-    4. A second watsonx.ai call critiques the new test.
+    3. Per file: the AI provider reads the source and writes a killing test
+       via write_test_file (hard-guarded to tests/ only).
+    4. A second call critiques the new test.
     5. Re-measure for real (deterministic, no LLM involved) and gate.
     6. If publish=True and the gate passes, commit and open a PR.
     7. Write an evidence report to watson-evidence/.
 
-    Raises WatsonxCredentialsError immediately if WATSONX_APIKEY /
-    WATSONX_PROJECT_ID aren't set -- checked before the (multi-minute)
-    mutation baseline runs, not after, so a missing-credentials failure is
-    instant rather than waiting on a measurement that was going to be thrown
-    away anyway.
+    provider: forwarded to ai_providers.get_provider() (None reads
+    REPOGUARD_AI_PROVIDER, defaulting to "watsonx").
+
+    Raises AIProviderError immediately if the selected provider's
+    credentials aren't set -- checked before the (multi-minute) mutation
+    baseline runs, not after, so a missing-credentials failure is instant
+    rather than waiting on a measurement that was going to be thrown away
+    anyway.
     """
-    model = get_chat_model()
+    model = get_provider(provider=provider)
 
     repo = str(Path(repo_path).resolve())
     baseline = run_pipeline(repo, include_mutation=True, include_endpoints=True, gate_threshold=gate_threshold)
@@ -142,11 +151,11 @@ def run_fix_loop(
 def _publish(repo_path: str) -> None:
     """Branch, commit tests/ only, push, open a PR. Bare git/gh, like a human
     would run them -- same intentional exception as verify.py's phase0 check."""
-    branch = f"fix/watsonx-{datetime.now(timezone.utc):%Y%m%d%H%M%S}"
+    branch = f"fix/ai-{datetime.now(timezone.utc):%Y%m%d%H%M%S}"
     steps = [
         ["git", "checkout", "-b", branch],
         ["git", "add", "tests"],
-        ["git", "commit", "-m", "test: watsonx.ai fix loop"],
+        ["git", "commit", "-m", "test: AI fix loop"],
         ["git", "push", "-u", "origin", branch],
         ["gh", "pr", "create", "--fill"],
     ]
@@ -164,7 +173,7 @@ def _write_evidence(repo_path: str, result: FixResult) -> str:
     next_n = int(existing[-1].name[:2]) + 1 if existing else 1
     path = out_dir / f"{next_n:02d}-fix-loop.md"
     path.write_text(
-        f"# watsonx.ai fix loop -- {datetime.now(timezone.utc).isoformat()}\n\n"
+        f"# AI fix loop -- {datetime.now(timezone.utc).isoformat()}\n\n"
         f"Repo: {result.repo_path}\n\n"
         f"Files attempted: {', '.join(result.files_attempted) or '(none)'}\n\n"
         f"## Before\n```json\n{json.dumps(result.baseline, indent=2)}\n```\n\n"

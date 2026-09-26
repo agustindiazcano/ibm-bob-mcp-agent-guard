@@ -49,3 +49,7 @@ demo-repo/.pytest_cache/
 # RepoGuard engine outputs (written to target repo; never commit)
 repoguard-out/
 **/repoguard-out/
+
+# repoguard fix's auto-written run reports (target repo; never commit)
+watson-evidence/
+**/watson-evidence/

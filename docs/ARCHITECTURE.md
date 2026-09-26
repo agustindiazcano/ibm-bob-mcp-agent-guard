@@ -13,7 +13,7 @@ RepoGuard is structured as four independent layers that communicate via well-def
 ┌──────────────────────▼──────────────────────────────┐
 │              repoguard_engine                        │
 │  core.py · api_check.py · visual.py · pipeline.py   │
-│  narrative.py · watson_agent/                        │
+│  narrative.py · ai_providers/ · watson_agent/         │
 └────────────┬──────────────────────────┬─────────────┘
              │                          │
 ┌────────────▼────────┐   ┌─────────────▼─────────────┐
@@ -53,11 +53,16 @@ RepoGuard is structured as four independent layers that communicate via well-def
 - FastMCP server exposing 9 tools (thin wrappers over engine functions)
 - Started via `repoguard mcp` (stdio transport), usable by any MCP client
 
+### `repoguard_engine/ai_providers/`
+- `base.py` — `ChatProvider` protocol (`chat(messages, tools=, max_tokens=, timeout_ms=) -> dict`), `AIProviderError`
+- `watsonx.py` — the default provider; `get_provider()` builds a watsonx.ai chat (tool-calling) connection, raises `WatsonxCredentialsError` immediately if `WATSONX_APIKEY`/`WATSONX_PROJECT_ID` aren't set
+- `vertex.py` — Google Vertex AI; **Phase 16 Stage B, not built yet** (needs real GCP credentials to live-verify the SDK call shape)
+- `__init__.py` — `get_provider(provider=None, model_id=None)` reads `REPOGUARD_AI_PROVIDER` (default `"watsonx"`), lazily imports the selected module
+
 ### `repoguard_engine/watson_agent/`
-- `client.py` — `get_chat_model()`, a watsonx.ai chat (tool-calling) connection; raises `WatsonxCredentialsError` immediately if `WATSONX_APIKEY`/`WATSONX_PROJECT_ID` aren't set
 - `tools.py` — `TOOL_SCHEMAS`/`TOOL_REGISTRY`; `write_test_file` is the only write tool and hard-rejects any path outside `tests/`
 - `prompts.py` — system prompts for the writer/critic stages
-- `orchestrator.py` — `run_fix_loop(repo_path, ...)`: measure → prioritize by risk → write → critique → re-measure → evidence report
+- `orchestrator.py` — `run_fix_loop(repo_path, ..., provider=None)`: measure → prioritize by risk → write → critique → re-measure → evidence report; calls `ai_providers.get_provider()`, provider-agnostic
 
 ### `repoguard_engine/web/server.py`
 - FastAPI application with:
@@ -79,15 +84,17 @@ repoguard analyze ./demo-repo
   └─ _print_coverage_table()  →  rich table to stdout
 ```
 
-## watsonx.ai Integration
+## AI fix loop Integration
 
 `repoguard fix` runs `watson_agent.orchestrator.run_fix_loop()` in-process
 against `pipeline`/`core`/`api_check` directly — the same layering as
-`web/server.py`, not an MCP round-trip:
+`web/server.py`, not an MCP round-trip. It drives whichever provider
+`ai_providers.get_provider()` returns (watsonx.ai by default, or Vertex AI
+via `REPOGUARD_AI_PROVIDER=vertex`/`--provider vertex` once Stage B lands):
 1. Measure → `run_pipeline(..., include_mutation=True, include_endpoints=True)`
 2. Prioritise → up to 3 files by `compute_risk()`'s existing risk score
-3. Fix → watsonx.ai writes a test per file through `write_test_file`, guarded to `tests/`
-4. Critique → a second watsonx.ai call reviews the new test against the quality prompt
+3. Fix → the AI provider writes a test per file through `write_test_file`, guarded to `tests/`
+4. Critique → a second call to the same provider reviews the new test against the quality prompt
 5. Validate → re-run `run_pipeline()` for real numbers; `--publish` opens a PR if the gate passes
 
 This replaces what `.bob/custom_modes.yaml`'s Orchestrator/Test
