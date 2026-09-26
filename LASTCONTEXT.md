@@ -592,6 +592,60 @@ credentials, and the Cloud Run token isn't attached yet. Gap 3 stays 🟡
 until a real run from the Vercel demo shows a measured mutation score above
 20.25%, and `/api/analyze` on the same service still reports 65.1% after it.
 
+### Session 23 — Phase 19 plan: evaluation & guardrails for the fix loop (`claude/pensive-rubin-7nhvkh`)
+
+The user asked whether code-review/healing LLM apps have guardrails and
+evaluation, and what the benchmark is, then asked for a plan doc, an
+implementation doc and README phases. A second Claude session was
+refactoring docs in parallel, so edits outside the two new docs were kept
+small and additive.
+
+Before planning, the current guardrails were probed on throwaway
+`demo-repo` copies with the real `write_test_file` / `run_tests` /
+`measure_coverage` / `run_mutation` functions (script not committed;
+`demo-repo/` unchanged afterwards):
+
+| # | Probe | Measured |
+|---|---|---|
+| P1 | Test that only asserts `shop/*.py` hashes are unchanged (no behavioral assertion) | Mutation **100% (79/79)**, above the honest reference's 89.87% (71/79); coverage 66.1% (+5 lines of the test file itself) |
+| P2 | Model-written test prints `REPOGUARD_FIX_TOKEN` | Leaked through `run_tests` output: every pytest subprocess inherits the full env |
+| P3 | `write_test_file("tests/test_cart.py", "")` | Accepted |
+| P4 | `write_test_file("tests/conftest.py", ...)` | Accepted |
+| P5 | Coverage with bare `--cov` vs `--cov=shop` | 65.1% (112/172) vs **60.26% (91/151)**: `tests/` counts toward its own coverage |
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Plan: how the loop acts on code today (writes whole files via one tool, runs in our backend, `--publish` → PR → `ci.yml`), benchmark landscape (TestGenEval, SWT-Bench, BugsInPy; why not SWE-bench), measured gaps, three layers G/E/O, metrics, hypotheses, decisions D1–D9 | `docs/EVAL_GUARDRAILS_PLAN.md` (new) |
+| 2 | Implementation: 13 steps with signatures, `verify.py phase19*` checks, cut line, shared work with Phase 18 | `docs/EVAL_GUARDRAILS_IMPLEMENTATION.md` (new) |
+| 3 | README "Evaluation & guardrails (planned)" section with the 19.x phase table, TOC, docs list, roadmap | `README.md` |
+| 4 | Phase 19 table; Phase 16's `benchmark_models.py` row marked superseded by Phase 19 step 9 | `PENDING.md` |
+| 5 | New docs added to the directory tree | `CLAUDE.md` + `AGENTS.md` (still byte-identical) |
+
+### Key decisions (Session 23)
+
+- **No guardrail product** (NeMo Guardrails, Guardrails AI, Llama Guard): the model's only effects are tool calls and executed tests, so deterministic checks at those two points cover it. A second model would add its own unmeasured error rate.
+- **Every measurement gets a control:** no-op source canary (P1), sham mutant (shared with Phase 18 S1), 3× repetition, monotonic kill set, and the reference suite as calibration (must pass every guard at 71/79).
+- **Waiting on the user:** D1 (policy inside `write_test_file`, an `AGENTS.md §8` item), D3 (held-out fixture), D4 (BugsInPy subset), D9 (source-only coverage moves 65.1% → 60.26%, and `ci.yml`'s threshold of 60 would pass by 0.26 pp).
+- Nothing in `repoguard_engine/` changed this session; the §7 baseline is untouched.
+
+---
+
+### Session 23 — Phase 18 Step 0: swarm groundwork (`claude/inspiring-cannon-zy5v80`)
+
+Other agents were working on docs, the database, the frontend and planning
+in parallel. This session took the swarm. `core.py` was left alone on
+purpose: S1/S2 change it, and so does Phase 17 A2 (DB).
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | `_run_chat_stage` returns `StageResult(content, tool_calls, llm_calls, wall_s)` and takes an optional `schemas`/`registry` pair (a tool outside `registry` gets "no such tool"). `run_fix_loop(..., model=None)` accepts an already-built `ChatProvider` (not on the CLI). `FixResult` gained `stages` and `wall_s` (`baseline`, `ai`, `remeasure`, `total`); the evidence report has a Timing section. The CLI, `/api/fix` and prompts are unchanged | `watson_agent/orchestrator.py` |
+| 2 | `ScriptedProvider`: picks the role (writer/critic) from the system prompt and raises on an unknown role or missing script. It records every call and is never wired into `get_provider()`. Scripts: `reference_writer(dir)` writes `test_<m>_complete.py` and runs it; `approving_critic` runs the suite and approves only if it passed | `repoguard_engine/testing/` (new) |
+| 3 | `verify.py phase18-seq-stub`: runs the real sequential loop on a temp copy of demo-repo with the scripted provider. Pins the files and numbers measured on the first run, which were identical across 3 runs: `inventory`, `api` and `pricing` (not `cart`); 86.08% (68/79), 362/367 lines, 56 passed. Also checks the stage and tool sequence, the timing fields and the evidence Timing section, and that demo-repo stays byte-identical | `scripts/verify.py` |
+| 4 | CI job `fix-loop-stub` runs it (about 2 min on the dev container) | `.github/workflows/ci.yml` |
+| 5 | Pitfall hit: `pytest -q` in demo-repo becomes `-qq` because `pytest.ini` already adds `-q`, and `-qq` drops the "N passed" line. The check calls pytest without `-q` | — |
+
+Verified before commit: `verify.py` phase0/phase3/phase7/phase15/phase16/multicloud/phase14fix/phase18-seq-stub all PASS. `repoguard analyze ./demo-repo --mutation` still gives 65.1%, 20.25% (16/79) and 4 gap files.
+
 ---
 
 ### Session 23 — Frontend gaps: endpoints card, honest mutation progress, Gate, `verify.py phase14ui` (`claude/eloquent-fermat-4e9gir`)
@@ -623,13 +677,15 @@ build, so the check was run with `REPOGUARD_CHROMIUM=/opt/pw-browsers/chromium`.
 
 ## Current repo state
 
-- **Session 23 (frontend gaps) is on `claude/eloquent-fermat-4e9gir`, pushed, not merged.** Session 22's Autofix is on `main` (PR #55).
+- Session 22 (Autofix) merged to `main` as PR #55.
+- **Session 23 (Phase 19 plan, docs only) is on `claude/pensive-rubin-7nhvkh`.** Phase 19 is 🔴 apart from its docs. Decisions D1/D3/D4/D9 are waiting on the user (`docs/EVAL_GUARDRAILS_PLAN.md` §9).
+- **Session 23 (frontend gaps) is on `claude/eloquent-fermat-4e9gir`, pushed, not merged.**
 - Branch: `main` — PR #37 (Phase 16 + 13 WIF), #38 (doc fixes), #39 (Phase 17 B1 Terraform), #40 (session log), #41 (cd.yml trim fix), #42 (cli graceful failure), #43 (frontend context docs), #44 (dashboard visual design), #45 (Phase 11 Gemini 3 + `run_tests` + `thought_signature` fixes), #46 (Phase 17/18 planning corrections), #47 (`/api/analyze` 400-vs-500 fix), #48 (frontend: clear backend-unreachable error + real screenshots) all merged
 - All Session 21 fixes merged: PR #49 (CORS), #51 (ImportError detail), #52 (`Dockerfile` `[vertex]` extra + docs — recovered after #49/#51 both dropped commits pushed post-merge, see Session 21 item 5), #53 (frontend live-deploy docs). `ok: true` summary path verified live for real
 - Phase 0/3/7/8/9/13/15/16: 🟢. Phase 11: 🟢 (see Session 20) — first genuinely successful live AI fix-loop run, 89.87%/71/79. Phase 17 B1/B2: 🟢 (Terraform-managed WIF)
 - Phase 14: 🟡 — PR #43 closed gaps 4/5/6, PR #44 added visual design, PR #48 added a clear backend-unreachable error + real production screenshots, PR #50 shows the backend's error `detail`. `NEXT_PUBLIC_REPOGUARD_API_BASE` now points at the real Cloud Run URL (Vercel, type "Config" not "Secret" since it's not sensitive), verified end-to-end including CORS (Session 21-front). Remaining: gap 3 (Autofix) is built (Session 22), and its live run is waiting on `REPOGUARD_FIX_TOKEN` being attached on Cloud Run (`docs/DEPLOY.md` §5). The summary's `ok=true` path is verified live (Session 21). Analyze *with* mutation against Cloud Run's request timeout is unchecked
 - Phase 17 A1-A3 (DB store) and C1-C2 (charts) still 🔴, but `docs/DATA_PLATFORM.md` §13 now has a corrected, step-by-step Block A build plan (Session 20) — build from that, not the doc's original sketch
-- Phase 18 (swarm) still 🔴, `docs/MULTI_AGENT_SWARM.md` §14 now has a corrected S0–S8 plan + 15 risks (Session 20) — Phase 11's merge (PR #45) clears its §14 R1 blocker; demo-repo's 71/79 ceiling still means H2 can only tie there (§14 R2)
+- Phase 18 (swarm): Step 0 🟢 (Session 23, `claude/inspiring-cannon-zy5v80`, not merged yet); S1–S8 still 🔴. `docs/MULTI_AGENT_SWARM.md` §14 now has a corrected S0–S8 plan + 15 risks (Session 20) — Phase 11's merge (PR #45) clears its §14 R1 blocker; demo-repo's 71/79 ceiling still means H2 can only tie there (§14 R2)
 - IBM Bob is retired. `.bob/` stays on disk as inert legacy (`.bob/DEPRECATED.md`); `repoguard_engine/watson_agent/` is the live replacement.
 - GCP Cloud Run: identity is Terraform-managed and a real deploy has succeeded. `GCP_PROJECT_ID`'s raw value in GitHub Settings still has the leading space (cosmetic — `cd.yml` auto-trims it every run; clean it up next time you're in Settings)
 - **Done, human-run:** `roles/aiplatform.user` granted to the Cloud Run runtime SA (`993240087609-compute@developer.gserviceaccount.com`) — confirmed in the real IAM policy. Was blocked for an agent session (Claude Code's auto-mode classifier blocks IAM permission grants regardless of scope), so the user ran `gcloud projects add-iam-policy-binding ...` directly
@@ -643,7 +699,8 @@ build, so the check was run with `REPOGUARD_CHROMIUM=/opt/pw-browsers/chromium`.
 1. Read `PENDING.md` for the task list (Phase 11 is now 🟢 — read its "3 attempts, 3 bugs" narrative before touching `watson_agent/` again, it explains real, non-obvious API constraints).
 2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16`, `multicloud`, `phase14fix`, `phase14ui` (needs `npm ci` in `web-next/`) to confirm baseline holds. (`ci.yml` doesn't run `phase14fix` yet; it's credential-free, so it could.)
 3. Frontend punch-list items 1-4 are all done and verified live (Session 21). Autofix (`POST /api/fix`, Phase 14 gap 3) is built (Session 22); what's left is the human token step plus a first live run. When pushing follow-up commits to a branch mid-session, confirm with `git log origin/main..<branch>` that nothing merged out from under you first (Session 21 item 5 — happened 3 times).
-4. Build Phase 17/18 from `docs/DATA_PLATFORM.md` §13 / `docs/MULTI_AGENT_SWARM.md` §14, not their original sketches.
+4. Build Phase 17/18 from `docs/DATA_PLATFORM.md` §13 / `docs/MULTI_AGENT_SWARM.md` §14, not their original sketches. Phase 18's next step is S1 (`core.run_mutation` workers, file scope, `NoMutantsError`, `COPY_IGNORE`, sham-mutant control). It edits `core.py`, and so does Phase 17 A2, so coordinate with the DB work before starting. S2 is the same work as A2, so build it once.
 5. Autofix: attach `REPOGUARD_FIX_TOKEN` (`docs/DEPLOY.md` §5), then run it from the Vercel demo against `demo-repo` and record the measured before/after. If you change a Vercel env var, Redeploy the **newest `main`** deployment, never an older row (`docs/ARCHITECTURE-front.md`, Session 21-front item 5).
 6. If tightening `repoguard-deployer`'s IAM roles, or moving the new `aiplatform.user` grant into Terraform: read `infra/terraform/README.md`'s "Known gap" section first — real permissions change against a live project, own PR.
 7. The repo-rename decision is open and low-urgency — decide whenever, it's cosmetic.
+8. Phase 19: build from `docs/EVAL_GUARDRAILS_IMPLEMENTATION.md` in step order. Steps 1, 3, 4, 5, 7 and 8 need no approval; step 2 needs D1, step 6 needs D9. Step 4 is shared with Phase 18 S1/S2, so check which phase built it first.

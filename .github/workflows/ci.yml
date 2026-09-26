@@ -62,3 +62,21 @@ jobs:
 
       - name: Verify phase3 (mutation engine determinism)
         run: python scripts/verify.py phase3
+
+  fix-loop-stub:
+    runs-on: ubuntu-latest
+    # The sequential fix loop end to end with a scripted provider (no AI
+    # credentials): real tools, real risk planner, two real mutation runs on
+    # a temp copy of demo-repo. Own job for the same reason as above.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install repoguard
+        run: pip install -e .
+
+      - name: Verify phase18-seq-stub (fix loop, scripted provider)
+        run: python scripts/verify.py phase18-seq-stub

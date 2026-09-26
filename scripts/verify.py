@@ -18,6 +18,7 @@ Phase checks implemented:
     phase14ui   — web-next in real Chromium against a real backend: rendered numbers match /api/analyze and the
                   AGENTS.md §7 baseline, including one real mutation run (~5 min). Needs `npm ci` in web-next/;
                   REPOGUARD_CHROMIUM overrides the browser binary if Playwright's own isn't installed
+    phase18-seq-stub — the sequential fix loop end to end with a scripted, credential-free provider (Phase 18 Step 0)
 """
 
 from __future__ import annotations
@@ -532,6 +533,89 @@ def check_phase14ui() -> bool:
     return not failures
 
 
+def check_phase18_seq_stub() -> bool:
+    """Phase 18 Step 0: the existing sequential fix loop end to end, with no
+    credentials. A ScriptedProvider plays the model: the writer copies the
+    matching docs/expected-after-tests/test_<m>_complete.py into tests/ and
+    runs it, the critic runs the suite and approves. The tools, the risk
+    planner and both measurements are the real ones, on a temp copy of
+    demo-repo. This is the sequential loop's first regression test, and the
+    baseline the swarm's own stub run (Step 7) is compared against."""
+    print("=== Phase 18 Step 0: sequential fix loop, scripted provider ===")
+
+    script = """
+import hashlib, re, shutil, subprocess, sys, tempfile
+from pathlib import Path
+from repoguard_engine.testing import ScriptedProvider, approving_critic, reference_writer
+from repoguard_engine.watson_agent import run_fix_loop
+
+demo = Path('demo-repo').resolve()
+def tree_hash(root):
+    h = hashlib.sha256()
+    for p in sorted(root.rglob('*')):
+        if p.is_file() and '__pycache__' not in p.parts and 'repoguard-out' not in p.parts:
+            h.update(str(p.relative_to(root)).encode()); h.update(p.read_bytes())
+    return h.hexdigest()
+before = tree_hash(demo)
+
+with tempfile.TemporaryDirectory(prefix='repoguard-seq-stub-') as tmp:
+    work = Path(tmp) / 'demo-repo'
+    shutil.copytree(demo, work, ignore=shutil.ignore_patterns('__pycache__', '.pytest_cache', 'repoguard-out', 'watson-evidence'))
+    provider = ScriptedProvider({'writer': reference_writer('docs/expected-after-tests'), 'critic': approving_critic})
+    r = run_fix_loop(str(work), model=provider)
+    b, a = r.baseline, r.after
+    # No -q: demo-repo's pytest.ini already adds one, and -qq drops the 'N passed' line.
+    suite = subprocess.run([sys.executable, '-m', 'pytest'], cwd=work, capture_output=True, text=True, timeout=120)
+    counted = re.search(r'(\\d+) passed', suite.stdout)
+    assert counted, suite.stdout[-2000:] + suite.stderr[-2000:]
+    passed = int(counted.group(1))
+    evidence = Path(r.evidence_path).read_text(encoding='utf-8')
+
+    print('  files:', r.files_attempted)
+    for label, d in (('before', b), ('after', a)):
+        c, m = d['coverage'], d['mutation']
+        print(f"  {label}: coverage {c['percent']:.2f}% ({c['covered_lines']}/{c['total_lines']}), mutation {m['score']}% ({m['killed']}/{m['total']})")
+    print(f'  after suite: {passed} passed')
+    print('  wall_s:', {k: round(v, 1) for k, v in r.wall_s.items()})
+
+    assert (round(b['coverage']['percent'], 1), b['mutation']['killed'], b['mutation']['total']) == (65.1, 16, 79), 'baseline drifted from AGENTS.md Section 7'
+    # compute_risk picks the top 3 files by uncovered-line ratio, so the loop
+    # writes 3 of the 4 reference files (shop/cart.py is left out); the
+    # numbers below are what that measured on the first real run.
+    assert r.files_attempted == EXPECTED_FILES, r.files_attempted
+    got = (a['coverage']['covered_lines'], a['coverage']['total_lines'], a['mutation']['score'], a['mutation']['killed'], a['mutation']['total'], passed)
+    assert got == EXPECTED_AFTER, f'after numbers changed: {got} != {EXPECTED_AFTER}'
+    assert suite.returncode == 0, suite.stdout[-2000:]
+
+    assert [row['stage'] for row in r.stages] == ['writer', 'critic'] * len(r.files_attempted), r.stages
+    for row in r.stages:
+        want = ['write_test_file', 'run_tests'] if row['stage'] == 'writer' else ['run_tests']
+        assert row['tool_calls'] == want, row
+        assert row['wall_s'] >= 0 and row['llm_calls'] >= 2, row
+    assert all(note.endswith('APPROVED') for note in r.critic_notes), r.critic_notes
+    assert set(r.wall_s) == {'baseline', 'ai', 'remeasure', 'total'}, r.wall_s
+    assert r.wall_s['total'] >= r.wall_s['baseline'] + r.wall_s['ai'] + r.wall_s['remeasure'], r.wall_s
+    assert '## Timing' in evidence, 'evidence report has no timing section'
+
+assert tree_hash(demo) == before, 'demo-repo changed during the run'
+print(f'OK: {len(r.files_attempted)} files, {len(provider.calls)} scripted chat calls, timing recorded, demo-repo unchanged')
+"""
+    script = script.replace("EXPECTED_FILES", repr(_SEQ_STUB_FILES)).replace("EXPECTED_AFTER", repr(_SEQ_STUB_AFTER))
+
+    rc, out = run([sys.executable, "-c", script], timeout=1800)
+    ok = rc == 0
+    status = "PASS" if ok else "FAIL"
+    print(out.rstrip() if ok else out[-3000:])
+    print(f"  sequential loop, scripted provider -> {status}")
+    return ok
+
+
+# Pinned from the first real run (Session 23), not derived. After numbers are
+# (covered lines, total lines, mutation %, killed, mutants, tests passed).
+_SEQ_STUB_FILES = ["shop/inventory.py", "shop/api.py", "shop/pricing.py"]
+_SEQ_STUB_AFTER = (362, 367, 86.08, 68, 79, 56)
+
+
 CHECKS: dict[str, callable] = {
     "phase0": check_phase0,
     "phase3": check_phase3,
@@ -541,6 +625,7 @@ CHECKS: dict[str, callable] = {
     "multicloud": check_multicloud,
     "phase14fix": check_phase14fix,
     "phase14ui": check_phase14ui,
+    "phase18-seq-stub": check_phase18_seq_stub,
 }
 
 

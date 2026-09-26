@@ -384,7 +384,7 @@ false 100% mutation score). See `docs/VERTEX_SETUP.md` for credentials.
 | `ai_providers/vertex.py` | Google Vertex AI implementation against `google-genai==2.25.0`; live-verified with real GCP credentials (text call + tool-calling round trip) | 🟢 |
 | `narrative.py` / `orchestrator.py` switched to `get_provider()` | No behavior change for watsonx.ai — confirmed live (`phase15`/`phase16`/new `multicloud` check all PASS; a real `--summarize` call with real watsonx credentials still returns real text) | 🟢 |
 | `--provider` CLI flag | `repoguard fix --provider` / `repoguard analyze --summarize --provider` override `REPOGUARD_AI_PROVIDER` per call | 🟢 |
-| `scripts/benchmark_models.py` | Runs the fix loop against fresh `demo-repo` copies per `(provider, model_id)`, compares real mutation-score deltas | 🔴 deferred — needs live credentials for 2+ providers |
+| `scripts/benchmark_models.py` | Runs the fix loop against fresh `demo-repo` copies per `(provider, model_id)`, compares real mutation-score deltas | 🔴 superseded by Phase 19 step 9 (`scripts/eval_fixloop.py`: same idea plus repeats, integrity counts and a held-out fixture) |
 
 Live cross-provider benchmarking needs real credentials for at least two
 clouds — same human-gated situation as `docs/WATSONX_SETUP.md` and Phase 11.
@@ -434,9 +434,8 @@ in-process: one lane per source file (Test Writer → Verifier → Critic, up to
 re-measure after fan-in. Kept behind `repoguard fix --swarm` until real runs
 show it's faster (H1) and at least as good (H2) as the sequential loop.
 
-**Blocker, not yet cleared:** Phase 18 can't branch until
-`feat/11-gemini3-antihallucination` (the `run_tests` tool the lane Verifier
-depends on) is merged to `main` — see `docs/MULTI_AGENT_SWARM.md` §14 R1.
+**Blocker cleared:** `run_tests`, the tool the lane Verifier depends on
+(`docs/MULTI_AGENT_SWARM.md` §14 R1), reached `main` with PR #45.
 **Real limit found:** demo-repo's mutation ceiling is 71/79 (matches the
 hand-written reference tests) — the swarm can only *tie* H2 on this
 fixture, not beat it; a harder fixture would be an `AGENTS.md §8` ask-first
@@ -445,6 +444,7 @@ change (§14 R2).
 | Block | Deliverable | Status |
 |---|---|---|
 | — | `docs/MULTI_AGENT_SWARM.md` — agents, parallelism, file contract, build order, verification | 🟢 corrected against real Phase 11 result + 4 new bugs found, step-by-step plan added, §14 |
+| S0 | Groundwork: `_run_chat_stage` → `StageResult` with injectable toolset; `run_fix_loop(model=...)`; wall time per phase/stage in `FixResult` + evidence; `testing/ScriptedProvider`; `verify.py phase18-seq-stub` + CI job `fix-loop-stub` | 🟢 Session 23. Measured with no credentials: 86.08% (68/79), 362/367 lines, 56 passed, identical across 3 runs |
 | S1 | Parallel mutation workers; `paths_to_mutate` accepts a file (today it silently finds 0 mutants); zero mutants is an error | 🔴 |
 | S2 | Per-mutant records (same as Phase 17 A2) | 🔴 |
 | S3 | Per-lane sandbox + owned-path write guard | 🔴 |
@@ -456,6 +456,43 @@ change (§14 R2).
 | S9 | Per-role AI providers (needs Phase 16) | 🔴 |
 | S10 | "Swarm over MCP" recipe for external MCP clients | 🔴 |
 | — | `verify.py phase18` | 🔴 |
+
+---
+
+## Phase 19 — Evaluation & guardrails for the AI fix loop
+**Priority: 2 · Depends on: 8, 11 (done) · Shares G4 with Phase 18 S1/S2** — plan in `docs/EVAL_GUARDRAILS_PLAN.md`, build steps in `docs/EVAL_GUARDRAILS_IMPLEMENTATION.md` (Session 23)
+
+The fix loop is guarded against damage (writes only under `tests/`) but not
+against gaming its own score or leaking. Measured in Session 23 on throwaway
+`demo-repo` copies, with the real tool/engine functions:
+
+- **P1:** a test with zero behavioral assertions that asserts the source files' hashes → mutation **100% (79/79)**, above the honest reference's 89.87% (71/79). The baseline guard doesn't catch it, because the test passes on the original code.
+- **P2:** a model-written test read `REPOGUARD_FIX_TOKEN` and got it back through `run_tests`' output. Every pytest subprocess inherits the full server environment.
+- **P3/P4:** `write_test_file` accepts overwriting `tests/test_cart.py` with `""` and writing `tests/conftest.py`.
+- **P5:** coverage counts `tests/` itself: 65.1% (112/172) today vs **60.26% (91/151)** source-only.
+
+Also found by reading the code: `--publish` gates on coverage only; a
+harness error in `_run_mutant` counts as killed; a failing AI suite crashes
+`run_fix_loop` before the evidence is written; no repetition, so flaky tests
+go unnoticed; no benchmark beyond one live run on one fixture.
+
+| Step | ID | Deliverable | Status |
+|---|---|---|---|
+| 0 | — | `docs/EVAL_GUARDRAILS_PLAN.md` + `docs/EVAL_GUARDRAILS_IMPLEMENTATION.md`, README section | 🟢 |
+| 1 | G1 | `core.pytest_env()` allow-list, used by `measure_coverage`, `run_mutation`, `_run_mutant`, `tools.run_tests` | 🔴 |
+| 2 | G2 | `watson_agent/policy.py` static test-file policy inside `write_test_file` — **needs approval (D1, `AGENTS.md §8`)** | 🔴 |
+| 3 | G3 | `watson_agent/acceptance.py`: 3× repetition, no-op canary, test-ID preservation, quarantine | 🔴 |
+| 4 | G4 | Sham mutant + outcome classes (shared with Phase 18 S1/S2) + monotonic kill set | 🔴 |
+| 5 | G5 | `FixResult.status`/`integrity`, evidence always written, publish gate on mutation gain + integrity | 🔴 |
+| 6 | G6 | Source-only coverage — **needs approval (D9)**: moves 65.1% → 60.26%, and the `ci.yml` threshold of 60 needs a decision | 🔴 |
+| 7 | E1 | `ai_providers/scripted.py` + 8 attack scripts + `verify.py phase19` in CI (8/8 stopped, honest run 71/79) | 🔴 |
+| 8 | O1 | `repoguard-out/fix_run.json` structured run record | 🔴 |
+| 9 | E2 | `scripts/eval_fixloop.py` (K = 3 × provider/model × fixture) — credentialed | 🔴 |
+| 10 | E3 | Held-out fixture `eval-fixtures/<name>/` — **needs approval (D3)** | 🔴 |
+| 11 | E4 | Real-fault protocol on a BugsInPy subset — **needs approval (D4)** | 🔴 |
+| 12 | O2 | NDJSON `guard` events + integrity badge (below the cut line) | 🔴 |
+| 13 | E5 | Pynguin control / TestGenEval subset (below the cut line) | 🔴 |
+| — | — | `verify.py phase19` | 🔴 |
 
 ---
 

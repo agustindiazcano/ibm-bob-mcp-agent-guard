@@ -78,7 +78,8 @@ ibm-bob-mcp-agent-guard/
 │   ├── watson_agent/     AI fix loop — replaces .bob/'s Orchestrator/Test Writer/Critic/Gate/Publisher modes
 │   │   ├── tools.py          TOOL_SCHEMAS/TOOL_REGISTRY — write_test_file hard-guards writes to tests/ only
 │   │   ├── prompts.py        TEST_WRITER_PROMPT, CRITIC_PROMPT — carried forward from .bob/rules,skills
-│   │   └── orchestrator.py   run_fix_loop — measure → write → critique → re-measure → evidence
+│   │   └── orchestrator.py   run_fix_loop — measure → write → critique → re-measure → evidence (wall time per phase/stage)
+│   ├── testing/          Credential-free test doubles — ScriptedProvider (never wired into get_provider(); used by verify.py phase18-seq-stub)
 │   ├── pipeline.py       run_pipeline — ordered steps; returns PipelineResult
 │   ├── cli.py            repoguard analyze | fix | gate | serve | mcp  (click entry point)
 │   ├── mcp_server.py     9 FastMCP tools (thin wrappers, stdio transport)
@@ -116,6 +117,8 @@ ibm-bob-mcp-agent-guard/
 │   ├── WATSONX_SETUP.md          IBM Cloud credentials for the default AI provider
 │   ├── MULTICLOUD_AI.md          ChatProvider abstraction + Vertex AI — both built, see docs/VERTEX_SETUP.md
 │   ├── VERTEX_SETUP.md           Google Cloud credentials for the Vertex AI provider
+│   ├── EVAL_GUARDRAILS_PLAN.md            Phase 19 plan: fix-loop guardrails, evaluation, benchmark (measured gaps P1–P5)
+│   ├── EVAL_GUARDRAILS_IMPLEMENTATION.md  Phase 19 build steps, signatures, verify.py phase19 checks
 │   ├── AI_ASSISTED_DEVELOPMENT_FRAMEWORK.md  How this repo itself is built
 │   ├── make_results_chart.py     Generates before/after results chart
 │   ├── expected-after-tests/     Reference tests — copy in to verify "after" numbers; remove after

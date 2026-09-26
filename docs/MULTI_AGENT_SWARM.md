@@ -451,6 +451,18 @@ onward, and nothing before S6 touches the CLI surface at all.
 
 ### Step 0 — groundwork, no behavior change
 
+> **Status: done (Session 23).** `StageResult` also carries `llm_calls`
+> (Step 8 needs an LLM call count). `FixResult` gained `stages` (one row per
+> AI stage) and `wall_s` (`baseline`, `ai`, `remeasure`, `total`), and the
+> evidence report has a Timing section. The provider is
+> `ScriptedProvider({"writer": reference_writer(dir), "critic":
+> approving_critic})`. `phase18-seq-stub` pinned the numbers it measured,
+> identical across 3 runs: the risk planner picks `shop/inventory.py`,
+> `shop/api.py` and `shop/pricing.py` (not `cart.py`). After: coverage 98.64%
+> (362/367), mutation 86.08% (68/79), 56 passed. Wall time on the dev
+> container: baseline ≈ 55 s, AI ≈ 3.5 s (scripted), re-measure ≈ 63 s,
+> total ≈ 120 s. A new CI job, `fix-loop-stub`, runs this check.
+
 - `watson_agent/orchestrator.py`: parameterize `_run_chat_stage(model,
   system, user, repo, *, schemas=TOOL_SCHEMAS, registry=TOOL_REGISTRY)`,
   returning `StageResult(content, tool_calls, wall_s)`; `run_fix_loop` keeps
