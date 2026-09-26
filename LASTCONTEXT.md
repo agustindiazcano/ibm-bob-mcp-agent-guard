@@ -499,15 +499,30 @@ Key findings:
 
 ---
 
+### Session 19 — doc fixes (PR #38) + Phase 17 Block B1: Terraform for the WIF identity (PR #39, both merged)
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Fixed `PENDING.md`'s stale Phase 16 status (`vertex.py` still shown 🔴 after PR #37 had already built and live-verified it); logged Session 18 in `LASTCONTEXT.md` | `PENDING.md`, `LASTCONTEXT.md` (PR #38) |
+| 2 | User pointed at a pattern from another project (WIF pool + scoped deployer SA + minimal roles, managed in Terraform) and asked for the same approach here | — |
+| 3 | Wrote `infra/terraform/` codifying Phase 13's already-existing identity: `github-pool`/`github-provider`, `repoguard-deployer` SA + its 3 project IAM roles, the Artifact Registry repo, 4 enabled APIs | `infra/terraform/{versions,variables,cicd,outputs}.tf`, `README.md` |
+| 4 | Ran `terraform import` for all 10 resources against the real project, then `terraform plan` → **"No changes. Your infrastructure matches the configuration."** Outputs match `docs/DEPLOY.md`'s documented `WIF_PROVIDER`/`DEPLOYER_SA` exactly. No `apply` run; state is local and gitignored | — |
+| 5 | Added `infra-ci.yml` (fmt/validate only, no credentials); pointed `docs/DEPLOY.md` at the Terraform-managed setup, kept original `gcloud` commands as historical record; `PENDING.md` Phase 17 B1 → 🟢; `AGENTS.md`/`CLAUDE.md` tree updated (kept identical) | `docs/DEPLOY.md`, `PENDING.md`, `AGENTS.md`+`CLAUDE.md`, `.github/workflows/infra-ci.yml` |
+
+Deliberately deferred, not done here: the 3 project-level IAM roles on `repoguard-deployer` are broader than needed (project-wide, not scoped to this one AR repo + this one Cloud Run service, unlike the other project's pattern) — noted in `infra/terraform/README.md` as a real permissions change against a live project, left for its own PR rather than bundled in silently.
+
+---
+
 ## Current repo state
 
-- Branch: `main` at `c626e6e` — Phase 16 (Stage A+B) and Phase 13's WIF deploy merged (PR #37)
-- Phase 0: 🟢 · Phase 3: 🟢 · Phase 7: 🟢 · Phase 8: 🟢 (redefined for watsonx.ai) · Phase 9: 🟢 (`repoguard fix` now real) · Phase 13: 🟢 (incl. WIF, done early) · Phase 15: 🟢 (narrative) · Phase 16: 🟢 (both providers built, live-verified)
+- Branch: `main` at `3e30504` — PR #37 (Phase 16 + Phase 13 WIF), #38 (doc fixes), #39 (Phase 17 B1 Terraform) all merged
+- Phase 0: 🟢 · Phase 3: 🟢 · Phase 7: 🟢 · Phase 8: 🟢 (redefined for watsonx.ai) · Phase 9: 🟢 (`repoguard fix` now real) · Phase 13: 🟢 (incl. WIF) · Phase 15: 🟢 (narrative) · Phase 16: 🟢 (both providers built, live-verified) · Phase 17 B1/B2: 🟢 (WIF now Terraform-managed, `terraform plan` confirms parity)
 - Phase 14: 🟡 — all dashboard components including `SummaryPanel` merged and verified end-to-end in a browser (see `PENDING.md` Phase 14); remaining: Autofix (gap 3, no `POST /api/fix`), folding `docs/ARCHITECTURE-front.md` into `docs/ARCHITECTURE.md`, and updating `NEXT_PUBLIC_REPOGUARD_API_BASE` once Cloud Run's real URL exists (Vercel deploy itself is done)
+- Phase 17 A1-A3 (DB store) and C1-C2 (data-driven charts) still 🔴 — B1/B2 (the CI/CD identity) is the only part of Phase 17 actually built so far
 - IBM Bob is retired. `.bob/` stays on disk as inert legacy (`.bob/DEPRECATED.md`); `repoguard_engine/watson_agent/` is the live replacement.
-- Remaining 🔴 critical-path item: Phase 11 — a real `repoguard fix demo-repo` run that measurably raises the mutation score above 20.25%/16/79. No longer credential-gated (both watsonx and Vertex credentials exist and were live-tested this session) — the blocker is tool-calling reliability of the models tried so far; Vertex (Gemini) hasn't been run through a full fix loop against demo-repo yet and is the next thing to try.
-- GCP Cloud Run deploy is done (WIF); still pending, human-only: adding the 6 GitHub repo Variables (`docs/DEPLOY.md` §2) through the GitHub web UI before the first real CD run, since `gh` CLI isn't available in this environment.
-- Open, not yet decided: whether to rename the GitHub repo/local directory (`ibm-bob-mcp-agent-guard`) now that Bob is gone — flagged in `PENDING.md`, deliberately not done here
+- Remaining 🔴 critical-path item: Phase 11 — a real `repoguard fix demo-repo` run that measurably raises the mutation score above 20.25%/16/79. No longer credential-gated — the blocker is tool-calling reliability of the models tried so far; Vertex (Gemini) hasn't been run through a full fix loop against demo-repo yet and is the next thing to try.
+- GCP Cloud Run deploy identity is done and now Terraform-managed; still pending, human-only: adding the 6 GitHub repo Variables (`docs/DEPLOY.md` §2) through the GitHub web UI before the first real CD run, since `gh` CLI isn't available in this environment.
+- Open, not yet decided: whether to rename the GitHub repo/local directory (`ibm-bob-mcp-agent-guard`) now that Bob is gone; whether to tighten `repoguard-deployer`'s 3 project-wide IAM roles down to resource-scoped ones (`infra/terraform/README.md`) — both flagged, deliberately not done here
 
 ---
 
@@ -518,4 +533,5 @@ Key findings:
 3. For the frontend: CORS and `/api/summary` are on `main`; run `PYTHONIOENCODING=utf-8 repoguard serve` + `npm run dev` (with `NEXT_PUBLIC_REPOGUARD_API_BASE`) for the still-pending browser end-to-end check.
 4. For Phase 11: try `repoguard fix demo-repo --provider vertex` (credentials in `docs/VERTEX_SETUP.md`) — Vertex hasn't had a full fix-loop run against demo-repo yet, and its tool-calling was reliable in the Stage B live tests, unlike watsonx's fallback model.
 5. Add the 6 GitHub repo Variables from `docs/DEPLOY.md` §2 via the GitHub web UI, then trigger `cd.yml` for the first real Cloud Run deploy.
+6. If tightening `repoguard-deployer`'s IAM roles: read `infra/terraform/README.md`'s "Known gap" section first — it's a real permissions change against a live project, plan it as its own deliberate PR.
 6. The repo-rename decision (`ibm-bob-mcp-agent-guard`) is open and low-urgency — decide whenever, it's cosmetic.
