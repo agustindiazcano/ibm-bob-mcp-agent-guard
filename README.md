@@ -271,7 +271,7 @@ Status key: ✅ implemented and running in this repo · ⚠️ implemented but n
 | CI | GitHub Actions: `ci.yml`, `frontend-ci.yml` | Verify checks, tests, coverage gate, mutation determinism, frontend lint/build | ✅ green on `main` |
 | CD | GitHub Actions: `cd.yml` | Build → Artifact Registry → Cloud Run | ⚠️ fails at the Google auth step on every push to `main` until the one-time GCP setup is done ([`docs/DEPLOY.md`](docs/DEPLOY.md)) |
 | Cloud (backend) | Google Cloud Run, Artifact Registry | Hosting the API + dashboard | ⚠️ not deployed yet (human GCP setup pending) |
-| Cloud (frontend) | Vercel | Hosting `web-next/` | ✅ deployed: https://ibm-bob-mcp-agent-guard.vercel.app/ — `NEXT_PUBLIC_REPOGUARD_API_BASE` still points at `localhost:8000` until the backend (row above) is deployed |
+| Cloud (frontend) | Vercel | Hosting `web-next/` | ✅ deployed: https://ibm-bob-mcp-agent-guard.vercel.app/, calling the Cloud Run backend (`NEXT_PUBLIC_REPOGUARD_API_BASE`) |
 | Database | PostgreSQL 16 on Cloud SQL; SQLite locally | Run history per commit | 🗺️ Phase 17 ([design](docs/DATA_PLATFORM.md#4-database-design)) |
 | Data access | SQLAlchemy 2 (Core), psycopg 3 | One code path for SQLite and Postgres | 🗺️ Phase 17 |
 | Infrastructure as code | Terraform (google, random providers), GCS remote state | Provisioning GCP | 🗺️ Phase 17 ([design](docs/DATA_PLATFORM.md#8-infrastructure-as-code-terraform)) |
@@ -541,22 +541,23 @@ The rest of this section is about the first one — how the repo itself gets bui
 
 ## Roadmap
 
-**Next.js dashboard on Vercel: built, deployed, backend not wired yet.**
+**Next.js dashboard on Vercel: built, deployed, live against Cloud Run.**
 `web-next/` is on `main` and deployed at
 https://ibm-bob-mcp-agent-guard.vercel.app/ — `RepoForm`/`ActionBar` drive
 `/api/analyze`, `StreamLog` renders `/api/stream` live,
 `StatCards`/`GapsList`/`RiskTable` render the measured numbers verbatim, and
 `SummaryPanel` shows the advisory AI summary from `POST /api/summary`,
-labeled with the provider that wrote it. Checked end to end in a real browser
-against a local `repoguard serve`. The current web UI (`repoguard serve`,
+labeled with the provider that wrote it. The public URL calls the real
+backend on Cloud Run; checked end to end in a real browser (Analyze on
+`./demo-repo`: 65.1% coverage, 4 gap files, gate FAIL). The current web UI (`repoguard serve`,
 `web/static/index.html`) stays as the reference implementation — the new
 frontend consumes the same endpoints rather than replacing them.
 
-Still open: the Vercel deployment's `NEXT_PUBLIC_REPOGUARD_API_BASE` points
-at a `localhost` placeholder until the backend is deployed to Cloud Run
-(Phase 13); and the
-"Autofix" button stays disabled until there's a `POST /api/fix`, which waits
-on a verified live fix-loop run (Phase 11). The frontend gets no Terraform or
+Still open: the AI summary on the public demo, which shows "unavailable"
+until the Cloud Run image includes the Vertex AI SDK (the service account
+already has Vertex access); and the "Autofix" button, disabled until there's a
+`POST /api/fix` — both its prerequisites (a verified live fix-loop run,
+Phase 11, and the `ChatProvider` layer, Phase 16) are now done. The frontend gets no Terraform or
 GCP infrastructure: it ships as a plain Vercel project, with its own
 path-filtered CI (`.github/workflows/frontend-ci.yml`). See `PENDING.md`
 Phase 14 and `docs/ARCHITECTURE-front.md`.

@@ -25,12 +25,22 @@ Without AI credentials on the backend, the summary panel shows "Summary
 unavailable: …" — expected, not a bug. See `../docs/WATSONX_SETUP.md` or
 `../docs/VERTEX_SETUP.md` to get a real summary.
 
+## Deploy (Vercel)
+
+Production talks to the Cloud Run backend through
+`NEXT_PUBLIC_REPOGUARD_API_BASE=https://repoguard-ljm5hefnsq-uc.a.run.app`
+(Vercel → Settings → Environment Variables; keep the `NEXT_PUBLIC_` prefix,
+type "Config"). The value is baked in at build time: after changing it,
+Redeploy the **newest `main`** deployment — redeploying an older one ships
+old code. Merges to `main` deploy automatically. Details and the CORS side:
+`../docs/ARCHITECTURE-front.md` → "Local dev & deployment config".
+
 ## Structure
 
 | Path | Purpose |
 |---|---|
 | `app/page.tsx` | Single route (`/`): owns all fetching — stream, analyze, then one summary request per run |
-| `app/components/` | `RepoForm`, `ActionBar`, `StreamLog`, `StatCards`, `GapsList`, `RiskTable`, `SummaryPanel` — render props only |
+| `app/components/` | `RepoForm`, `ActionBar`, `StreamLog`, `StatCards`, `GapsList`, `RiskTable`, `SummaryPanel`, `Card` — render props only, each with its own CSS Module |
 | `app/lib/types.ts` | `AnalyzeResponse`, `SummaryResponse`, SSE event types — mirror `web/server.py` verbatim, never reshaped |
 | `app/lib/api.ts` | `fetchAnalyze`, `fetchSummary`, `streamUrl` against `NEXT_PUBLIC_REPOGUARD_API_BASE` |
 

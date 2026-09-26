@@ -6,10 +6,11 @@ paragraphs of a shared file. Same pattern `docs/MULTICLOUD_AI.md` uses for
 the AI-provider layer. `docs/ARCHITECTURE.md`'s "Next.js dashboard on
 Vercel" section is a short summary pointing here.**
 
-**Status: built in `web-next/` and deployed to Vercel
-(https://ibm-bob-mcp-agent-guard.vercel.app/). Still open: pointing the
-deployment at a real backend, and Autofix — tracker in
-`PENDING.md` Phase 14.**
+**Status: built in `web-next/`, deployed to Vercel
+(https://ibm-bob-mcp-agent-guard.vercel.app/) and wired to the real backend
+on Cloud Run (`https://repoguard-ljm5hefnsq-uc.a.run.app`) — Analyze works
+end to end on the public URL. Still open: the AI summary on Cloud Run
+(Vertex SDK in the image, `PENDING.md` Phase 14 gap 8) and Autofix (gap 3).**
 
 The original web UI (`web/static/index.html`, served by `web/server.py`)
 stays as the reference implementation. `web-next/` is a separate, richer
@@ -52,13 +53,13 @@ belongs to Phase 17 (`docs/DATA_PLATFORM.md`), not this phase.
 | `StatCards` | coverage % (covered/total lines), mutation score or "Not run", files with gaps, gate PASS/FAIL with the threshold that run used | `AnalyzeResponse` + the submitted threshold |
 | `GapsList` | uncovered files + missing lines | `AnalyzeResponse.gaps` |
 | `RiskTable` | file + reasons, score with a bar (the score is already a 0–1 uncovered-line ratio, so the bar width is the score itself) | `AnalyzeResponse.risk` |
+| `SummaryPanel` | AI prose, labeled "advisory, not a measurement", plus which provider generated it; "Summary unavailable: …" when `ok=false` | `SummaryResponse`, passed in by `page.tsx` |
 | `Card` | shared section frame (title, optional badge) | — |
 
 Styling is CSS Modules next to each component plus design tokens in
 `app/globals.css` (light and dark via `prefers-color-scheme`), no CSS
 dependency. Formatting is display-only (`toFixed`, same decimals everywhere);
 no component derives a new metric.
-| `SummaryPanel` | AI prose, labeled "advisory, not a measurement", plus which provider generated it; "Summary unavailable: …" when `ok=false` | `SummaryResponse`, passed in by `page.tsx` |
 
 `page.tsx` owns all fetching. One Analyze click opens the `/api/stream`
 `EventSource` and calls `/api/analyze` in parallel; once `/api/analyze`
@@ -110,6 +111,14 @@ type SummaryResponse = {
 without AI credentials returns. The panel shows the error and the rest of
 the dashboard is unaffected.
 
+**Errors** (`web-next/app/lib/api.ts`): every call goes through `request()`.
+A network failure becomes "Can't reach the backend at `<API base>`…",
+naming both likely causes, because a stopped backend and a CORS rejection
+reach the browser as the same opaque `TypeError`. A non-2xx response shows
+FastAPI's `detail` when the body has one (e.g. `/api/analyze`'s 400 for a
+nonexistent `repo_path`), else `"<call> failed: <status>"` — note that over
+HTTP/2 (Cloud Run) `statusText` is empty, so the status code is all there is.
+
 ## AI providers
 
 The backend has two AI providers behind `ai_providers.get_provider()`
@@ -121,25 +130,48 @@ choice, and `SummaryPanel` only displays the `provider` it's told.
 Credentials (watsonx API key, `GOOGLE_APPLICATION_CREDENTIALS`) stay
 server-side only; the frontend never holds or forwards one.
 
+On Cloud Run the chosen provider is Vertex (`REPOGUARD_AI_PROVIDER=vertex`,
+`VERTEX_PROJECT_ID` set on the service). Vertex needs no secret there — it
+authenticates as the service's runtime account, which has
+`roles/aiplatform.user`. The public demo's summary still shows
+"unavailable" until the image includes the `[vertex]` extra
+(`fix/vertex-import-error-detail`, `PENDING.md` Phase 14 gap 8). Nothing
+changes in the frontend once that ships.
+
 ## Backend gaps this phase depended on
 
 | # | Gap | Status |
 |---|---|---|
-| 1 | CORS — `REPOGUARD_CORS_ORIGINS` (default `localhost:3000` and `127.0.0.1:3000` only — the Vercel domain must be added when the backend is deployed), `GET` + `POST`, all headers | 🟢 |
+| 1 | CORS — `REPOGUARD_CORS_ORIGINS` (default `localhost:3000` and `127.0.0.1:3000`; Cloud Run sets the Vercel domain in `cd.yml`, PR #49), `GET` + `POST`, all headers | 🟢 |
 | 2 | Gate — no new endpoint needed, `/api/analyze?gate_threshold=N` returns `passed_gate` | 🟢 |
-| 3 | No `POST /api/fix` — the fix loop (`repoguard fix`) is CLI-only | 🔴 Autofix stays disabled. Exposing it means a long-running, credentialed, possibly PR-opening action over HTTP — auth and rate limiting the read-only endpoints never needed. Build it after a verified live fix-loop run (Phase 11); `ChatProvider` (Phase 16) is already done |
+| 3 | No `POST /api/fix` — the fix loop (`repoguard fix`) is CLI-only | 🔴 Autofix stays disabled. Exposing it means a long-running, credentialed, possibly PR-opening action over HTTP — auth and rate limiting the read-only endpoints never needed, plus a job model for a run that takes minutes. Its prerequisites — a verified live fix-loop run (Phase 11) and `ChatProvider` (Phase 16) — are both done |
 | 4 | `POST /api/summary` | 🟢 PR #27 |
 | 5 | `/api/stream` takes `gate_threshold` instead of a hardcoded 80% | 🟢 PR #27 |
 | 6 | `provider` surfaced in responses | 🟢 on `/api/summary`, from the provider actually used; add it to gap 3's endpoint when that exists |
+| 7 | Nonexistent `repo_path` → raw 500 | 🟢 400 with a `detail` message (PR #47) |
+| 8 | AI summary on Cloud Run (Vertex SDK in the image; runtime-account role already granted) | 🟡 fix on `fix/vertex-import-error-detail`, then re-verify live |
 
 ## Local dev & deployment config
 
 - `web-next/.env.local` (copy `.env.example`):
   `NEXT_PUBLIC_REPOGUARD_API_BASE=http://127.0.0.1:8000`, matching
   `repoguard serve`'s default host/port.
-- Vercel project env var: `NEXT_PUBLIC_REPOGUARD_API_BASE=<Cloud Run URL>`.
-  Today it's a `localhost:8000` placeholder, so the deployed page loads but
-  can't analyze anything until the backend is on Cloud Run (Phase 13) and
-  its origin is added to `REPOGUARD_CORS_ORIGINS`.
+- Vercel (Settings → Environment Variables):
+  `NEXT_PUBLIC_REPOGUARD_API_BASE=https://repoguard-ljm5hefnsq-uc.a.run.app`,
+  no trailing slash (`api.ts` appends `/api/...`), Production + Preview.
+  Vercel warns that the `NEXT_PUBLIC_` prefix exposes the value to the
+  browser — that's intended, the browser calls this URL directly; keep the
+  prefix and mark it "Config". Removing the prefix leaves it undefined in
+  the browser.
+- **`NEXT_PUBLIC_*` is inlined at build time.** Saving a new value changes
+  nothing until a new build runs. Redeploy the **newest `main`** deployment;
+  redeploying or promoting an older row ships that row's old code (this
+  happened: it rolled production back to pre-#48 code, and once to a
+  `127.0.0.1:8000` build). To check what's live, search the served JS for
+  the API base URL. Normal merges to `main` redeploy automatically.
+- Cloud Run: `REPOGUARD_CORS_ORIGINS=https://ibm-bob-mcp-agent-guard.vercel.app`
+  comes from `cd.yml`'s `env_vars`. Vercel preview URLs
+  (`…-git-<branch>-….vercel.app`) are not in it, so previews can't call the
+  backend unless added.
 - No secrets live in the Next.js app. It only calls the backend's endpoints
   with a repo path the user types in.
