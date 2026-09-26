@@ -513,16 +513,30 @@ Deliberately deferred, not done here: the 3 project-level IAM roles on `repoguar
 
 ---
 
+### Session 20 — Phase 11 done for real (PR #41, #42 merged; Gemini-3 work not yet a PR) + Phase 17/18 planning kickoff
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | First real Cloud Run deploy: `GCP_PROJECT_ID` repo variable had a leading space, breaking the Docker tag. Hardened `cd.yml` to trim + validate all 6 repo variables and fail loud instead of a cryptic Docker error. Deploy then succeeded for real (`https://repoguard-ljm5hefnsq-uc.a.run.app`, confirmed `GET /api/analyze` returns real 65.1% coverage) | `.github/workflows/cd.yml` (PR #41) |
+| 2 | `repoguard fix`'s CLI crashed with a raw traceback when `run_mutation()`'s baseline guard correctly raised `RuntimeError` on a broken AI-written suite — now caught and reported cleanly (exit 1, no traceback), same pattern as `gate`'s failure message | `repoguard_engine/cli.py` (PR #42) |
+| 3 | Phase 11, 3 real attempts, 3 real bugs, then success: (a) `gemini-2.5-flash` twice hallucinated `Inventory.clear()` (doesn't exist) — caught by the baseline guard but the loop had no way to self-correct; (b) moved to Gemini 3 (`gemini-3.8-flash`, `location=global` — 404s at `us-central1`) and added a `run_tests` tool + prompt changes requiring the writer/critic to actually execute pytest before finalizing; (c) Gemini 3's function-call parts carry a `thought_signature` that must be replayed next turn or the API 400s — `vertex.py` was discarding it, now captured and replayed. Final real result: **20.25% (16/79) → 89.87% (71/79)**, coverage 65.1% → 99.1%, independently re-measured, exact match | `repoguard_engine/ai_providers/vertex.py`, `watson_agent/tools.py`, `watson_agent/prompts.py`, `watson_agent/orchestrator.py`, `docs/VERTEX_SETUP.md`, `docs/MULTICLOUD_AI.md`, `PENDING.md` — branch `feat/11-gemini3-antihallucination`, not yet a PR |
+| 4 | Kicked off Phase 17 Block A (DB store) and Phase 18 (swarm) planning in parallel, via isolated-worktree Opus subagents — read-only, no code written. DB plan found ~15 real gaps in `docs/DATA_PLATFORM.md` vs. actual code (rounding, SQLite view portability, import cycles, cross-OS fingerprint paths, an unauthenticated `persist=true` write-amplification risk, etc.); swarm plan found 4 more real bugs (missing `PYTHONDONTWRITEBYTECODE`, a baseline-vs-mutant-copy environment mismatch that reproduces the false-100% bug class one layer up, timeouts scored as kills, a stale MCP docstring) and the hard limit that demo-repo's 71/79 ceiling means the swarm can only tie H2, never beat it, on this fixture | both folded into the docs for real: `docs/DATA_PLATFORM.md` §13 (step-by-step Block A plan + 6 decisions) and `docs/MULTI_AGENT_SWARM.md` §14 (S0–S8 plan + 15 risks), corrections applied inline throughout both docs — not yet committed to a branch |
+
+Demo-repo's tests/ were restored to the documented weak baseline (5 passed, 65.1%, 20.25%/16/79) after each Phase 11 attempt, including the successful one — Phase 11's AI-written tests were real and passing but were never meant to permanently replace the baseline every other check and doc depends on, same rule as Plan B's reference tests.
+
+---
+
 ## Current repo state
 
-- Branch: `main` at `3e30504` — PR #37 (Phase 16 + Phase 13 WIF), #38 (doc fixes), #39 (Phase 17 B1 Terraform) all merged
-- Phase 0: 🟢 · Phase 3: 🟢 · Phase 7: 🟢 · Phase 8: 🟢 (redefined for watsonx.ai) · Phase 9: 🟢 (`repoguard fix` now real) · Phase 13: 🟢 (incl. WIF) · Phase 15: 🟢 (narrative) · Phase 16: 🟢 (both providers built, live-verified) · Phase 17 B1/B2: 🟢 (WIF now Terraform-managed, `terraform plan` confirms parity)
-- Phase 14: 🟡 — all dashboard components including `SummaryPanel` merged and verified end-to-end in a browser (see `PENDING.md` Phase 14); remaining: Autofix (gap 3, no `POST /api/fix`), folding `docs/ARCHITECTURE-front.md` into `docs/ARCHITECTURE.md`, and updating `NEXT_PUBLIC_REPOGUARD_API_BASE` once Cloud Run's real URL exists (Vercel deploy itself is done)
-- Phase 17 A1-A3 (DB store) and C1-C2 (data-driven charts) still 🔴 — B1/B2 (the CI/CD identity) is the only part of Phase 17 actually built so far
+- Branch: `main` at `f5a4b08` — PR #37 (Phase 16 + 13 WIF), #38 (doc fixes), #39 (Phase 17 B1 Terraform), #40 (session log), #41 (cd.yml trim fix), #42 (cli graceful failure), #43 (frontend context docs, run in parallel this session by a separate Opus session — Phase 14 gaps 4/5/6 closed, real Vercel/CORS state documented) all merged
+- Pushed, not yet merged: `feat/11-gemini3-antihallucination` (Gemini 3 + `run_tests` + `thought_signature` fixes, PR not opened by this session — see the branch's own commit message for the ready-to-paste description) and the docs-only correction pass below (Phase 17/18 plans folded into `docs/DATA_PLATFORM.md`/`docs/MULTI_AGENT_SWARM.md`, on `main`'s working tree as of this writing — check `git status`/`git branch` for where it actually landed)
+- Phase 0/3/7/8/9/13/15/16: 🟢. Phase 11: 🟢 (see Session 20) — first genuinely successful live AI fix-loop run, 89.87%/71/79. Phase 17 B1/B2: 🟢 (Terraform-managed WIF)
+- Phase 14: 🟡 — PR #43 closed gaps 4/5/6 and updated `docs/ARCHITECTURE-front.md`/`README.md`/`web-next/README.md` to match reality (real Vercel URL, `SummaryPanel`, CORS state); `docs/ARCHITECTURE.md` now points to `ARCHITECTURE-front.md` instead of inlining it (PR #43's own call, supersedes the earlier "fold in" plan). Remaining: gap 3, Autofix (`POST /api/fix`), and updating `NEXT_PUBLIC_REPOGUARD_API_BASE` to the real Cloud Run URL now that one exists (was still a `localhost` placeholder as of PR #43)
+- Phase 17 A1-A3 (DB store) and C1-C2 (charts) still 🔴, but `docs/DATA_PLATFORM.md` §13 now has a corrected, step-by-step Block A build plan (Session 20) — build from that, not the doc's original sketch
+- Phase 18 (swarm) still 🔴, `docs/MULTI_AGENT_SWARM.md` §14 now has a corrected S0–S8 plan + 15 risks (Session 20) — blocked on `feat/11-gemini3-antihallucination` merging first (§14 R1), and demo-repo's 71/79 ceiling means H2 can only tie there (§14 R2)
 - IBM Bob is retired. `.bob/` stays on disk as inert legacy (`.bob/DEPRECATED.md`); `repoguard_engine/watson_agent/` is the live replacement.
-- Remaining 🔴 critical-path item: Phase 11 — a real `repoguard fix demo-repo` run that measurably raises the mutation score above 20.25%/16/79. No longer credential-gated — the blocker is tool-calling reliability of the models tried so far; Vertex (Gemini) hasn't been run through a full fix loop against demo-repo yet and is the next thing to try.
-- GCP Cloud Run deploy identity is done and now Terraform-managed; still pending, human-only: adding the 6 GitHub repo Variables (`docs/DEPLOY.md` §2) through the GitHub web UI before the first real CD run, since `gh` CLI isn't available in this environment.
-- Open, not yet decided: whether to rename the GitHub repo/local directory (`ibm-bob-mcp-agent-guard`) now that Bob is gone; whether to tighten `repoguard-deployer`'s 3 project-wide IAM roles down to resource-scoped ones (`infra/terraform/README.md`) — both flagged, deliberately not done here
+- GCP Cloud Run: identity is Terraform-managed and a real deploy has succeeded. `GCP_PROJECT_ID`'s raw value in GitHub Settings still has the leading space (cosmetic — `cd.yml` auto-trims it every run; clean it up next time you're in Settings)
+- Open, not yet decided: repo rename; tightening `repoguard-deployer`'s 3 project-wide IAM roles (`infra/terraform/README.md`); the 6 Phase 17 decisions (now listed with recommendations in `docs/DATA_PLATFORM.md` §13's table) and 15 Phase 18 risks (`docs/MULTI_AGENT_SWARM.md` §14)
 
 ---
 
@@ -530,8 +544,8 @@ Deliberately deferred, not done here: the 3 project-level IAM roles on `repoguar
 
 1. Read `PENDING.md` for the task list (Phase 14 now holds the frontend tracker too).
 2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16`, `multicloud` to confirm baseline holds.
-3. For the frontend: CORS and `/api/summary` are on `main`; run `PYTHONIOENCODING=utf-8 repoguard serve` + `npm run dev` (with `NEXT_PUBLIC_REPOGUARD_API_BASE`) for the still-pending browser end-to-end check.
-4. For Phase 11: try `repoguard fix demo-repo --provider vertex` (credentials in `docs/VERTEX_SETUP.md`) — Vertex hasn't had a full fix-loop run against demo-repo yet, and its tool-calling was reliable in the Stage B live tests, unlike watsonx's fallback model.
-5. Add the 6 GitHub repo Variables from `docs/DEPLOY.md` §2 via the GitHub web UI, then trigger `cd.yml` for the first real Cloud Run deploy.
-6. If tightening `repoguard-deployer`'s IAM roles: read `infra/terraform/README.md`'s "Known gap" section first — it's a real permissions change against a live project, plan it as its own deliberate PR.
-6. The repo-rename decision (`ibm-bob-mcp-agent-guard`) is open and low-urgency — decide whenever, it's cosmetic.
+3. Open (or merge) the `feat/11-gemini3-antihallucination` PR first — Phase 18 explicitly can't start before it (`docs/MULTI_AGENT_SWARM.md` §14 R1).
+4. Commit the docs-only correction pass (`docs/DATA_PLATFORM.md`/`docs/MULTI_AGENT_SWARM.md`) on its own branch if it isn't already, and merge it before starting Phase 17/18 implementation — build from §13/§14 of those docs, not their original sketches.
+5. For the frontend: CORS and `/api/summary` are on `main`; run `PYTHONIOENCODING=utf-8 repoguard serve` + `npm run dev` for the still-pending browser end-to-end check; also now update `NEXT_PUBLIC_REPOGUARD_API_BASE` to the real Cloud Run URL.
+6. If tightening `repoguard-deployer`'s IAM roles: read `infra/terraform/README.md`'s "Known gap" section first — real permissions change against a live project, own PR.
+7. The repo-rename decision is open and low-urgency — decide whenever, it's cosmetic.

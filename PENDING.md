@@ -346,16 +346,24 @@ clouds — same human-gated situation as `docs/WATSONX_SETUP.md` and Phase 11.
 ---
 
 ## Phase 17 — Measurement history: Postgres, Terraform, data-driven charts
-**Priority: 2 · Depends on: 9, 13, 14** — full design in `docs/DATA_PLATFORM.md`
+**Priority: 2 · Depends on: 9, 13, 14** — full design in `docs/DATA_PLATFORM.md`, corrected step-by-step Block A plan in its §13 (Session 20)
 
 Stores every measured run (per commit) so trends, persistent surviving
 mutants, flaky tests and fix-loop effect become queryable. The engine still
 measures; the database only stores; derived values live in SQL views.
 Persistence is off unless `REPOGUARD_DATABASE_URL` is set.
 
+A Session 20 planning pass read the actual current code against the design
+doc and found ~15 real gaps (rounding, SQLite view portability, an import
+cycle, cross-OS fingerprint paths, an unauthenticated write-amplification
+risk on `persist=true`, and more) — all corrected in place in
+`docs/DATA_PLATFORM.md`, with a concrete step-by-step build order (A1.1
+through A3.4, each with exact files and a real `verify.py phase17-*`
+check) in its new §13. Build from §13, not the original design sketch.
+
 | Block | Deliverable | Status |
 |---|---|---|
-| — | `docs/DATA_PLATFORM.md` — schema, views, charts, Terraform layout, build order | 🟢 |
+| — | `docs/DATA_PLATFORM.md` — schema, views, charts, Terraform layout, build order | 🟢 corrected + step-by-step plan added, §13 |
 | A1 | `repoguard_engine/store/` (SQLAlchemy Core, SQLite + Postgres), `[db]` extra | 🔴 |
 | A2 | Engine: per-mutant outcomes + stable fingerprints, `junit.xml` per-test outcomes; `pipeline.py` persists | 🔴 |
 | A3 | API read routes + `POST /api/runs` ingest (project token) + `repoguard analyze --push` | 🔴 |
@@ -372,7 +380,7 @@ situation as `docs/DEPLOY.md`.
 ---
 
 ## Phase 18 — Multi-agent swarm: parallel agent lanes
-**Priority: 2 · Depends on: 8 (fix loop); benchmark needs 11 · Optional: 16 (per-role providers) · Shares S2 with 17** — full design in `docs/MULTI_AGENT_SWARM.md`
+**Priority: 2 · Depends on: 8 (fix loop, done); 11 (real sequential baseline, done — 89.87%/71/79); Optional: 16 (per-role providers, done) · Shares S2 with 17** — full design in `docs/MULTI_AGENT_SWARM.md`, corrected step-by-step plan (S0–S8) + 15 risks in its §14 (Session 20)
 
 Brings back IBM Bob's parallel swarm design (`.bob/custom_modes.yaml`), rebuilt
 in-process: one lane per source file (Test Writer → Verifier → Critic, up to
@@ -380,9 +388,17 @@ in-process: one lane per source file (Test Writer → Verifier → Critic, up to
 re-measure after fan-in. Kept behind `repoguard fix --swarm` until real runs
 show it's faster (H1) and at least as good (H2) as the sequential loop.
 
+**Blocker, not yet cleared:** Phase 18 can't branch until
+`feat/11-gemini3-antihallucination` (the `run_tests` tool the lane Verifier
+depends on) is merged to `main` — see `docs/MULTI_AGENT_SWARM.md` §14 R1.
+**Real limit found:** demo-repo's mutation ceiling is 71/79 (matches the
+hand-written reference tests) — the swarm can only *tie* H2 on this
+fixture, not beat it; a harder fixture would be an `AGENTS.md §8` ask-first
+change (§14 R2).
+
 | Block | Deliverable | Status |
 |---|---|---|
-| — | `docs/MULTI_AGENT_SWARM.md` — agents, parallelism, file contract, build order, verification | 🟢 |
+| — | `docs/MULTI_AGENT_SWARM.md` — agents, parallelism, file contract, build order, verification | 🟢 corrected against real Phase 11 result + 4 new bugs found, step-by-step plan added, §14 |
 | S1 | Parallel mutation workers; `paths_to_mutate` accepts a file (today it silently finds 0 mutants); zero mutants is an error | 🔴 |
 | S2 | Per-mutant records (same as Phase 17 A2) | 🔴 |
 | S3 | Per-lane sandbox + owned-path write guard | 🔴 |
