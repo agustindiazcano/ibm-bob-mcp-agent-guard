@@ -26,7 +26,7 @@ _allowed_origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -55,22 +55,32 @@ async def api_analyze(
     return {**result.dashboard, "passed_gate": result.passed_gate}
 
 
+@app.post("/api/summary")
+async def api_summary(dashboard: dict) -> dict:
+    """Wrap narrative.generate_summary() over an already-measured dashboard dict."""
+    from ..narrative import generate_summary
+
+    result = generate_summary(dashboard)
+    return {"ok": result.ok, "text": result.text, "error": result.error, "provider": "watsonx.ai"}
+
+
 @app.get("/api/stream")
 async def api_stream(
     repo_path: str = Query(default=".", description="Path to the target repository"),
+    gate_threshold: float = Query(default=80.0),
 ) -> StreamingResponse:
     """
     Server-Sent Events stream that emits pipeline progress events.
     Each event is a JSON object with a 'type' and 'data' field.
     """
     return StreamingResponse(
-        _stream_pipeline(repo_path),
+        _stream_pipeline(repo_path, gate_threshold),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
-async def _stream_pipeline(repo_path: str) -> AsyncGenerator[str, None]:
+async def _stream_pipeline(repo_path: str, gate_threshold: float = 80.0) -> AsyncGenerator[str, None]:
     """Yield SSE events as the pipeline progresses."""
     def _emit(event_type: str, data: dict) -> str:
         return f"data: {json.dumps({'type': event_type, 'data': data})}\n\n"
@@ -102,7 +112,7 @@ async def _stream_pipeline(repo_path: str) -> AsyncGenerator[str, None]:
         risk = compute_risk(repo_path, coverage)
         yield _emit("risk", {"top_files": [{"file": r.file, "score": r.score} for r in risk[:5]]})
 
-        yield _emit("done", {"passed_gate": coverage.percent >= 80.0})
+        yield _emit("done", {"passed_gate": coverage.percent >= gate_threshold})
 
     except Exception as exc:
         yield _emit("error", {"message": str(exc)})
