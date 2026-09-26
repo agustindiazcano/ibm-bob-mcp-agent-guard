@@ -316,8 +316,11 @@ badge on "Running" until then, bad path shows the backend's `detail`, no
 console errors. Fails against the previous frontend (stream/gate mismatch,
 no endpoints card). Not in CI yet.
 
-**Not yet verified:** Analyze *with* mutation on Cloud Run (~270 s locally
-— may hit Cloud Run's request timeout).
+**Verified live:** Analyze *with* mutation against the real Cloud Run
+service (`GET /api/analyze?repo_path=demo-repo&mutation=true`) — `200` in
+2m45s, well under the service's `--timeout=1800`; returned 65.1%
+(112/172), mutation 20.25% (16/79), 4 gap files, 1/7 endpoints tested —
+exact match to `AGENTS.md §7`.
 
 **Known issues**
 
