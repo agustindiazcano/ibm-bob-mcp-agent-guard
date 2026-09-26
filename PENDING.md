@@ -424,9 +424,8 @@ in-process: one lane per source file (Test Writer → Verifier → Critic, up to
 re-measure after fan-in. Kept behind `repoguard fix --swarm` until real runs
 show it's faster (H1) and at least as good (H2) as the sequential loop.
 
-**Blocker, not yet cleared:** Phase 18 can't branch until
-`feat/11-gemini3-antihallucination` (the `run_tests` tool the lane Verifier
-depends on) is merged to `main` — see `docs/MULTI_AGENT_SWARM.md` §14 R1.
+**Blocker cleared:** `run_tests`, the tool the lane Verifier depends on
+(`docs/MULTI_AGENT_SWARM.md` §14 R1), reached `main` with PR #45.
 **Real limit found:** demo-repo's mutation ceiling is 71/79 (matches the
 hand-written reference tests) — the swarm can only *tie* H2 on this
 fixture, not beat it; a harder fixture would be an `AGENTS.md §8` ask-first
@@ -435,6 +434,7 @@ change (§14 R2).
 | Block | Deliverable | Status |
 |---|---|---|
 | — | `docs/MULTI_AGENT_SWARM.md` — agents, parallelism, file contract, build order, verification | 🟢 corrected against real Phase 11 result + 4 new bugs found, step-by-step plan added, §14 |
+| S0 | Groundwork: `_run_chat_stage` → `StageResult` with injectable toolset; `run_fix_loop(model=...)`; wall time per phase/stage in `FixResult` + evidence; `testing/ScriptedProvider`; `verify.py phase18-seq-stub` + CI job `fix-loop-stub` | 🟢 Session 23. Measured with no credentials: 86.08% (68/79), 362/367 lines, 56 passed, identical across 3 runs |
 | S1 | Parallel mutation workers; `paths_to_mutate` accepts a file (today it silently finds 0 mutants); zero mutants is an error | 🔴 |
 | S2 | Per-mutant records (same as Phase 17 A2) | 🔴 |
 | S3 | Per-lane sandbox + owned-path write guard | 🔴 |

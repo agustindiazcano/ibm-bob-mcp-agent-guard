@@ -78,7 +78,8 @@ ibm-bob-mcp-agent-guard/
 │   ├── watson_agent/     AI fix loop — replaces .bob/'s Orchestrator/Test Writer/Critic/Gate/Publisher modes
 │   │   ├── tools.py          TOOL_SCHEMAS/TOOL_REGISTRY — write_test_file hard-guards writes to tests/ only
 │   │   ├── prompts.py        TEST_WRITER_PROMPT, CRITIC_PROMPT — carried forward from .bob/rules,skills
-│   │   └── orchestrator.py   run_fix_loop — measure → write → critique → re-measure → evidence
+│   │   └── orchestrator.py   run_fix_loop — measure → write → critique → re-measure → evidence (wall time per phase/stage)
+│   ├── testing/          Credential-free test doubles — ScriptedProvider (never wired into get_provider(); used by verify.py phase18-seq-stub)
 │   ├── pipeline.py       run_pipeline — ordered steps; returns PipelineResult
 │   ├── cli.py            repoguard analyze | fix | gate | serve | mcp  (click entry point)
 │   ├── mcp_server.py     9 FastMCP tools (thin wrappers, stdio transport)
