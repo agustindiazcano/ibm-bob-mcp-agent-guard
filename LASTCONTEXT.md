@@ -449,7 +449,7 @@ both merged to `main`.
 
 ## Current repo state
 
-- Branch: `main` at `7480cb0`; open, independent branches: `fix/web-root-encoding` (backend), `fix/14-summary-double-post` (frontend), `docs/14-fold-pending-front` (docs)
+- Branch: `main` at `6a48bbf` — all Session 14/15 branches merged (PRs #26–#33)
 - Phase 0: 🟢 · Phase 3: 🟢 · Phase 7: 🟢 · Phase 8: 🟢 (redefined for watsonx.ai) · Phase 9: 🟢 (`repoguard fix` now real) · Phase 13: 🟢 · Phase 15: 🟢 (narrative, PR #18)
 - Phase 14: 🟡 — all dashboard components including `SummaryPanel` merged and verified end-to-end in a browser (see `PENDING.md` Phase 14); remaining: Autofix (gap 3, no `POST /api/fix`), Vercel deploy, folding `docs/ARCHITECTURE-front.md` into `docs/ARCHITECTURE.md`, and the `ok=true` summary path (needs credentials)
 - IBM Bob is retired. `.bob/` stays on disk as inert legacy (`.bob/DEPRECATED.md`); `repoguard_engine/watson_agent/` is the live replacement.
