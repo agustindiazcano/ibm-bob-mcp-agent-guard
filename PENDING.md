@@ -268,10 +268,10 @@ real summary generated with IBM Cloud credentials (the `ok=true` path, where
 
 | Issue | Status |
 |---|---|
-| `GET /` returned 500 on Windows (`index.html` read as cp1252) | 🟡 fixed on `fix/web-root-encoding`, pending merge |
-| `/api/stream` stuck at "Running pytest with coverage…" — `/api/analyze` was `async def` running the pipeline synchronously, blocking the event loop while `web-next` had both open | 🟡 fixed on `fix/web-root-encoding`, pending merge |
-| Under `next dev`, `POST /api/summary` fires twice (React StrictMode double mount) — with real credentials, two paid watsonx.ai calls per local test; production fires once | ⚪ frontend, optional |
-| `web-next` runs `/api/analyze` and `/api/stream` concurrently, i.e. two pytest+coverage runs in the same repo at once — measured 65.1% both times so far, but it's a determinism risk | ⚪ frontend design decision |
+| `GET /` returned 500 on Windows (`index.html` read as cp1252) | 🟢 fixed (PR #30) |
+| `/api/stream` stuck at "Running pytest with coverage…" — `/api/analyze` was `async def` running the pipeline synchronously, blocking the event loop while `web-next` had both open | 🟢 fixed (PR #30) |
+| Under `next dev`, `POST /api/summary` fired twice (React StrictMode double mount) — two paid watsonx.ai calls per local test with real credentials | 🟢 fixed (PR #29) (summary requested once, right after `/api/analyze` returns; stale summaries dropped) |
+| `web-next` runs `/api/analyze` and `/api/stream` concurrently → two pytest-cov runs sharing `.coverage`/`coverage.json` at fixed paths in the target repo (could erase each other's data) | 🟢 fixed (PR #32) (`measure_coverage()` uses a per-run temp dir; 4 parallel runs all 65.12%) |
 
 ---
 

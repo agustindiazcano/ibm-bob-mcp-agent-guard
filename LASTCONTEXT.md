@@ -428,6 +428,8 @@ both merged to `main`.
 | 1 | Frontend session ran the browser E2E on `main` (`50fe2e6`): Playwright + `repoguard serve` + `next dev`, all three endpoints 200, `SummaryPanel` showed the credentials error, dashboard intact | — |
 | 2 | `GET /` 500 on Windows: `index.html` read as cp1252. Fixed with explicit `encoding="utf-8"`, plus the same latent bug in `api_check.py` (2 reads) and `core.py` (2 reads) that would break on any non-ASCII source | `fix/web-root-encoding` |
 | 3 | `/api/stream` frozen at the first progress event: `api_analyze` was `async def` running `run_pipeline()` synchronously, and `web-next` opens both at once. Now `def`; confirmed stream events arrive while analyze is still running | `fix/web-root-encoding` |
+| 3b | Flagged by the frontend session: the two concurrent requests ran pytest-cov with `.coverage`/`coverage.json` at fixed paths in the target repo. `measure_coverage()` now uses a per-run temp dir (`COVERAGE_FILE` + `--cov-report=json:<tmp>`); 1 and 4 parallel runs all 65.12% | `fix/web-root-encoding` |
+| 3c | Frontend session fixed the double `POST /api/summary` under `next dev` | `fix/14-summary-double-post` |
 | 4 | Folded `PENDING-front.md` into `PENDING.md` Phase 14 (gaps, deliverables, verified, known issues), deleted it, repointed references | `docs/14-fold-pending-front` |
 
 ### Key decisions (Session 15)
@@ -463,7 +465,7 @@ Key decisions (design only, nothing built):
 
 ## Current repo state
 
-- Branch: `main` at `7480cb0`; open branches `fix/web-root-encoding` (code) and `docs/14-fold-pending-front` (docs), independent of each other
+- Branch: `main` at `6a48bbf` — all Session 14/15 branches merged (PRs #26–#33)
 - Phase 0: 🟢 · Phase 3: 🟢 · Phase 7: 🟢 · Phase 8: 🟢 (redefined for watsonx.ai) · Phase 9: 🟢 (`repoguard fix` now real) · Phase 13: 🟢 · Phase 15: 🟢 (narrative, PR #18)
 - Phase 14: 🟡 — all dashboard components including `SummaryPanel` merged and verified end-to-end in a browser (see `PENDING.md` Phase 14); remaining: Autofix (gap 3, no `POST /api/fix`), Vercel deploy, folding `docs/ARCHITECTURE-front.md` into `docs/ARCHITECTURE.md`, and the `ok=true` summary path (needs credentials)
 - IBM Bob is retired. `.bob/` stays on disk as inert legacy (`.bob/DEPRECATED.md`); `repoguard_engine/watson_agent/` is the live replacement.
