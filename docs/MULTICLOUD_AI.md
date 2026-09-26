@@ -112,7 +112,8 @@ length.
 
 ```bash
 export VERTEX_PROJECT_ID="<gcp-project-id>"
-export VERTEX_LOCATION="us-central1"          # optional, this is the default
+export VERTEX_LOCATION="global"                # optional, this is the default
+export VERTEX_MODEL_ID="gemini-3.8-flash"       # optional, this is the default
 
 # Credentials: no separate API key. Either:
 gcloud auth application-default login          # local dev -- this is what
@@ -121,9 +122,12 @@ gcloud auth application-default login          # local dev -- this is what
 export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
 ```
 
-Default model: `gemini-2.5-flash` (live-verified this session, real GCP
-project, `us-central1`) — chosen as a real, currently-available model, not
-guessed.
+Default model: `gemini-3.8-flash` at `location="global"` — moved here from
+`gemini-2.5-flash`/`us-central1` after a live Phase 11 fix-loop run twice
+produced a hallucinated method call; see `docs/VERTEX_SETUP.md`'s "Model
+history" section for the full real-verified findings (both Gemini 3 Flash
+tiers 404 at `us-central1`, work at `global`; `gemini-3.1-pro` 404s even at
+`global` on this project).
 
 Same optional-dependency pattern as `[ai]`/`[docs]` in `pyproject.toml`:
 
@@ -178,16 +182,21 @@ before any code exists, not because it can be verified in this environment.
   ask was specifically watsonx.ai + Google Vertex AI.
 - Not building cost tracking or a spend dashboard — out of scope until
   someone asks for it.
-- Not changing `tools.py`'s write guard or `prompts.py`'s content at all —
-  those are already provider-agnostic and stay exactly as they are.
+- Not changing `tools.py`'s write guard or `prompts.py`'s content *for this
+  refactor* — they stayed provider-agnostic through Stages A/B. They were
+  later extended in a follow-up Phase 11 session (a new `run_tests` tool,
+  prompt instructions requiring it) to fix a real hallucination found live,
+  not as part of the multicloud abstraction itself — see
+  `docs/VERTEX_SETUP.md`'s "Model history".
 
 ## Open questions for a human
 
 - ~~Which Vertex AI model(s) to default to, and in which GCP project/region~~
-  — resolved: `gemini-2.5-flash` in `us-central1`, confirmed available and
-  working against the real GCP project used to verify this. A different
-  project/region may need a different model; `VERTEX_LOCATION` and
-  `get_provider(model_id=...)` are both overridable.
+  — resolved, revised: originally `gemini-2.5-flash`/`us-central1`; moved to
+  `gemini-3.8-flash`/`global` after a live hallucination finding (Phase 11).
+  `gemini-3.5-flash` is a live-verified alternative via `VERTEX_MODEL_ID`.
+  `VERTEX_LOCATION`/`VERTEX_MODEL_ID` env vars and `get_provider(model_id=...)`
+  are all overridable for a different project/region's available models.
 - ~~Whether `REPOGUARD_AI_PROVIDER` should support per-call override~~ —
   resolved: `get_provider(provider=...)` takes the override, and
   `repoguard fix --provider` / `repoguard analyze --summarize --provider`
