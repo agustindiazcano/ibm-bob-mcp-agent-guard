@@ -36,6 +36,11 @@ ai = ["ibm-watsonx-ai>=1.7"]
 # Application Default Credentials (gcloud auth application-default login)
 # or GOOGLE_APPLICATION_CREDENTIALS -- see docs/VERTEX_SETUP.md.
 vertex = ["google-genai>=2.25"]
+# Run history (repoguard_engine/store/): only when REPOGUARD_DATABASE_URL is
+# set, or for `repoguard db ...` / serving the history routes. SQLite needs
+# nothing else; psycopg is the PostgreSQL (Cloud SQL) driver. `repoguard
+# analyze --push` works without this extra.
+db = ["sqlalchemy>=2.0", "psycopg[binary]>=3.1"]
 
 [project.scripts]
 repoguard = "repoguard_engine.cli:main"

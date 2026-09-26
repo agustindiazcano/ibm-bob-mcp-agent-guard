@@ -216,6 +216,7 @@ def tool_full_pipeline(
         repo_path,
         include_mutation=include_mutation,
         gate_threshold=gate_threshold,
+        source="mcp",
     )
     compact = {
         "coverage_percent": result.dashboard.get("coverage", {}).get("percent"),
@@ -223,6 +224,8 @@ def tool_full_pipeline(
         "gap_count": len(result.dashboard.get("gaps", {}).get("uncovered_files", [])),
         "passed_gate": result.passed_gate,
     }
+    if result.run_id:  # only when REPOGUARD_DATABASE_URL is set
+        compact["run_id"] = result.run_id
     if not detail:
         return compact
     return {**result.dashboard, "passed_gate": result.passed_gate}

@@ -66,9 +66,12 @@ class VertexCredentialsError(AIProviderError):
 
 
 class VertexChatProvider:
+    name = "vertex"
+
     def __init__(self, client, model_id: str) -> None:
         self._client = client
         self._model_id = model_id
+        self.model_id = model_id
 
     def chat(
         self,

@@ -31,6 +31,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from .history import router as _history_router  # noqa: E402
+
+app.include_router(_history_router)
+
 # Serve static files (index.html)
 _static_dir = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
@@ -48,17 +52,37 @@ def api_analyze(
     repo_path: str = Query(default=".", description="Path to the target repository"),
     mutation: bool = Query(default=False),
     gate_threshold: float = Query(default=80.0),
+    persist: bool = Query(default=False, description="Store this run (needs a project token)"),
+    authorization: str | None = Header(default=None),
 ) -> dict:
-    """Run the full pipeline and return JSON results."""
+    """Run the full pipeline and return JSON results.
+
+    persist=true stores the run in the project the bearer token belongs to
+    and adds run_id to the response. Off by default even when the server
+    has a database: a public request never writes unless it carries a
+    project token (docs/DATA_PLATFORM.md §13, decision #5).
+    """
+    from ..mutation import NoMutantsError
     from ..pipeline import run_pipeline
 
+    project = None
+    if persist:
+        from .history import project_from_token, store_engine
+
+        project = project_from_token(store_engine(), authorization)
     try:
-        result = run_pipeline(repo_path, include_mutation=mutation, gate_threshold=gate_threshold)
-    except NotADirectoryError as exc:
+        result = run_pipeline(
+            repo_path, include_mutation=mutation, gate_threshold=gate_threshold,
+            persist=persist, project=project, source="server",
+        )
+    except (NotADirectoryError, NoMutantsError) as exc:
         # Otherwise this reaches subprocess.run(cwd=...) uncaught and the
         # frontend sees a bare 500 for what is really a bad request.
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {**result.dashboard, "passed_gate": result.passed_gate}
+    body = {**result.dashboard, "passed_gate": result.passed_gate}
+    if result.run_id:
+        body["run_id"] = result.run_id
+    return body
 
 
 @app.post("/api/summary")

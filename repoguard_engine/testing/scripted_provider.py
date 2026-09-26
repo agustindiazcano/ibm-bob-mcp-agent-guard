@@ -62,6 +62,9 @@ class ScriptedProvider:
     critic_runs_tests: whether the critic calls run_tests before replying.
     """
 
+    name = "scripted"
+    model_id = None
+
     def __init__(
         self,
         reference_dir: str | Path,

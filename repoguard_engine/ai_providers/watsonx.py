@@ -38,8 +38,11 @@ class WatsonxCredentialsError(AIProviderError):
 
 
 class WatsonxChatProvider:
-    def __init__(self, model) -> None:
+    name = "watsonx"
+
+    def __init__(self, model, model_id: str | None = None) -> None:
         self._model = model
+        self.model_id = model_id
 
     def chat(
         self,
@@ -92,4 +95,4 @@ def get_provider(*, model_id: str = DEFAULT_MODEL_ID) -> WatsonxChatProvider:
         credentials=Credentials(url=url, api_key=api_key),
         project_id=project_id,
     )
-    return WatsonxChatProvider(model)
+    return WatsonxChatProvider(model, model_id=model_id)

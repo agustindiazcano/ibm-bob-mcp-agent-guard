@@ -21,6 +21,10 @@ class AIProviderError(RuntimeError):
 
 
 class ChatProvider(Protocol):
+    # Public identity, recorded with stored fix sessions (store/).
+    name: str
+    model_id: str | None
+
     def chat(
         self,
         messages: list[dict],

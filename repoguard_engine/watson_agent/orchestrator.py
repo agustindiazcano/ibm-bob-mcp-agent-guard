@@ -49,6 +49,8 @@ class FixResult:
     # (swarm faster than sequential) is measured against.
     timings: list[dict] = field(default_factory=list)
     wall_s: float | None = None
+    # Stored before/after runs and their link, when persistence is on.
+    fix_session_id: str | None = None
 
 
 @dataclass
@@ -155,6 +157,7 @@ def run_fix_loop(
     provider: str | None = None,
     on_event: Callable[[str, dict], None] | None = None,
     model: ChatProvider | None = None,
+    mutation_workers: int = 1,
 ) -> FixResult:
     """
     Run the full AI fix loop against repo_path.
@@ -179,6 +182,9 @@ def run_fix_loop(
     (not exposed on the CLI) -- lets a credential-free scripted provider
     (repoguard_engine/testing/scripted_provider.py) drive the real loop.
 
+    mutation_workers: parallel mutant workers for both measurements (same
+    numbers, less wall time).
+
     Raises AIProviderError immediately if the selected provider's
     credentials aren't set -- checked before the (multi-minute) mutation
     baseline runs, not after, so a missing-credentials failure is instant
@@ -194,7 +200,10 @@ def run_fix_loop(
     repo = str(Path(repo_path).resolve())
     emit("baseline_start", {})
     started = time.perf_counter()
-    baseline = run_pipeline(repo, include_mutation=True, include_endpoints=True, gate_threshold=gate_threshold)
+    baseline = run_pipeline(
+        repo, include_mutation=True, include_endpoints=True, gate_threshold=gate_threshold,
+        mutation_workers=mutation_workers,
+    )
     timings.append({"stage": "baseline", "wall_s": time.perf_counter() - started})
     result = FixResult(repo_path=repo, baseline=baseline.dashboard, timings=timings)
     files = _priority_files(baseline.risk)
@@ -222,7 +231,10 @@ def run_fix_loop(
 
     emit("remeasure_start", {})
     started = time.perf_counter()
-    after = run_pipeline(repo, include_mutation=True, include_endpoints=True, gate_threshold=gate_threshold)
+    after = run_pipeline(
+        repo, include_mutation=True, include_endpoints=True, gate_threshold=gate_threshold,
+        mutation_workers=mutation_workers,
+    )
     timings.append({"stage": "remeasure", "wall_s": time.perf_counter() - started})
     result.after = after.dashboard
     emit("remeasure_done", {"dashboard": after.dashboard, "passed_gate": after.passed_gate})
@@ -231,9 +243,29 @@ def run_fix_loop(
         _publish(repo)
         result.published = True
 
+    if baseline.run_id and after.run_id and after.record:
+        result.fix_session_id = _store_fix_session(after.record["project"], baseline.run_id, after.run_id, model, provider)
+
     result.wall_s = time.perf_counter() - loop_started
     result.evidence_path = _write_evidence(repo, result)
     return result
+
+
+def _store_fix_session(project: str, before_run_id: str, after_run_id: str, model, provider: str | None) -> str:
+    """Link the two stored runs; the effect itself is a view (v_fix_effect)."""
+    from ..ai_providers import resolve_provider_name
+    from ..store import database_url
+    from ..store.db import get_engine
+    from ..store.repository import save_fix_session
+
+    return save_fix_session(
+        get_engine(database_url()),
+        project=project,
+        before_run_id=before_run_id,
+        after_run_id=after_run_id,
+        provider=getattr(model, "name", None) or resolve_provider_name(provider),
+        model_id=getattr(model, "model_id", None),
+    )
 
 
 def _publish(repo_path: str) -> None:

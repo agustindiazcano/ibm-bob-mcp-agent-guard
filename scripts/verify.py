@@ -17,6 +17,8 @@ Phase checks implemented:
     phase18-seq-stub — sequential fix loop driven by ScriptedProvider (no credentials), pinned after-numbers
     phase18-s1  — parallel mutation workers, single-file scope, NoMutantsError, sham-mutant control
     phase17-engine / phase18-s2 — per-mutant records + stable fingerprints, per-test JUnit outcomes
+    phase17-store / -pipeline / -api / -history — run-history store (set REPOGUARD_TEST_DATABASE_URL
+                  to also run the store checks against Postgres); phase17 runs all of them
     phase14fix  — POST /api/fix: token gate, single-run lock, NDJSON events, sandbox leaves the target repo untouched
 """
 
@@ -24,6 +26,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from pathlib import Path
 
 
 def run(cmd: list[str], timeout: int = 30) -> tuple[int, str]:
@@ -542,6 +545,49 @@ finally:
     return ok
 
 
+_CHECKS_DIR = Path(__file__).resolve().parent / "checks"
+
+
+def _run_check_script(name: str, title: str, timeout: int = 900) -> bool:
+    """Run scripts/checks/<name>.py in a fresh interpreter from the repo
+    root and report PASS/FAIL. Standalone scripts keep this file small and
+    let a check assert on sys.modules (e.g. "SQLAlchemy not imported")."""
+    print(f"=== {title} ===")
+    rc, out = run([sys.executable, str(_CHECKS_DIR / f"{name}.py")], timeout=timeout)
+    ok = rc == 0
+    print("  " + out.strip().replace("\n", "\n  "))
+    print(f"  {name} -> {'PASS' if ok else 'FAIL'}")
+    return ok
+
+
+def check_phase17_store() -> bool:
+    return _run_check_script("phase17_store", "Phase 17 A1.1: store round trip (SQLite + REPOGUARD_TEST_DATABASE_URL)")
+
+
+def check_phase17_pipeline() -> bool:
+    return _run_check_script("phase17_pipeline", "Phase 17 A1.2: pipeline persistence can't change outputs")
+
+
+def check_phase17_api() -> bool:
+    return _run_check_script("phase17_api", "Phase 17 A3: read routes, ingest, tokens, --push over loopback")
+
+
+def check_phase17_history() -> bool:
+    return _run_check_script("phase17_history", "Phase 17 A2.3: per-mutant history, views, fix sessions", timeout=1800)
+
+
+def check_phase17() -> bool:
+    """Aggregate: every Phase 17 Block A check (they all run, even after a FAIL)."""
+    results = [
+        check_phase17_engine(),
+        check_phase17_store(),
+        check_phase17_pipeline(),
+        check_phase17_api(),
+        check_phase17_history(),
+    ]
+    return all(results)
+
+
 CHECKS: dict[str, callable] = {
     "phase0": check_phase0,
     "phase3": check_phase3,
@@ -554,6 +600,11 @@ CHECKS: dict[str, callable] = {
     "phase18-s1": check_phase18_s1,
     "phase17-engine": check_phase17_engine,
     "phase18-s2": check_phase17_engine,
+    "phase17-store": check_phase17_store,
+    "phase17-pipeline": check_phase17_pipeline,
+    "phase17-api": check_phase17_api,
+    "phase17-history": check_phase17_history,
+    "phase17": check_phase17,
 }
 
 
