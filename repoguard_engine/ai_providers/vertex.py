@@ -220,8 +220,15 @@ def get_provider(*, model_id: str | None = None) -> VertexChatProvider:
         import google.auth
         from google import genai
     except ImportError as exc:
+        # Real finding: this except clause used to swallow *any* ImportError
+        # under a fixed "not installed" message, including a transitive
+        # dependency failing to import with google-genai itself present --
+        # narrative.py's caller only sees str(exc), which lost exc's own
+        # message entirely. Now included, so a deployed environment's real
+        # failure is diagnosable from its own error response instead of
+        # needing a local repro to rule out a masked cause.
         raise VertexCredentialsError(
-            "google-genai is not installed (pip install 'repoguard[vertex]')"
+            f"google-genai import failed: {exc} (pip install 'repoguard[vertex]')"
         ) from exc
 
     try:
