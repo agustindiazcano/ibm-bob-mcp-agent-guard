@@ -463,6 +463,21 @@ Key decisions (design only, nothing built):
 
 ---
 
+### Session 17 — Phase 18 design: multi-agent swarm (`claude/eager-gauss-ifyd8w`)
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Wrote the plan to bring back a parallel multi-agent swarm: Bob's 9 modes mapped to new agents, lanes per file (Writer → Verifier → Critic), two levels of parallelism, file contract, build order, verification incl. a credential-free stub E2E | `docs/MULTI_AGENT_SWARM.md` |
+| 2 | README: new "Multi-agent swarm (planned)" section + ToC entry, Documentation link, tech-stack row, pointer from "Is it multi-agent?" | `README.md` |
+| 3 | Phase 18 tracker | `PENDING.md` |
+
+Found while designing (not fixed, planned as S1/§3 of the doc):
+- `run_mutation(paths_to_mutate=<file>)` silently finds 0 mutants (`rglob` on a file path returns nothing) and returns `total = 0` instead of an error.
+- Today's fix loop gives each writer the whole repo's surviving mutant IDs as bare integers (no descriptions), never picks a fully covered file that still has surviving mutants (risk = coverage gap only), caps at 3 files (demo-repo has 4 modules), and its critic has the same write tool as the writer.
+- Measured: sequential mutation on demo-repo, 79 mutants in 53 s (this container) — the H1 baseline at the engine level.
+
+---
+
 ## Current repo state
 
 - Branch: `main` at `6a48bbf` — all Session 14/15 branches merged (PRs #26–#33)

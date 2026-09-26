@@ -30,6 +30,7 @@ IBM Bob Hackaton Ranking (Bob IDE ussage):
 - [What it does](#what-it-does)
 - [How it works](#how-it-works)
 - [Is it multi-agent?](#is-it-multi-agent)
+- [Multi-agent swarm (planned)](#multi-agent-swarm-planned)
 - [Quick start](#quick-start)
 - [Commands](#commands)
 - [Using the watsonx.ai fix loop](#using-the-watsonxai-fix-loop)
@@ -120,7 +121,7 @@ After both, the orchestrator re-measures deterministically. Both agents use the 
 The engine is also exposed through **MCP** (9 tools), so external agents such as Claude Code or any other MCP client can call the same measurements. The fix loop itself calls the engine directly rather than through MCP.
 
 **What it is not (yet):**
-- **Not a parallel swarm.** A parallel multi-agent design for IBM Bob exists in `.bob/`, but it was retired before its first full run (`.bob/DEPRECATED.md`).
+- **Not a parallel swarm yet.** A parallel multi-agent design for IBM Bob exists in `.bob/`, but it was retired before its first full run (`.bob/DEPRECATED.md`). Its return, rebuilt on watsonx.ai, is planned: see [Multi-agent swarm (planned)](#multi-agent-swarm-planned).
 - **Not provider-agnostic.** watsonx.ai is the only AI provider in the code today. A `ChatProvider` abstraction that would add Google Vertex AI is designed but not built: see [`docs/MULTICLOUD_AI.md`](docs/MULTICLOUD_AI.md) (`PENDING.md` Phase 16).
 
 ```mermaid
@@ -138,6 +139,29 @@ flowchart TB
 | `repoguard fix` | Yes | The watsonx.ai loop above (write → critique → re-measure) |
 | `repoguard analyze [--summarize]` | Only with `--summarize` | Deterministic pipeline; `--summarize` adds one watsonx.ai call for prose, never a metric |
 | `repoguard gate` (CI) | No | Deterministic pipeline |
+
+## Multi-agent swarm (planned)
+
+> Design only (`PENDING.md` Phase 18). Full plan: [`docs/MULTI_AGENT_SWARM.md`](docs/MULTI_AGENT_SWARM.md).
+
+The swarm IBM Bob was designed to run (`.bob/custom_modes.yaml`: Orchestrator, Test Writer, Critic, Gate, Publisher…), rebuilt in-process on watsonx.ai. Instead of one loop working file by file, the Orchestrator opens **one lane per source file** and runs the lanes **in parallel**. Each lane has three agents:
+
+- **Test Writer (LLM):** writes tests aimed at that file's surviving mutants, in its own sandbox copy of the repo. It can only write its own test file.
+- **Verifier (deterministic):** runs mutation testing on that file and reports which mutants the new tests killed.
+- **Critic (LLM, read-only):** reviews the tests and returns APPROVED or NEEDS_WORK. NEEDS_WORK triggers one revision round.
+
+After all lanes finish, their files are merged, and the **Gate** re-measures the whole repo once. That number is the only one reported. The **Publisher** opens a PR if the score improved. Agents talk through files in `repoguard-out/swarm/<run_id>/`, like Bob's subagents did, so every run is auditable. Mutation testing itself also runs in parallel.
+
+The swarm has to earn its place with two measurements: it must be faster than the sequential loop, and reach at least the same final mutation score. Until then, `repoguard fix` keeps the sequential loop as its default, and the swarm runs behind `--swarm`.
+
+| Doc section | What it covers |
+|---|---|
+| [§2](docs/MULTI_AGENT_SWARM.md#2-bob-then-today-target) | Bob's modes mapped one by one to the new agents |
+| [§3](docs/MULTI_AGENT_SWARM.md#3-problems-in-todays-loop-the-swarm-must-fix) | Six problems in today's loop the swarm fixes |
+| [§5](docs/MULTI_AGENT_SWARM.md#5-parallelism) | Two levels of parallelism, and per-lane isolation |
+| [§6](docs/MULTI_AGENT_SWARM.md#6-communication-contract-the-blackboard) | The file contract between agents |
+| [§10](docs/MULTI_AGENT_SWARM.md#10-build-order) | Build order and cut line |
+| [§11](docs/MULTI_AGENT_SWARM.md#11-verification-scriptsverifypy-phase18) | Verification, including a credential-free end-to-end test |
 
 ## Quick start
 
@@ -211,6 +235,7 @@ Status key: ✅ implemented and running in this repo · ⚠️ implemented but n
 | Accessibility | axe-playwright-python (axe-core) | Accessibility violations (MCP tool) | ✅ locally · not in the Docker image |
 | Agent protocol | MCP via FastMCP (stdio) | 9 tools for any MCP client | ✅ |
 | AI agents | IBM watsonx.ai (`ibm-watsonx-ai`), default model `meta-llama/llama-3-3-70b-instruct` | Writer and critic agents with tool calling (`repoguard fix`), `--summarize` prose | ⚠️ SDK call shapes checked against the real package; no live run with real credentials yet |
+| Multi-agent swarm | Parallel agent lanes (`ThreadPoolExecutor`), per-lane sandboxes, file-based agent contract | Parallel Test Writer / Verifier / Critic per file, parallel mutation workers | 🗺️ Phase 18 ([design](docs/MULTI_AGENT_SWARM.md)) |
 | AI provider abstraction | `ChatProvider` protocol | Switching between providers without touching the agents | 🗺️ Phase 16 ([design](docs/MULTICLOUD_AI.md)) |
 | AI (second provider) | Google Vertex AI | Alternative model provider + model benchmarking by mutation-score delta | 🗺️ Phase 16 ([design](docs/MULTICLOUD_AI.md)) |
 | Frontend | Next.js 16.3.6, React 19.2.8, TypeScript 5, ESLint 9 | `web-next/` dashboard | ✅ (lint + build pass; end-to-end checked in a browser locally) |
@@ -481,6 +506,7 @@ The rest of this section is about the first one — how the repo itself gets bui
 - [Demo script](docs/DEMO.md): 3-minute pitch and backup plan
 - [Deploy to Cloud Run](docs/DEPLOY.md): one-time GCP setup for the CD workflow
 - [Data platform (design)](docs/DATA_PLATFORM.md): run history on Postgres, Terraform on GCP, data-driven charts
+- [Multi-agent swarm (design)](docs/MULTI_AGENT_SWARM.md): parallel Test Writer / Verifier / Critic lanes per file, the return of IBM Bob's swarm design on watsonx.ai
 - [Frontend architecture](docs/ARCHITECTURE-front.md): the Next.js dashboard on Vercel
 - [watsonx.ai setup](docs/WATSONX_SETUP.md): IBM Cloud credentials for `narrative.py` / `watson_agent`
 - [Multicloud AI (design)](docs/MULTICLOUD_AI.md): adding Google Vertex AI alongside watsonx.ai, and benchmarking models
@@ -508,6 +534,11 @@ plain Vercel project (no IaC). See `PENDING.md` Phase 14 and
 [Database](#database-planned) and
 [Infrastructure as code](#infrastructure-as-code-planned) above
 (`PENDING.md` Phase 17). Design only.
+
+**Also planned: a real multi-agent swarm.** Parallel Test Writer / Verifier /
+Critic lanes, one per file, bringing back IBM Bob's swarm design on
+watsonx.ai. See [Multi-agent swarm (planned)](#multi-agent-swarm-planned)
+(`PENDING.md` Phase 18). Design only.
 
 **Also planned: multicloud AI.** watsonx.ai is the only provider today. See
 [`docs/MULTICLOUD_AI.md`](docs/MULTICLOUD_AI.md) (`PENDING.md` Phase 16) for

@@ -344,6 +344,32 @@ situation as `docs/DEPLOY.md`.
 
 ---
 
+## Phase 18 — Multi-agent swarm: parallel agent lanes
+**Priority: 2 · Depends on: 8 (fix loop); benchmark needs 11 · Optional: 16 (per-role providers) · Shares S2 with 17** — full design in `docs/MULTI_AGENT_SWARM.md`
+
+Brings back IBM Bob's parallel swarm design (`.bob/custom_modes.yaml`), rebuilt
+in-process: one lane per source file (Test Writer → Verifier → Critic, up to
+2 rounds), lanes in parallel in isolated sandboxes, one global Gate
+re-measure after fan-in. Kept behind `repoguard fix --swarm` until real runs
+show it's faster (H1) and at least as good (H2) as the sequential loop.
+
+| Block | Deliverable | Status |
+|---|---|---|
+| — | `docs/MULTI_AGENT_SWARM.md` — agents, parallelism, file contract, build order, verification | 🟢 |
+| S1 | Parallel mutation workers; `paths_to_mutate` accepts a file (today it silently finds 0 mutants); zero mutants is an error | 🔴 |
+| S2 | Per-mutant records (same as Phase 17 A2) | 🔴 |
+| S3 | Per-lane sandbox + owned-path write guard | 🔴 |
+| S4 | Lane state machine, thread pool, blackboard files, `timeline.jsonl` | 🔴 |
+| S5 | Read-only critic with JSON verdict; one revision round | 🔴 |
+| S6 | Fan-in, Gate, Publisher, Reporter | 🔴 |
+| S7 | Credential-free stub end-to-end test reaching the documented "after" numbers | 🔴 |
+| S8 | SSE lane events + web-next lanes view (below the cut line) | 🔴 |
+| S9 | Per-role AI providers (needs Phase 16) | 🔴 |
+| S10 | "Swarm over MCP" recipe for external MCP clients | 🔴 |
+| — | `verify.py phase18` | 🔴 |
+
+---
+
 ## Standalone tasks (not phase-blocked)
 
 - [ ] **Create `scripts/verify.py`** — accepts a phase name, runs the relevant checks, outputs PASS/FAIL with numbers pasteable into a PR description
