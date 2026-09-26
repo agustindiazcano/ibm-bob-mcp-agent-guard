@@ -27,8 +27,8 @@ and the SSE stream are pure measurement and don't change either way; gaps
 | 1 | ~~`web/server.py` has no `CORSMiddleware`~~ — fixed, `REPOGUARD_CORS_ORIGINS` env var (default `localhost:3000`) | any browser call from a Vercel origin | done |
 | 2 | — | (Gate needs no new endpoint — `/api/analyze?gate_threshold=N` already returns `passed_gate`) | — |
 | 3 | No `POST /api/fix` — the fix loop is CLI-only | Autofix button | ship v1 with it disabled; revisit once the fix loop *and* `docs/MULTICLOUD_AI.md`'s `ChatProvider` are both stable, so the endpoint isn't built twice |
-| 4 | No summary endpoint (`generate_summary` is MCP/CLI-only) | `SummaryPanel` | backend (`web/server.py`), ideally after `ai_providers.get_provider()` lands so it returns `provider` from day one |
-| 5 | `/api/stream`'s gate check hardcodes 80% and ignores threshold | live-progress gate readout | backend (`web/server.py`) |
+| 4 | ~~No summary endpoint~~ — fixed, `POST /api/summary` (body: `/api/analyze`'s dashboard; returns `{ok, text, error, provider}`, `provider` fixed to `"watsonx.ai"` until `ChatProvider` exists); CORS now allows `POST` | `SummaryPanel` | done |
+| 5 | ~~`/api/stream`'s gate check hardcodes 80%~~ — fixed, `gate_threshold` query param (default 80.0), same as `/api/analyze` | live-progress gate readout | done |
 | 6 | Nothing surfaces which AI provider ran (only watsonx.ai has ever existed) | `SummaryPanel` labeling, future Autofix result view | backend, once `ChatProvider` exists — add a `provider` field to gaps 3/4's future responses |
 
 ## Deliverables
