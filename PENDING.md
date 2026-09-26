@@ -249,12 +249,14 @@ contract. (This section absorbed the former satellite `PENDING-front.md`.)
 
 | # | Gap | Blocks | Status |
 |---|---|---|---|
-| 1 | `CORSMiddleware` — `REPOGUARD_CORS_ORIGINS` env var (default `localhost:3000`), `GET`+`POST` | any browser call from the frontend | 🟢 |
+| 1 | `CORSMiddleware` — `REPOGUARD_CORS_ORIGINS` env var (default `localhost:3000`), `GET`+`POST`. Cloud Run sets it to `https://ibm-bob-mcp-agent-guard.vercel.app` via `cd.yml`'s `env_vars` (PR #49), so it survives every deploy | any browser call from the frontend | 🟢 |
 | 2 | Gate needs no new endpoint — `/api/analyze?gate_threshold=N` already returns `passed_gate` | — | 🟢 |
-| 3 | No `POST /api/fix` — the fix loop is CLI-only | Autofix button | 🔴 revisit once the fix loop (Phase 11) *and* Phase 16's `ChatProvider` are both stable, so the endpoint isn't built twice |
+| 3 | No `POST /api/fix` — the fix loop is CLI-only | Autofix button | 🔴 unblocked — Phase 11 (live fix-loop run) and Phase 16 (`ChatProvider`) are both done. Open design questions before building: auth and rate limiting (credentialed, long-running, possibly PR-opening), and a run that outlives one HTTP request (the fix loop takes minutes) |
 | 4 | `POST /api/summary` — body: `/api/analyze`'s dashboard; returns `{ok, text, error, provider}` (PR #27) | `SummaryPanel` | 🟢 |
 | 5 | `/api/stream` takes `gate_threshold` (default 80.0) instead of a hardcoded 80% (PR #27) | live-progress gate readout | 🟢 |
 | 6 | `provider` on `/api/summary` comes from the provider actually used (`"watsonx"` or `"vertex"`, via `narrative.py`/`get_provider()`), on both `ok` paths | future Autofix result view | 🟢 add it to gap 3's response when that endpoint exists |
+| 7 | A nonexistent `repo_path` crashed `/api/analyze` with a raw 500 (`NotADirectoryError`) — now `core._require_repo_dir()` + 400 with `{"detail": "repo_path does not exist or is not a directory: …"}` (PR #47) | a readable error in the dashboard | 🟢 |
+| 8 | AI summary on the Cloud Run backend (the public demo). Needs: `REPOGUARD_AI_PROVIDER=vertex` + `VERTEX_PROJECT_ID` (live on the service; codified in `cd.yml` on `fix/vertex-import-error-detail`), the `[vertex]` extra in the image (`Dockerfile`, same branch — until it merges the live panel shows "google-genai import failed: No module named 'google'"), and `roles/aiplatform.user` for runtime SA `993240087609-compute@developer.gserviceaccount.com` (granted by hand, confirmed in the IAM policy; not yet in `infra/terraform/`). No secret needed: Vertex authenticates with the service account | `SummaryPanel` `ok=true` on the public demo | 🟡 merge `fix/vertex-import-error-detail`, then re-verify live |
 
 **Deliverables**
 
@@ -266,7 +268,8 @@ contract. (This section absorbed the former satellite `PENDING-front.md`.)
 | `StatCards` + `GapsList` + `RiskTable` | Coverage, mutation score, gaps, risk ranking — verbatim from `AnalyzeResponse`, no new numbers | 🟢 |
 | `SummaryPanel` | AI prose, labeled advisory + which provider generated it (PRs #26/#27) | 🟢 |
 | CI split | `frontend-ci.yml` (lint+build, `web-next/**` only) separate from backend `ci.yml`/`cd.yml` (`paths-ignore: web-next/**`) | 🟢 |
-| Vercel deploy | Connect repo/subfolder to Vercel; no IaC, config in `vercel.json` / project settings; `NEXT_PUBLIC_REPOGUARD_API_BASE` per environment | 🟢 deployed: https://ibm-bob-mcp-agent-guard.vercel.app/ — `NEXT_PUBLIC_REPOGUARD_API_BASE` now points at the real Cloud Run backend (`https://repoguard-ljm5hefnsq-uc.a.run.app`), `REPOGUARD_CORS_ORIGINS` on the service updated to allow the Vercel origin; verified end-to-end against the live public demo |
+| Vercel deploy | Connect repo/subfolder to Vercel; no IaC, config in `vercel.json` / project settings; `NEXT_PUBLIC_REPOGUARD_API_BASE` per environment | 🟢 https://ibm-bob-mcp-agent-guard.vercel.app/ wired to the real backend: `NEXT_PUBLIC_REPOGUARD_API_BASE=https://repoguard-ljm5hefnsq-uc.a.run.app` (Production + Preview, type "Config" — it's public by design, the browser calls it); `REPOGUARD_CORS_ORIGINS` on the service allows the Vercel origin (PR #49). Every merge to `main` redeploys automatically; verified end to end against the live public demo |
+| Error messages | Unreachable backend → "Can't reach the backend at `<URL>`…" naming both causes (stopped backend / CORS rejection look identical to the browser) (PR #48); non-2xx → the backend's `detail` instead of "analyze failed: 400" (PR #50) | 🟢 verified live |
 | Docs | `docs/ARCHITECTURE-front.md` updated to what's built (real `/api/summary` contract, closed gaps); `docs/ARCHITECTURE.md`'s section now a short summary pointing to it (kept as a satellite so front/back sessions don't edit the same paragraphs); deployed URL in `README.md` and `web-next/README.md`; real dashboard screenshots (light/dark, production build, `demo-repo` with mutation: 65.1%, 20.25% 16/79) in `README.md` → `docs/img/dashboard-*.png` | 🟢 |
 | Visual design | Layout, stat cards, gaps list, risk table with score bars, live-progress states, advisory-tagged summary, empty/error states, light + dark, mobile — CSS Modules, no new dependency; display-only formatting (numbers stay verbatim from the API) | 🟢 checked in Chrome against a real `repoguard serve` at 1280px light/dark and 390px, no console errors |
 
@@ -276,9 +279,16 @@ contract. (This section absorbed the former satellite `PENDING-front.md`.)
 `GET /api/stream` and `POST /api/summary` all 200, no CORS or console
 errors; dashboard showed coverage 65.1%, 4 gap files, risk table, gate FAIL;
 `SummaryPanel` showed the advisory title and "Summary unavailable:
-WATSONX_APIKEY and WATSONX_PROJECT_ID must be set…". Separately verified
-end-to-end against the real public deployment (Vercel → Cloud Run) — same
-result, same clean error path, CORS confirmed working.
+WATSONX_APIKEY and WATSONX_PROJECT_ID must be set…".
+
+**Verified live (public demo, `main` at `c8eca46`):** headless Chrome on
+https://ibm-bob-mcp-agent-guard.vercel.app/ → Analyze `./demo-repo` (no
+mutation): `GET /api/stream`, `GET /api/analyze`, `POST /api/summary` against
+`https://repoguard-ljm5hefnsq-uc.a.run.app` all 200 in ~6 s, no CORS or
+console errors; coverage 65.1% (112/172), 4 gap files, gate FAIL — matches
+`AGENTS.md §7`. Repo path `./no-such-repo` → "repo_path does not exist or is
+not a directory: no-such-repo". Summary panel → "Summary unavailable:
+google-genai import failed: No module named 'google'" (gap 8).
 
 **Not yet verified:** the `ok=true` summary path (real generated text,
 "Generated by vertex" — the deployed service is configured for Vertex, not
@@ -289,10 +299,9 @@ restriction, not a project decision). The `[vertex]` extra fix
 (`Dockerfile`) is still not on `main`: it was pushed to `fix/cd-cors-vercel-origin`
 *after* that branch had already been merged as PR #49, so it never actually
 shipped — recovered onto `fix/vertex-import-error-detail`, not yet merged.
-Confirmed live, twice, same error both times: `ok=false`,
-`"google-genai is not installed"` — check `git log
-origin/main..origin/fix/vertex-import-error-detail` before assuming this is
-fixed on `main`.
+Check `git log origin/main..origin/fix/vertex-import-error-detail` before
+assuming this is fixed on `main`. Also not verified: Analyze *with* mutation
+on Cloud Run (~270 s locally — may hit Cloud Run's request timeout).
 
 **Known issues**
 
@@ -302,6 +311,7 @@ fixed on `main`.
 | `/api/stream` stuck at "Running pytest with coverage…" — `/api/analyze` was `async def` running the pipeline synchronously, blocking the event loop while `web-next` had both open | 🟢 fixed (PR #30) |
 | Under `next dev`, `POST /api/summary` fired twice (React StrictMode double mount) — two paid watsonx.ai calls per local test with real credentials | 🟢 fixed (PR #29) (summary requested once, right after `/api/analyze` returns; stale summaries dropped) |
 | `web-next` runs `/api/analyze` and `/api/stream` concurrently → two pytest-cov runs sharing `.coverage`/`coverage.json` at fixed paths in the target repo (could erase each other's data) | 🟢 fixed (PR #32) (`measure_coverage()` uses a per-run temp dir; 4 parallel runs all 65.12%) |
+| Vercel served stale builds after the env var change: `NEXT_PUBLIC_*` is inlined at build time, so saving the variable alone changes nothing; a manual "Redeploy" of an older deployment then became the newest Production build and shadowed the later merges (#48/#50), and a "Promote" of the wrong row rolled back to a `127.0.0.1:8000` build | 🟢 resolved — verified the live JS now contains the Cloud Run URL and PR #48/#50's code (a fresh build from current `main`). Rule: after changing a Vercel env var, Redeploy the **newest `main`** deployment, never an older row. Check which build is live by searching the served JS for the API base URL |
 
 ---
 

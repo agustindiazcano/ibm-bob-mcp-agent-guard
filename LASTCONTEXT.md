@@ -524,8 +524,6 @@ Deliberately deferred, not done here: the 3 project-level IAM roles on `repoguar
 
 Demo-repo's tests/ were restored to the documented weak baseline (5 passed, 65.1%, 20.25%/16/79) after each Phase 11 attempt, including the successful one — Phase 11's AI-written tests were real and passing but were never meant to permanently replace the baseline every other check and doc depends on, same rule as Plan B's reference tests.
 
----
-
 ### Session 21 — Frontend punch list: PR #48 (parallel), CORS + Vertex-on-Cloud-Run (PRs #49/#50, then a stray-commit chase)
 
 Two sessions worked in parallel against a shared punch list the frontend
@@ -555,6 +553,18 @@ confirms `roles/aiplatform.user` granted to
 re-verified**: `ok: true` from `/api/summary` against the live service —
 that needs the pending branch above to actually merge this time.
 
+### Session 21-front — frontend side of the same punch list (parallel Opus session, worktree `ibm-bob-mcp-agent-guard-frontend`)
+
+Only what Session 21 above doesn't already cover.
+
+| # | Action | Files / PR |
+|---|---|---|
+| 1 | Frontend context docs brought up to date with `main` (real `/api/summary` contract, closed gaps, Vercel URL, 7 README lines still calling Vertex unbuilt) | PR #43 |
+| 2 | Visual design: card layout, stat cards, gaps list, risk table with score bars (bar width = the engine's own 0–1 score), live-progress states, advisory-tagged summary, light/dark, mobile. CSS Modules, no new dependency | PR #44 |
+| 3 | Non-2xx responses show FastAPI's `detail` (pairs with PR #47's 400 for a bad `repo_path`); over HTTP/2 `statusText` is empty, so the old fallback showed just "analyze failed: 400" | PR #50 |
+| 4 | Verified the public demo live in Chrome (Vercel → Cloud Run): 3 calls 200 in ~6 s, 65.1% (112/172), 4 gap files, gate FAIL, bad path → "repo_path does not exist…", summary → "google-genai import failed" (the pending branch above) | `PENDING.md` Phase 14 "Verified live" |
+| 5 | Found while verifying: Vercel kept serving stale builds. `NEXT_PUBLIC_*` is inlined at build time; a manual Redeploy of an *older* deployment became the newest Production build and shadowed #48/#50, and one Promote rolled back to a `127.0.0.1:8000` build. Rule: after changing a Vercel env var, Redeploy the **newest `main`** deployment; check which build is live by searching the served JS for the API URL | `PENDING.md` Phase 14 known issues, `docs/ARCHITECTURE-front.md`, `web-next/README.md` |
+
 ---
 
 ## Current repo state
@@ -562,7 +572,7 @@ that needs the pending branch above to actually merge this time.
 - Branch: `main` — PR #37 (Phase 16 + 13 WIF), #38 (doc fixes), #39 (Phase 17 B1 Terraform), #40 (session log), #41 (cd.yml trim fix), #42 (cli graceful failure), #43 (frontend context docs), #44 (dashboard visual design), #45 (Phase 11 Gemini 3 + `run_tests` + `thought_signature` fixes), #46 (Phase 17/18 planning corrections), #47 (`/api/analyze` 400-vs-500 fix), #48 (frontend: clear backend-unreachable error + real screenshots) all merged
 - Pending: `fix/vertex-import-error-detail` branch (not yet a PR) — `REPOGUARD_AI_PROVIDER=vertex`, `VERTEX_PROJECT_ID` in `cd.yml`, `[vertex]` extra in `Dockerfile`, plus `vertex.py`'s clearer ImportError message. `fix/cd-cors-vercel-origin` (PR #49) is merged but only got as far as the CORS env var — its `Dockerfile`/docs commits were pushed too late and had to be recovered onto this branch (Session 21 item 5) — that branch is deleted now, don't look for it
 - Phase 0/3/7/8/9/13/15/16: 🟢. Phase 11: 🟢 (see Session 20) — first genuinely successful live AI fix-loop run, 89.87%/71/79. Phase 17 B1/B2: 🟢 (Terraform-managed WIF)
-- Phase 14: 🟡 — PR #43 closed gaps 4/5/6, PR #44 added visual design, PR #48 added a clear backend-unreachable error + real production screenshots. `NEXT_PUBLIC_REPOGUARD_API_BASE` now points at the real Cloud Run URL (Vercel, type "Config" not "Secret" since it's not sensitive), verified end-to-end including CORS. Remaining: gap 3 (Autofix, `POST /api/fix`); the summary's real `ok=true` path needs the pending branch above merged and redeployed, then re-verified for real (IAM grant is already done)
+- Phase 14: 🟡 — PR #43 closed gaps 4/5/6, PR #44 added visual design, PR #48 added a clear backend-unreachable error + real production screenshots, PR #50 shows the backend's error `detail`. `NEXT_PUBLIC_REPOGUARD_API_BASE` now points at the real Cloud Run URL (Vercel, type "Config" not "Secret" since it's not sensitive), verified end-to-end including CORS (Session 21-front). Remaining: gap 3 (Autofix, `POST /api/fix` — unblocked, needs an auth/job design); the summary's real `ok=true` path needs the pending branch above merged and redeployed, then re-verified for real (IAM grant is already done); Analyze *with* mutation against Cloud Run's request timeout is unchecked
 - Phase 17 A1-A3 (DB store) and C1-C2 (charts) still 🔴, but `docs/DATA_PLATFORM.md` §13 now has a corrected, step-by-step Block A build plan (Session 20) — build from that, not the doc's original sketch
 - Phase 18 (swarm) still 🔴, `docs/MULTI_AGENT_SWARM.md` §14 now has a corrected S0–S8 plan + 15 risks (Session 20) — Phase 11's merge (PR #45) clears its §14 R1 blocker; demo-repo's 71/79 ceiling still means H2 can only tie there (§14 R2)
 - IBM Bob is retired. `.bob/` stays on disk as inert legacy (`.bob/DEPRECATED.md`); `repoguard_engine/watson_agent/` is the live replacement.
@@ -579,6 +589,6 @@ that needs the pending branch above to actually merge this time.
 2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16`, `multicloud` to confirm baseline holds.
 3. IAM grant is done. Open/merge `fix/vertex-import-error-detail` (not `fix/cd-cors-vercel-origin` — that one's already merged and deleted) — that's what's actually needed for the `[vertex]` extra to reach the deployed image. Re-test `POST /api/summary` against the live service afterward, and watch for the same "pushed after merge" race before assuming any branch is fully landed (Session 21 item 5).
 4. Build Phase 17/18 from `docs/DATA_PLATFORM.md` §13 / `docs/MULTI_AGENT_SWARM.md` §14, not their original sketches.
-5. Autofix (`POST /api/fix`, Phase 14 gap 3) is the last open frontend punch-list item.
+5. Autofix (`POST /api/fix`, Phase 14 gap 3) is the last open frontend punch-list item. If you change a Vercel env var, Redeploy the **newest `main`** deployment, never an older row (`docs/ARCHITECTURE-front.md`, Session 21-front item 5).
 6. If tightening `repoguard-deployer`'s IAM roles, or moving the new `aiplatform.user` grant into Terraform: read `infra/terraform/README.md`'s "Known gap" section first — real permissions change against a live project, own PR.
 7. The repo-rename decision is open and low-urgency — decide whenever, it's cosmetic.
