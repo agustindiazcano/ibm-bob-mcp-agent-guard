@@ -30,7 +30,7 @@ IBM Bob Hackaton Ranking (Bob IDE ussage):
 - [What it does](#what-it-does)
 - [How it works](#how-it-works)
 - [Is it multi-agent?](#is-it-multi-agent)
-- [Multi-agent swarm (planned)](#multi-agent-swarm-planned)
+- [Multi-agent swarm (in progress)](#multi-agent-swarm-in-progress)
 - [Evaluation & guardrails (planned)](#evaluation--guardrails-planned)
 - [Quick start](#quick-start)
 - [Commands](#commands)
@@ -41,7 +41,7 @@ IBM Bob Hackaton Ranking (Bob IDE ussage):
 - [CI/CD](#cicd)
 - [Deploy to Google Cloud](#deploy-to-google-cloud)
 - [Database (in progress)](#database-in-progress)
-- [Infrastructure as code (planned)](#infrastructure-as-code-planned)
+- [Infrastructure as code](#infrastructure-as-code)
 - [IBM Bob Usage](#ibm-bob-usage)
 - [AI-Assisted Development](#ai-assisted-development)
 - [Documentation](#documentation)
@@ -136,7 +136,7 @@ After both, the orchestrator re-measures deterministically. Both agents use the 
 The engine is also exposed through **MCP** (9 tools), so external agents such as Claude Code or any other MCP client can call the same measurements. The fix loop itself calls the engine directly rather than through MCP.
 
 **What it is not (yet):**
-- **Not a parallel swarm yet.** A parallel multi-agent design for IBM Bob exists in `.bob/`, but it was retired before its first full run (`.bob/DEPRECATED.md`). Its return, rebuilt on watsonx.ai, is planned: see [Multi-agent swarm (planned)](#multi-agent-swarm-planned).
+- **Not a parallel swarm yet.** A parallel multi-agent design for IBM Bob exists in `.bob/`, but it was retired before its first full run (`.bob/DEPRECATED.md`). Its return, rebuilt on watsonx.ai, is planned: see [Multi-agent swarm (in progress)](#multi-agent-swarm-in-progress).
 - **Multicloud, for real.** The `ChatProvider` abstraction (`repoguard_engine/ai_providers/`) is implemented; both watsonx.ai and Google Vertex AI (Gemini) run through it, `REPOGUARD_AI_PROVIDER`/`--provider` select which — see [`docs/MULTICLOUD_AI.md`](docs/MULTICLOUD_AI.md) (`PENDING.md` Phase 16).
 
 ```mermaid
@@ -155,7 +155,7 @@ flowchart TB
 | `repoguard analyze [--summarize]` | Only with `--summarize` | Deterministic pipeline; `--summarize` adds one watsonx.ai call for prose, never a metric |
 | `repoguard gate` (CI) | No | Deterministic pipeline |
 
-## Multi-agent swarm (planned)
+## Multi-agent swarm (in progress)
 
 > `PENDING.md` Phase 18. **Built (Step 0):** groundwork only — the fix loop
 > now takes an injectable `ChatProvider`, reports per-stage wall time, and a
@@ -299,16 +299,16 @@ Status key: ✅ implemented and running in this repo · ⚠️ implemented but n
 | Legacy UI | Static HTML served by FastAPI | `repoguard serve` dashboard | ✅ |
 | Charts (docs) | matplotlib (`[docs]` extra) | README before/after image | ✅ |
 | Charts (dashboard) | Recharts | Trend, survival-by-operator and fix-effect charts | 🗺️ Phase 17 ([design](docs/DATA_PLATFORM.md#6-charts-web-next-dashboard)) |
-| Container | Docker (`python:3.11-slim`) | Single image for Cloud Run | ⚠️ Dockerfile written; the served command was tested directly, the image build hasn't run yet |
+| Container | Docker (`python:3.11-slim`) | Single image for Cloud Run | ✅ builds and deploys via `cd.yml` |
 | CI | GitHub Actions: `ci.yml`, `frontend-ci.yml` | Verify checks, tests, coverage gate, mutation determinism, frontend lint/build | ✅ green on `main` |
-| CD | GitHub Actions: `cd.yml` | Build → Artifact Registry → Cloud Run | ⚠️ fails at the Google auth step on every push to `main` until the one-time GCP setup is done ([`docs/DEPLOY.md`](docs/DEPLOY.md)) |
-| Cloud (backend) | Google Cloud Run, Artifact Registry | Hosting the API + dashboard | ⚠️ not deployed yet (human GCP setup pending) |
+| CD | GitHub Actions: `cd.yml` | Build → Artifact Registry → Cloud Run | ✅ deploys on every push to `main` via Workload Identity Federation ([`docs/DEPLOY.md`](docs/DEPLOY.md)) |
+| Cloud (backend) | Google Cloud Run, Artifact Registry | Hosting the API + dashboard | ✅ deployed and live, called by the Vercel frontend below |
 | Cloud (frontend) | Vercel | Hosting `web-next/` | ✅ deployed: https://ibm-bob-mcp-agent-guard.vercel.app/, calling the Cloud Run backend (`NEXT_PUBLIC_REPOGUARD_API_BASE`) |
 | Database | PostgreSQL 16 (Cloud SQL planned); SQLite locally | Run history per commit | 🟡 store built and verified on SQLite + Postgres 16 (Phase 17 A1, `verify.py phase17-store`); Cloud SQL not provisioned ([design](docs/DATA_PLATFORM.md#4-database-design)) |
 | Data access | SQLAlchemy 2 (Core), psycopg 3 (`[db]` extra) | One code path for SQLite and Postgres | ✅ `repoguard_engine/store/` |
-| Infrastructure as code | Terraform (google, random providers), GCS remote state | Provisioning GCP | 🗺️ Phase 17 ([design](docs/DATA_PLATFORM.md#8-infrastructure-as-code-terraform)) |
-| Secrets | Google Secret Manager | Database password | 🗺️ Phase 17 |
-| CD authentication | Workload Identity Federation (GitHub OIDC) | Replacing the JSON service-account key | 🗺️ Phase 17 |
+| Infrastructure as code | Terraform (google, random providers), local state (gitignored) | Provisioning GCP | ✅ CI/CD identity (Artifact Registry, deployer SA, WIF); Cloud SQL/Secret Manager still 🗺️ Phase 17 ([design](docs/DATA_PLATFORM.md#8-infrastructure-as-code-terraform)) |
+| Secrets | Google Secret Manager | Database password | 🗺️ Phase 17 (not needed until Cloud SQL exists) |
+| CD authentication | Workload Identity Federation (GitHub OIDC) | Replacing the JSON service-account key | ✅ done since Phase 13, now Terraform-managed |
 | User accounts | Google Identity Platform | Optional sign-in for the dashboard | 🗺️ Phase 17, below the cut line |
 | Version control | git | `repoguard fix --publish`: branch, commit, push | ✅ |
 | Diagrams | Mermaid | Architecture and ER diagrams in the docs | ✅ |
@@ -321,10 +321,16 @@ Status key: ✅ implemented and running in this repo · ⚠️ implemented but n
 ibm-bob-mcp-agent-guard/
 ├── .bob/                           Where IBM Bob built Phases 0–8 (docs/IBM_BOB_USAGE.md); config kept for history
 ├── .github/workflows/
-│   ├── ci.yml                      Backend CI: verify.py checks, demo-repo tests, coverage gate, mutation determinism
+│   ├── ci.yml                      Backend CI: verify.py checks, demo-repo tests, coverage gate, mutation determinism, scripted fix loop, store round trip
 │   ├── frontend-ci.yml             web-next/ lint + build (path-filtered)
+│   ├── infra-ci.yml                terraform fmt -check + validate (path-filtered, no credentials)
 │   └── cd.yml                      Build image → Artifact Registry → deploy to Cloud Run on push to main
 ├── Dockerfile                      Single image: `repoguard serve` + bundled demo-repo/
+│
+├── infra/terraform/                CI/CD identity (Artifact Registry, deployer SA, WIF pool/provider) — codifies Phase 13, applied for real
+├── scripts/
+│   ├── verify.py                   Phase verification gate — every PENDING.md phase has a check here
+│   └── verify_phase17.py           Store round-trip checks (imported by verify.py)
 │
 ├── repoguard_engine/               Core library + all entry points
 │   ├── __init__.py
@@ -334,6 +340,7 @@ ibm-bob-mcp-agent-guard/
 │   ├── narrative.py                AI prose summary of an already-measured dashboard (never a metric source)
 │   ├── ai_providers/               ChatProvider abstraction: base.py, watsonx.py, vertex.py
 │   ├── watson_agent/               AI fix loop: guarded tools, prompts, orchestrator
+│   ├── testing/                    Credential-free ScriptedProvider (Phase 18 Step 0) — drives the fix loop with no AI credentials
 │   ├── store/                      Run history (optional [db] extra): run record, SQLAlchemy tables + views, writer
 │   ├── pipeline.py                 Ordered pipeline: measure → gaps → risk → gate
 │   ├── cli.py                      CLI entry point: analyze | fix | gate | serve | mcp
@@ -360,10 +367,16 @@ ibm-bob-mcp-agent-guard/
 │
 ├── docs/
 │   ├── ARCHITECTURE.md             Layer diagram, data flow, MCP tool list
+│   ├── ARCHITECTURE-front.md       The web-next/ Next.js dashboard on Vercel
 │   ├── DEMO.md                     3-minute demo script
 │   ├── DEPLOY.md                   One-time GCP setup for the Cloud Run deploy
-│   ├── DATA_PLATFORM.md            Phase 17: run history on Postgres (store built, A1), Terraform, data-driven charts
-│   ├── WATSONX_SETUP.md            Getting IBM Cloud credentials for narrative.py / watson_agent
+│   ├── DATA_PLATFORM.md            Phase 17: run history on Postgres (store built, A1), Terraform (WIF built), data-driven charts
+│   ├── MULTICLOUD_AI.md            ChatProvider abstraction — watsonx.ai + Vertex AI, both built and live-verified
+│   ├── WATSONX_SETUP.md            IBM Cloud credentials for the default AI provider
+│   ├── VERTEX_SETUP.md             GCP credentials for the Vertex AI provider
+│   ├── MULTI_AGENT_SWARM.md        Phase 18 swarm design — Step 0 (groundwork) built, lanes still design
+│   ├── EVAL_GUARDRAILS_PLAN.md            Phase 19 plan: fix-loop guardrails, evaluation, benchmark
+│   ├── EVAL_GUARDRAILS_IMPLEMENTATION.md  Phase 19 build steps and verify.py checks
 │   ├── AI_ASSISTED_DEVELOPMENT_FRAMEWORK.md  How this project itself is built (Claude, file-based contract)
 │   ├── make_results_chart.py       Generates the before/after results chart
 │   ├── expected-after-tests/       Reference tests (copy here to verify "after" numbers)
@@ -383,13 +396,14 @@ ibm-bob-mcp-agent-guard/
 
 ## CI/CD
 
-Three GitHub Actions workflows, split so a frontend-only change never
-triggers the Python/mutation pipeline or a Cloud Run deploy:
+Four GitHub Actions workflows, split so a frontend-only or infra-only change
+never triggers the Python/mutation pipeline or a Cloud Run deploy:
 
 | Workflow | Trigger | What it runs |
 |---|---|---|
-| [`ci.yml`](.github/workflows/ci.yml) | Push to `main`, every PR (ignores `web-next/**`) | `verify.py phase0` + `phase7`, demo-repo pytest, `repoguard gate demo-repo --threshold 60`; a separate slower job runs `verify.py phase3` (two full mutation runs, must match 16/79) |
+| [`ci.yml`](.github/workflows/ci.yml) | Push to `main`, every PR (ignores `web-next/**`) | 4 jobs: `quality-gate` (`verify.py phase0`/`phase7`, demo-repo pytest, `repoguard gate --threshold 60`), `mutation-determinism` (`phase3`, two full runs must match 16/79), `fix-loop-stub` (`phase18-seq-stub`, scripted fix loop), `store` (`phase17-store`/`phase17-pipeline` against real SQLite + Postgres 16) |
 | [`frontend-ci.yml`](.github/workflows/frontend-ci.yml) | Changes under `web-next/**` | `npm run lint` + `npm run build` |
+| [`infra-ci.yml`](.github/workflows/infra-ci.yml) | Changes under `infra/terraform/**` | `terraform fmt -check` + `terraform validate`, no GCP credentials needed |
 | [`cd.yml`](.github/workflows/cd.yml) | Push to `main` (ignores `web-next/**`), or manual | Builds the `Dockerfile`, pushes to Artifact Registry, deploys to Cloud Run |
 
 The coverage gate threshold (60%) sits just under the measured 65.1%
@@ -458,20 +472,25 @@ outcome of each test.
 | Build order and cut line | [§10](docs/DATA_PLATFORM.md#10-build-steps-two-day-hackathon-order) |
 | Verification (`verify.py phase17`) | [§11](docs/DATA_PLATFORM.md#11-verification) |
 
-## Infrastructure as code (planned)
+## Infrastructure as code
 
-> Design only (`PENDING.md` Phase 17, blocks B1–B2).
+> `PENDING.md` Phase 17, blocks B1–B2. **Built:** the CI/CD identity — Artifact
+> Registry, the `repoguard-deployer` service account + roles, and the
+> Workload Identity Federation pool/provider that lets `cd.yml` deploy
+> without a JSON key. **Not yet:** Cloud SQL, Secret Manager and the rest of
+> the database infrastructure (waits on Phase 17 Block A2/A3, since Terraform
+> shouldn't provision what the app doesn't use yet).
 
-**Terraform** (`infra/terraform/`, not created yet) will replace the manual
-`gcloud` steps in `docs/DEPLOY.md` and add the database: Artifact Registry,
-Cloud SQL PostgreSQL 16, Secret Manager for the DB password, the Cloud Run
-service (with the Cloud SQL socket and a 900 s timeout for mutation runs),
-and Workload Identity Federation so `cd.yml` no longer needs a JSON key.
-Terraform owns the service definition; CD keeps deploying the image.
-Terraform covers the backend only: the frontend stays on Vercel.
-`terraform apply` needs a person with GCP access and billing, the same as
-today's `docs/DEPLOY.md`. Full layout and decisions:
-[`docs/DATA_PLATFORM.md` §8](docs/DATA_PLATFORM.md#8-infrastructure-as-code-terraform).
+**Terraform** (`infra/terraform/`) codifies the WIF identity that
+`docs/DEPLOY.md` §1 originally created by hand via `gcloud` for Phase 13 —
+`terraform import` adopted the live resources, and `terraform plan` against
+the real project confirms "No changes" (`infra/terraform/README.md`).
+`infra-ci.yml` runs `terraform fmt -check` + `validate` on every change under
+`infra/terraform/**`, with no credentials. Terraform owns identity only; CD
+keeps deploying the image, and the frontend stays on Vercel, outside
+Terraform's scope. `terraform apply` for anything new still needs a person
+with GCP access and billing, same as `docs/DEPLOY.md`. Full layout and
+decisions: [`docs/DATA_PLATFORM.md` §8](docs/DATA_PLATFORM.md#8-infrastructure-as-code-terraform).
 
 ## IBM Bob Usage
 
@@ -622,15 +641,19 @@ GCP infrastructure: it ships as a plain Vercel project, with its own
 path-filtered CI (`.github/workflows/frontend-ci.yml`). See `PENDING.md`
 Phase 14 and `docs/ARCHITECTURE-front.md`.
 
-**In progress: run history, Postgres and Terraform for the backend.** See
-[Database](#database-in-progress) (the store is built, Phase 17 A1) and
-[Infrastructure as code](#infrastructure-as-code-planned) above
-(`PENDING.md` Phase 17).
+**In progress: run history for the backend.** The store is built and
+verified on SQLite + real Postgres (Phase 17 A1); the CI/CD identity is
+already Terraform-managed (blocks B1–B2). What's left is Cloud SQL +
+Secret Manager, per-mutant/per-test history (A2), read routes (A3) and
+dashboard charts (C). See [Database](#database-in-progress) and
+[Infrastructure as code](#infrastructure-as-code) above (`PENDING.md`
+Phase 17).
 
-**Also planned: a real multi-agent swarm.** Parallel Test Writer / Verifier /
-Critic lanes, one per file, bringing back IBM Bob's swarm design on
-watsonx.ai. See [Multi-agent swarm (planned)](#multi-agent-swarm-planned)
-(`PENDING.md` Phase 18). Design only.
+**In progress: a real multi-agent swarm.** Step 0 (groundwork) is built —
+injectable provider, per-stage timing, a credential-free `ScriptedProvider`.
+The parallel lanes themselves (Test Writer / Verifier / Critic per file) are
+still design. See [Multi-agent swarm (in progress)](#multi-agent-swarm-in-progress)
+(`PENDING.md` Phase 18).
 
 **Also planned: evaluation and guardrails for the fix loop.** Controls that
 stop it from inflating its own score, and a benchmark with repeats, a
