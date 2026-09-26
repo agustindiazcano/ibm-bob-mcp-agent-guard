@@ -17,12 +17,13 @@ from __future__ import annotations
 
 import json
 import subprocess
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from ..ai_providers import get_provider
+from ..ai_providers import ChatProvider, get_provider
 from ..pipeline import run_pipeline
 from .prompts import CRITIC_PROMPT, TEST_WRITER_PROMPT
 from .tools import TOOL_REGISTRY, TOOL_SCHEMAS, SourceEditRejected
@@ -43,6 +44,22 @@ class FixResult:
     critic_notes: list[str] = field(default_factory=list)
     published: bool = False
     evidence_path: str | None = None
+    # One row per AI stage: {"file", "stage", "wall_s", "llm_calls", "tool_calls"}.
+    stages: list[dict] = field(default_factory=list)
+    # Wall seconds per phase: "baseline", "ai", "remeasure", "total". Phase 18's
+    # H1 (swarm vs sequential speed) needs these; Phase 11's run recorded none.
+    wall_s: dict[str, float] = field(default_factory=dict)
+
+
+@dataclass
+class StageResult:
+    """What one chat-with-tools stage did: the model's final text, the tools it
+    called in order, how many chat() round trips it took, and its wall time."""
+
+    content: str
+    tool_calls: list[str] = field(default_factory=list)
+    llm_calls: int = 0
+    wall_s: float = 0.0
 
 
 def _priority_files(risk: list) -> list[str]:
@@ -51,32 +68,50 @@ def _priority_files(risk: list) -> list[str]:
     return [r.file for r in risk[:MAX_FILES_PER_RUN]]
 
 
-def _run_chat_stage(model, system_prompt: str, user_prompt: str, repo_path: str) -> str:
+def _run_chat_stage(
+    model: ChatProvider,
+    system_prompt: str,
+    user_prompt: str,
+    repo_path: str,
+    *,
+    schemas: list[dict] = TOOL_SCHEMAS,
+    registry: dict[str, Callable[..., dict]] = TOOL_REGISTRY,
+) -> StageResult:
     """One chat-with-tools stage against the configured AI provider, looping
     on tool calls until the model returns plain content or the round-trip
-    cap is hit."""
+    cap is hit.
+
+    schemas/registry default to the full fix-loop toolset; a caller can pass
+    a narrower pair (e.g. a critic with no write tool). A tool the model
+    calls that isn't in `registry` is reported back as an error, never run."""
+    started = time.perf_counter()
+    stage = StageResult(content="")
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
 
     for _ in range(MAX_TOOL_ROUNDS_PER_STAGE):
-        response = model.chat(messages=messages, tools=TOOL_SCHEMAS)
+        response = model.chat(messages=messages, tools=schemas)
+        stage.llm_calls += 1
         message = response["choices"][0]["message"]
         messages.append(message)
         tool_calls = message.get("tool_calls") or []
         if not tool_calls:
-            return message.get("content", "") or ""
+            stage.content = message.get("content", "") or ""
+            stage.wall_s = time.perf_counter() - started
+            return stage
 
         for call in tool_calls:
             name = call["function"]["name"]
+            stage.tool_calls.append(name)
             try:
                 args = json.loads(call["function"]["arguments"] or "{}")
             except json.JSONDecodeError:
                 args = {}
             args["repo_path"] = repo_path
             try:
-                tool_fn = TOOL_REGISTRY[name]
+                tool_fn = registry[name]
             except KeyError:
                 result = {"error": f"no such tool: {name}"}
             else:
@@ -100,7 +135,9 @@ def _run_chat_stage(model, system_prompt: str, user_prompt: str, repo_path: str)
                 }
             )
 
-    return "(stopped: exceeded tool-call round trip limit for this stage)"
+    stage.content = "(stopped: exceeded tool-call round trip limit for this stage)"
+    stage.wall_s = time.perf_counter() - started
+    return stage
 
 
 def run_fix_loop(
@@ -110,6 +147,7 @@ def run_fix_loop(
     publish: bool = False,
     provider: str | None = None,
     on_event: Callable[[str, dict], None] | None = None,
+    model: ChatProvider | None = None,
 ) -> FixResult:
     """
     Run the full AI fix loop against repo_path.
@@ -130,22 +168,32 @@ def run_fix_loop(
     each stage boundary (web/fix_job.py streams these to the browser). It
     only reports what already happened; it never changes what the loop does.
 
+    model: an already-built ChatProvider to use instead of calling
+    get_provider(); `provider` is ignored when it's set. Not exposed on the
+    CLI -- it exists so tests can inject a scripted, credential-free
+    provider (repoguard_engine/testing/scripted_provider.py).
+
     Raises AIProviderError immediately if the selected provider's
     credentials aren't set -- checked before the (multi-minute) mutation
     baseline runs, not after, so a missing-credentials failure is instant
     rather than waiting on a measurement that was going to be thrown away
     anyway.
     """
+    started = time.perf_counter()
     emit = on_event or (lambda _type, _data: None)
-    model = get_provider(provider=provider)
+    if model is None:
+        model = get_provider(provider=provider)
 
     repo = str(Path(repo_path).resolve())
     emit("baseline_start", {})
+    phase_started = time.perf_counter()
     baseline = run_pipeline(repo, include_mutation=True, include_endpoints=True, gate_threshold=gate_threshold)
     result = FixResult(repo_path=repo, baseline=baseline.dashboard)
+    result.wall_s["baseline"] = time.perf_counter() - phase_started
     files = _priority_files(baseline.risk)
     emit("baseline_done", {"dashboard": baseline.dashboard, "files": files})
 
+    phase_started = time.perf_counter()
     for file_rel in files:
         result.files_attempted.append(file_rel)
         emit("writer_start", {"file": file_rel})
@@ -157,24 +205,40 @@ def run_fix_loop(
             "Read this file, then write one pytest test file under tests/ "
             "that kills as many of the surviving mutants as possible."
         )
-        _run_chat_stage(model, TEST_WRITER_PROMPT, writer_prompt, repo)
+        writer = _run_chat_stage(model, TEST_WRITER_PROMPT, writer_prompt, repo)
+        result.stages.append(_stage_row(file_rel, "writer", writer))
 
         emit("critic_start", {"file": file_rel})
         critic_prompt = f"Review whatever test file(s) were just written for {file_rel}."
-        notes = _run_chat_stage(model, CRITIC_PROMPT, critic_prompt, repo)
-        result.critic_notes.append(f"{file_rel}: {notes}")
+        critic = _run_chat_stage(model, CRITIC_PROMPT, critic_prompt, repo)
+        result.stages.append(_stage_row(file_rel, "critic", critic))
+        result.critic_notes.append(f"{file_rel}: {critic.content}")
+    result.wall_s["ai"] = time.perf_counter() - phase_started
 
     emit("remeasure_start", {})
+    phase_started = time.perf_counter()
     after = run_pipeline(repo, include_mutation=True, include_endpoints=True, gate_threshold=gate_threshold)
     result.after = after.dashboard
+    result.wall_s["remeasure"] = time.perf_counter() - phase_started
     emit("remeasure_done", {"dashboard": after.dashboard, "passed_gate": after.passed_gate})
 
     if publish and after.passed_gate:
         _publish(repo)
         result.published = True
 
+    result.wall_s["total"] = time.perf_counter() - started
     result.evidence_path = _write_evidence(repo, result)
     return result
+
+
+def _stage_row(file_rel: str, stage: str, outcome: StageResult) -> dict:
+    return {
+        "file": file_rel,
+        "stage": stage,
+        "wall_s": round(outcome.wall_s, 3),
+        "llm_calls": outcome.llm_calls,
+        "tool_calls": outcome.tool_calls,
+    }
 
 
 def _publish(repo_path: str) -> None:
@@ -207,7 +271,21 @@ def _write_evidence(repo_path: str, result: FixResult) -> str:
         f"Files attempted: {', '.join(result.files_attempted) or '(none)'}\n\n"
         f"## Before\n```json\n{json.dumps(result.baseline, indent=2)}\n```\n\n"
         f"## After\n```json\n{json.dumps(result.after, indent=2)}\n```\n\n"
+        f"{_timing_section(result)}\n\n"
         "## Critic notes\n" + "\n\n".join(result.critic_notes),
         encoding="utf-8",
     )
     return str(path)
+
+
+def _timing_section(result: FixResult) -> str:
+    """Wall time per phase and per AI stage, as measured by run_fix_loop."""
+    lines = ["## Timing", "", "| Phase | Wall s |", "|---|---|"]
+    lines += [f"| {phase} | {seconds:.1f} |" for phase, seconds in result.wall_s.items()]
+    lines += ["", "| File | Stage | Wall s | LLM calls | Tools called |", "|---|---|---|---|---|"]
+    lines += [
+        f"| {row['file']} | {row['stage']} | {row['wall_s']:.1f} | {row['llm_calls']} | "
+        f"{', '.join(row['tool_calls']) or '(none)'} |"
+        for row in result.stages
+    ]
+    return "\n".join(lines)
