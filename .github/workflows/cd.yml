@@ -3,6 +3,10 @@ name: CD — Deploy to Cloud Run
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "web-next/**"
+      - "docs/ARCHITECTURE-front.md"
+      - "PENDING-front.md"
   workflow_dispatch: {}
 
 # Requires repo-level configuration a human sets up once — see docs/DEPLOY.md.
