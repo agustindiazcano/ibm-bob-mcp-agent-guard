@@ -61,8 +61,11 @@ export async function fetchSummary(result: AnalyzeResponse): Promise<SummaryResp
   return res.json() as Promise<SummaryResponse>;
 }
 
-export function streamUrl(repoPath: string): string {
-  return `${apiBase()}/api/stream?${new URLSearchParams({ repo_path: repoPath })}`;
+// gate_threshold must match /api/analyze's, or the stream's `done` line
+// reports a different PASS/FAIL than the stat cards.
+export function streamUrl(repoPath: string, gateThreshold: number): string {
+  const params = new URLSearchParams({ repo_path: repoPath, gate_threshold: String(gateThreshold) });
+  return `${apiBase()}/api/stream?${params}`;
 }
 
 // POST /api/fix streams NDJSON (one event per line) for several minutes, so

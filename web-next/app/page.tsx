@@ -9,6 +9,7 @@ import { GapsList } from "./components/GapsList";
 import { RiskTable } from "./components/RiskTable";
 import { SummaryPanel } from "./components/SummaryPanel";
 import { FixResultPanel } from "./components/FixResultPanel";
+import { EndpointsList } from "./components/EndpointsList";
 import { Card } from "./components/Card";
 import styles from "./page.module.css";
 import { fetchAnalyze, fetchSummary, streamFix, streamUrl } from "./lib/api";
@@ -33,6 +34,9 @@ export default function Home() {
   // The threshold the shown result was measured against, so editing the
   // input afterwards doesn't relabel an old PASS/FAIL.
   const [ranThreshold, setRanThreshold] = useState(DEFAULT_VALUES.gateThreshold);
+  // Whether the /api/analyze call in flight runs mutation testing; null when
+  // none is in flight. Drives StreamLog's "still measuring" line.
+  const [analyzing, setAnalyzing] = useState<{ mutation: boolean } | null>(null);
   const runRef = useRef(0);
 
   // The summary is fetched here rather than in a SummaryPanel effect because
@@ -54,9 +58,10 @@ export default function Home() {
     }
   }
 
-  async function runAnalyze(gateThreshold: number) {
+  async function runAnalyze(gateThreshold: number, mutation: boolean) {
     const run = ++runRef.current;
     setRanThreshold(gateThreshold);
+    setAnalyzing({ mutation });
     setBusy(true);
     setError(null);
     setEvents([]);
@@ -64,7 +69,7 @@ export default function Home() {
     setSummary(null);
     setFix(null);
 
-    const source = new EventSource(streamUrl(values.repoPath));
+    const source = new EventSource(streamUrl(values.repoPath, gateThreshold));
     source.onmessage = (msg) => {
       const event = JSON.parse(msg.data) as StreamEvent;
       setEvents((prev) => [...prev, event]);
@@ -75,13 +80,14 @@ export default function Home() {
     source.onerror = () => source.close();
 
     try {
-      const data = await fetchAnalyze({ ...values, gateThreshold });
+      const data = await fetchAnalyze({ ...values, gateThreshold, mutation });
       setResult(data);
       // Not awaited: the summary must never hold up or fail the dashboard.
       void loadSummary(data, run);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
+      setAnalyzing(null);
       setBusy(false);
     }
   }
@@ -114,6 +120,14 @@ export default function Home() {
     }
   }
 
+  const streamEnded = events.some((e) => e.type === "done" || e.type === "error");
+  const pending =
+    analyzing && streamEnded
+      ? analyzing.mutation
+        ? "Running mutation testing — this can take several minutes"
+        : "Finishing the analysis"
+      : undefined;
+
   return (
     <main className={styles.main}>
       <header className={styles.header}>
@@ -124,8 +138,9 @@ export default function Home() {
         <RepoForm values={values} onChange={setValues} token={token} onTokenChange={setToken} disabled={busy} />
         <ActionBar
           busy={busy}
-          onAnalyze={() => runAnalyze(values.gateThreshold)}
-          onGate={() => runAnalyze(values.gateThreshold)}
+          onAnalyze={() => runAnalyze(values.gateThreshold, values.mutation)}
+          // Like `repoguard gate`: a coverage-only check, never mutation.
+          onGate={() => runAnalyze(values.gateThreshold, false)}
           onAutofix={runAutofix}
           canAutofix={token.trim() !== ""}
         />
@@ -135,7 +150,7 @@ export default function Home() {
           {error}
         </p>
       )}
-      <StreamLog events={events} />
+      <StreamLog events={events} pending={pending} />
       {fix && <FixResultPanel fix={fix} />}
       {!result && !fix && !busy && !error && events.length === 0 && (
         <p className={styles.empty}>
@@ -149,6 +164,7 @@ export default function Home() {
             <GapsList gaps={result.gaps} />
             <RiskTable risk={result.risk} />
           </div>
+          <EndpointsList endpoints={result.endpoints} />
           <SummaryPanel summary={summary} />
         </>
       )}

@@ -15,13 +15,24 @@ Phase checks implemented:
     phase16     — fix-loop write guard + fail-loud credential check
     multicloud  — ai_providers.get_provider() dispatch, defaults, and unknown-provider handling
     phase14fix  — POST /api/fix: token gate, single-run lock, NDJSON events, sandbox leaves the target repo untouched
+    phase14ui   — web-next in real Chromium against a real backend: rendered numbers match /api/analyze and the
+                  AGENTS.md §7 baseline, including one real mutation run (~5 min). Needs `npm ci` in web-next/;
+                  REPOGUARD_CHROMIUM overrides the browser binary if Playwright's own isn't installed
     phase18-seq-stub — the sequential fix loop end to end with a scripted, credential-free provider (Phase 18 Step 0)
 """
 
 from __future__ import annotations
 
+import json
+import os
+import shutil
+import socket
 import subprocess
 import sys
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
 
 
 def run(cmd: list[str], timeout: int = 30) -> tuple[int, str]:
@@ -352,6 +363,176 @@ print(f'OK: 503/401/400/409 gates, {len(types)} events in order, 1 test file ret
     return ok
 
 
+def _free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def _wait_http(url: str, timeout: float) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=5):
+                return True
+        except urllib.error.HTTPError:
+            return True  # the server answered, just not with 2xx
+        except OSError:
+            time.sleep(0.5)
+    return False
+
+
+def check_phase14ui() -> bool:
+    """Drive the production web-next build in real Chromium against a real
+    backend on demo-repo. Every number the page renders is compared with
+    /api/analyze's own response and, independently, with the AGENTS.md §7
+    baseline (so two sides agreeing on a wrong number still fails). No stubs:
+    the mutation step is a real run."""
+    print("=== Phase 14: web-next dashboard in a real browser ===")
+    root = Path(__file__).resolve().parent.parent
+    web = root / "web-next"
+    npm, node = shutil.which("npm"), shutil.which("node")
+    if not (npm and node):
+        print("  npm/node not on PATH -> FAIL")
+        return False
+    if not (web / "node_modules").is_dir():
+        print("  web-next/node_modules missing: run `npm ci` in web-next/ first -> FAIL")
+        return False
+    try:
+        from playwright.sync_api import TimeoutError as PlaywrightTimeout
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("  playwright not installed -> FAIL")
+        return False
+
+    api_port, web_port = _free_port(), _free_port()
+    api = f"http://127.0.0.1:{api_port}"
+    site = f"http://127.0.0.1:{web_port}"
+
+    build = subprocess.run(
+        [npm, "run", "build"], cwd=web, capture_output=True, text=True, timeout=600,
+        env={**os.environ, "NEXT_PUBLIC_REPOGUARD_API_BASE": api},
+    )
+    if build.returncode != 0:
+        print("  npm run build -> FAIL")
+        print((build.stdout + build.stderr)[-1500:])
+        return False
+
+    backend = subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "repoguard_engine.web.server:app", "--host", "127.0.0.1", "--port", str(api_port)],
+        cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        env={**os.environ, "REPOGUARD_CORS_ORIGINS": site, "PYTHONDONTWRITEBYTECODE": "1"},
+    )
+    frontend = subprocess.Popen(
+        [node, "node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", str(web_port)],
+        cwd=web, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    failures: list[str] = []
+
+    def expect(cond: bool, what: str) -> None:
+        print(f"  {'ok  ' if cond else 'FAIL'} {what}")
+        if not cond:
+            failures.append(what)
+
+    try:
+        if not (_wait_http(f"{api}/api/analyze?repo_path=/nonexistent", 60) and _wait_http(site, 60)):
+            print("  backend or frontend did not start -> FAIL")
+            return False
+        query = "repo_path=./demo-repo&mutation=false&gate_threshold=60"
+        with urllib.request.urlopen(f"{api}/api/analyze?{query}", timeout=300) as res:
+            ref = json.load(res)
+        cov = ref["coverage"]
+        untested = [ep for ep in ref["endpoints"] if not ep["has_test"]]
+
+        # The API itself against AGENTS.md §7, so the page can't agree with a wrong API.
+        expect(f"{cov['percent']:.1f}" == "65.1" and len(ref["gaps"]["uncovered_files"]) == 4,
+               f"API baseline: {cov['percent']:.1f}% coverage, {len(ref['gaps']['uncovered_files'])} gap files (§7: 65.1%, 4)")
+        expect(len(ref["endpoints"]) == 7 and len(untested) == 6,
+               f"API endpoints: {len(ref['endpoints']) - len(untested)} of {len(ref['endpoints'])} tested (demo-repo: 1 of 7)")
+
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(executable_path=os.environ.get("REPOGUARD_CHROMIUM") or None)
+            page = browser.new_page()
+            console_errors: list[str] = []
+            page.on("console", lambda m: m.type == "error" and console_errors.append(m.text))
+            page.on("pageerror", lambda e: console_errors.append(str(e)))
+            analyze_urls: list[str] = []
+            page.on("request", lambda r: "/api/analyze" in r.url and analyze_urls.append(r.url))
+            page.goto(site)
+
+            def stat(label: str) -> str:
+                return page.get_by_text(label, exact=True).locator("xpath=..").inner_text()
+
+            def run_and_wait(button: str, timeout: float) -> None:
+                # Each run clears the previous result first; waiting for that
+                # keeps a stale card from satisfying the wait below.
+                cards = page.get_by_text("Line coverage", exact=True)
+                page.get_by_role("button", name=button).click()
+                cards.wait_for(state="detached", timeout=30_000)
+                cards.wait_for(timeout=timeout)
+
+            log = page.get_by_role("region", name="Live progress")
+            badge = log.locator("h2").locator("xpath=following-sibling::span[1]")
+
+            # 1. Analyze at a 60% threshold: stream and stat cards must agree on PASS.
+            page.get_by_label("Gate threshold (%)").fill("60")
+            run_and_wait("Analyze", 180_000)
+            coverage_card = stat("Line coverage")
+            expect(f"{cov['percent']:.1f}%" in coverage_card and f"{cov['covered_lines']} / {cov['total_lines']} lines" in coverage_card,
+                   f"coverage card shows {cov['percent']:.1f}% ({cov['covered_lines']}/{cov['total_lines']})")
+            expect(str(len(ref["gaps"]["uncovered_files"])) in stat("Files with coverage gaps"), "gap-file count matches the API")
+            expect("PASS" in stat("Quality gate") and "Threshold 60% coverage" in stat("Quality gate"), "gate card: PASS at 60%")
+            expect("passed_gate: true" in log.inner_text(), "stream's done line agrees (passed_gate: true at 60%)")
+            endpoints = page.get_by_role("region", name="API endpoints")
+            expect(f"{len(ref['endpoints']) - len(untested)} / {len(ref['endpoints'])} tested" in endpoints.inner_text()
+                   and endpoints.get_by_text("no test", exact=True).count() == len(untested),
+                   f"endpoints card: {len(ref['endpoints']) - len(untested)} / {len(ref['endpoints'])} tested, {len(untested)} marked 'no test'")
+            expect("Not run" in stat("Mutation score"), "mutation card: Not run")
+            expect(not console_errors, f"no console errors ({console_errors[:2]})")
+
+            # 2. Gate never runs mutation, even with the checkbox on.
+            page.get_by_label("Gate threshold (%)").fill("80")
+            page.get_by_label("Run mutation testing").check()
+            analyze_urls.clear()
+            run_and_wait("Gate", 180_000)
+            expect(len(analyze_urls) == 1 and "mutation=false" in analyze_urls[0], "Gate requests mutation=false with the checkbox on")
+            expect("FAIL" in stat("Quality gate") and "Not run" in stat("Mutation score"), "Gate result: FAIL at 80%, mutation not run")
+
+            # 3. A real mutation run: the log must not say Done while it's still running.
+            cards = page.get_by_text("Line coverage", exact=True)
+            started = time.monotonic()
+            page.get_by_role("button", name="Analyze").click()
+            cards.wait_for(state="detached", timeout=30_000)
+            log.get_by_text("Running mutation testing", exact=False).wait_for(timeout=180_000)
+            expect(badge.inner_text() == "Running", f"badge stays 'Running' after the stream ends (was {badge.inner_text()!r})")
+            cards.wait_for(timeout=900_000)
+            print(f"       (mutation run took {time.monotonic() - started:.0f} s in the browser)")
+            mutation_card = stat("Mutation score")
+            expect("20.25%" in mutation_card and "16 / 79 mutants killed" in mutation_card,
+                   f"mutation card: {' '.join(mutation_card.split())!r} (§7: 20.25%, 16/79)")
+            expect(badge.inner_text() == "Done", "badge turns 'Done' once the dashboard is in")
+
+            # 4. A bad path shows the backend's detail (the 400 itself logs a console error).
+            page.get_by_label("Run mutation testing").uncheck()
+            page.get_by_label("Repo path").fill("./no-such-repo")
+            page.get_by_role("button", name="Analyze").click()
+            alert = page.locator("main").get_by_role("alert")  # not Next's route announcer
+            alert.wait_for(timeout=60_000)
+            expect("repo_path does not exist" in alert.inner_text(), f"bad path: {alert.inner_text()!r}")
+            browser.close()
+    except PlaywrightTimeout as exc:
+        expect(False, f"timed out waiting for the page: {str(exc).splitlines()[0]}")
+    finally:
+        for proc in (frontend, backend):
+            proc.terminate()
+            try:
+                proc.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+
+    return not failures
+
+
 def check_phase18_seq_stub() -> bool:
     """Phase 18 Step 0: the existing sequential fix loop end to end, with no
     credentials. A ScriptedProvider plays the model: the writer copies the
@@ -443,6 +624,7 @@ CHECKS: dict[str, callable] = {
     "phase16": check_phase16,
     "multicloud": check_multicloud,
     "phase14fix": check_phase14fix,
+    "phase14ui": check_phase14ui,
     "phase18-seq-stub": check_phase18_seq_stub,
 }
 
