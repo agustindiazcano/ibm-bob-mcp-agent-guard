@@ -38,12 +38,12 @@ app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 @app.get("/", response_class=HTMLResponse)
 async def root() -> HTMLResponse:
     """Serve the web UI."""
-    html = (_static_dir / "index.html").read_text()
+    html = (_static_dir / "index.html").read_text(encoding="utf-8")
     return HTMLResponse(content=html)
 
 
 @app.get("/api/analyze")
-async def api_analyze(
+def api_analyze(
     repo_path: str = Query(default=".", description="Path to the target repository"),
     mutation: bool = Query(default=False),
     gate_threshold: float = Query(default=80.0),

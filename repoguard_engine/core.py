@@ -87,7 +87,7 @@ def measure_coverage(repo_path: str | Path) -> CoverageResult:
             f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
         )
 
-    data = json.loads(coverage_json.read_text())
+    data = json.loads(coverage_json.read_text(encoding="utf-8"))
     totals = data.get("totals", {})
     missing: dict[str, list[int]] = {}
     for fname, fdata in data.get("files", {}).items():
@@ -461,7 +461,7 @@ def compute_risk(repo_path: str | Path, coverage: CoverageResult) -> list[RiskSc
     for fname, missing in coverage.missing_lines.items():
         path = repo / fname
         try:
-            total_lines = sum(1 for line in path.read_text().splitlines() if line.strip())
+            total_lines = sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
         except OSError:
             total_lines = 1
 
