@@ -302,7 +302,7 @@ of any number, per `AGENTS.md §4`. Optional dependency (`pip install -e
 ---
 
 ## Phase 16 — Multicloud AI: watsonx.ai + Google Vertex AI
-**Priority: 2 · Depends on: 8, 15** (Stage A implemented — see `docs/MULTICLOUD_AI.md`; Stage B (`vertex.py`) needs real GCP credentials)
+**Priority: 2 · Depends on: 8, 15** — 🟢 done, both stages built and live-verified — see `docs/MULTICLOUD_AI.md`
 
 The user asked for this project to not be single-cloud: watsonx.ai is the
 only provider today (`narrative.py`, `watson_agent/client.py`). This phase
@@ -319,14 +319,22 @@ hits `429` under real load, and a smaller model that does respond
 a real `repoguard fix demo-repo` run produced zero mutation-score improvement
 because the model replied in plain text instead of calling tools. The user
 has a separate Vertex AI account with credit and no rate limits, motivating
-Vertex as the reliable/fast provider once Stage B lands.
+Vertex as the reliable/fast provider — built and live-verified in the same
+session (Stage B): a real Vertex text call and a full tool-calling round
+trip both ran against a real GCP project (`gemini-2.5-flash`,
+`us-central1`). That same live testing also surfaced two real integrity
+bugs, both fixed: `watson_agent/orchestrator.py`'s tool dispatch only
+caught `SourceEditRejected` (any other tool error crashed the whole fix
+loop), and `core.py`'s `run_mutation()` never verified the unmutated
+baseline passes before mutating (let a broken AI-written suite report a
+false 100% mutation score). See `docs/VERTEX_SETUP.md` for credentials.
 
 | Deliverable | Description | Status |
 |---|---|---|
 | `docs/MULTICLOUD_AI.md` | Design doc: architecture, env vars, refactor steps, benchmarking plan, open questions | 🟢 |
 | `ai_providers/base.py` | `ChatProvider` protocol, `AIProviderError` | 🟢 |
 | `ai_providers/watsonx.py` | `watson_agent/client.py`'s logic, moved here; `narrative.py` unified onto the same `chat()` interface (previously a separate `generate_text()` call) | 🟢 |
-| `ai_providers/vertex.py` | Google Vertex AI implementation; SDK call shapes to be verified against the real installed package before shipping, same rigor as `watsonx.py` | 🔴 needs real GCP credentials |
+| `ai_providers/vertex.py` | Google Vertex AI implementation against `google-genai==2.25.0`; live-verified with real GCP credentials (text call + tool-calling round trip) | 🟢 |
 | `narrative.py` / `orchestrator.py` switched to `get_provider()` | No behavior change for watsonx.ai — confirmed live (`phase15`/`phase16`/new `multicloud` check all PASS; a real `--summarize` call with real watsonx credentials still returns real text) | 🟢 |
 | `--provider` CLI flag | `repoguard fix --provider` / `repoguard analyze --summarize --provider` override `REPOGUARD_AI_PROVIDER` per call | 🟢 |
 | `scripts/benchmark_models.py` | Runs the fix loop against fresh `demo-repo` copies per `(provider, model_id)`, compares real mutation-score deltas | 🔴 deferred — needs live credentials for 2+ providers |
