@@ -81,25 +81,72 @@ complete to be a manual bootstrap.
 | `db447c3` | chore: add .gitattributes, ignore coverage.json, remove stale plan file | PR #6 |
 
 **Commit-count reconciliation:** 9 commits across PRs #1/#2/#4/#6, plus 3
-direct-push commits before PR #1 existed, totals **12** by git archaeology —
-matching the figure from memory that prompted this document. The initial
-commit would make it 13 if counted; it's kept separate above because, unlike
-the other 12, it carries no explicit trailer.
+direct-push commits before PR #1 existed, totals **12** by git archaeology.
+IBM Bob's own **Bobalytics** dashboard independently confirms **12 Bob
+commits** for this repo — matching exactly, not just close. (An earlier,
+slightly-earlier-timestamped Bobalytics screenshot,
+`bob-evidence/bob-images/c/23-...`, shows 11 commits / 817 lines / 15.9% —
+almost certainly the same live counter captured a few minutes before the
+count above; both are real screenshots, the later one is authoritative.)
+The initial commit would make it 13 if counted; it's kept separate above
+because, unlike the other 12, it carries no explicit trailer.
 
-IBM Bob's own platform reports a close but distinct number: its **Bobalytics**
-repository-impact page (`bob-evidence/bob-images/c/23-...bobalytics-repo-impact-sorted-bob-commits.png`)
-lists `agustindiazcano/ibm-bob-mcp-agent-guard` at **817 Bob lines / 5,131
-total lines (15.9% Bob factor), 11 Bob commits** — Bob's own count, not a
-reconstruction from git trailers. The 11-vs-12 gap is unreconciled (possibly
-a different definition of "commit," e.g. excluding one of the pre-PR #1
-direct pushes) but both numbers are real, cited figures, not estimates.
+## Bob's own dashboard (Bobalytics) — full export
+
+From `bob-evidence/README.md`, IBM's "Bob IDE Usage Dashboard," Team Argentina:
+
+**Hackathon ranking position**
+
+| Metric | Value | Ranking |
+|---|---|---|
+| Bob commits | 12 | 1st of 6 |
+| Bob lines | 820 | 14th of 14 |
+| Bob factor | 16.0% | 21st of 21 |
+
+**Repository impact** (this repo specifically, sortable by commits/lines/factor —
+`bob-evidence/bob-images/bob-stats/ranking-*.png` capture all three sort orders)
+
+| Repository | Bob lines | User lines | Total lines | Bob factor | Bob commits |
+|---|---|---|---|---|---|
+| `agustindiazcano/ibm-bob-mcp-agent-guard` | 820 | 4,314 | 5,134 | 16.0% | 12 |
+
+**Spending**
+
+| Team | Limit | Used | Remaining |
+|---|---|---|---|
+| Team Argentina | 40 Bobcoins | 40 Bobcoins | 0 Bobcoins |
+
+**Modes (42 tasks total)**
+
+| Mode | Tasks | % |
+|---|---|---|
+| agent | 37 | 88.1% |
+| plan | 5 | 11.9% |
+
+**Language contribution (1.2k LOC total)**
+
+| Language | LOC | % |
+|---|---|---|
+| md | 1.1k | 97.8% |
+| unknown | 25 | 2.2% |
+
+Note on scope: the "1.2k LOC total" / language-contribution figures don't
+match the 820-line repository-impact figure above (different totals, and no
+Python listed despite Bob authoring `core.py`/`api_check.py`/etc.) — this
+table is almost certainly scoped to *all* of this account's Bob activity
+across every repo, not just this one, or to a different time window. Shown
+as-is from the dashboard rather than reinterpreted, since neither this
+document nor `bob-evidence/README.md` controls what Bobalytics scopes each
+chart to.
 
 ## Screenshot evidence
 
-29 IBM Bob IDE screenshots are in `bob-evidence/bob-images/` (`a/` 1–9,
-`b/` 10–19, `c/` 20–29, one continuous sequence). A representative subset is
-embedded directly in the main `README.md`'s "IBM Bob Usage" section; all 29
-are here for the full session record.
+32 IBM Bob screenshots total: 29 IDE session screenshots in
+`bob-evidence/bob-images/` (`a/` 1–9, `b/` 10–19, `c/` 20–29, one continuous
+sequence) plus 3 Bobalytics ranking exports in
+`bob-evidence/bob-images/bob-stats/`. A representative subset is embedded
+directly in the main `README.md`'s "IBM Bob Usage" section; the full set is
+here for the complete session record.
 
 ## Claude's interleaved PRs (docs only, not engine work)
 
