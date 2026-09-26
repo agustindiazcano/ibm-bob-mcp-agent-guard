@@ -1,15 +1,15 @@
 """
 Narrative summary: turns an already-measured dashboard dict into human-
-readable prose via IBM watsonx.ai. This module never measures anything
-itself and never invents a number — every figure it can mention has to
-already exist in the dict it's given. See AGENTS.md Section 4: "the AI
-decides, the engine measures."
+readable prose via whichever AI provider REPOGUARD_AI_PROVIDER selects
+(watsonx.ai by default, or Vertex AI) -- see docs/MULTICLOUD_AI.md. This
+module never measures anything itself and never invents a number — every
+figure it can mention has to already exist in the dict it's given. See
+AGENTS.md Section 4: "the AI decides, the engine measures."
 
-Requires IBM Cloud credentials (WATSONX_APIKEY, WATSONX_PROJECT_ID, and
-optionally WATSONX_URL) — see docs/WATSONX_SETUP.md for how to get them.
-Degrades gracefully (ok=False, a real error message) rather than raising or
-fabricating text when the SDK isn't installed or credentials are missing —
-same pattern as visual.py's Playwright/axe checks.
+Requires credentials for the selected provider (docs/WATSONX_SETUP.md or
+docs/VERTEX_SETUP.md). Degrades gracefully (ok=False, a real error message)
+rather than raising or fabricating text when the SDK isn't installed or
+credentials are missing — same pattern as visual.py's Playwright/axe checks.
 """
 
 from __future__ import annotations
@@ -17,9 +17,10 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-DEFAULT_MODEL_ID = "ibm/granite-3-8b-instruct"
-DEFAULT_URL = "https://us-south.ml.cloud.ibm.com"
+from .ai_providers import get_provider
+
 _TIMEOUT_SECONDS = 30
+_MAX_NEW_TOKENS = 300
 
 
 @dataclass
@@ -27,6 +28,7 @@ class NarrativeResult:
     ok: bool
     text: str = ""
     error: str = ""
+    provider: str = ""
 
 
 def _build_prompt(dashboard: dict) -> str:
@@ -71,49 +73,30 @@ def _build_prompt(dashboard: dict) -> str:
 def generate_summary(
     dashboard: dict,
     *,
-    api_key: str | None = None,
-    project_id: str | None = None,
-    url: str | None = None,
-    model_id: str = DEFAULT_MODEL_ID,
+    provider: str | None = None,
+    model_id: str | None = None,
 ) -> NarrativeResult:
     """
-    Ask watsonx.ai for a plain-English summary of an already-measured
-    *dashboard* dict (the exact shape core.build_dashboard_data returns).
-    Never computes or alters a metric — advisory text only.
+    Ask the configured AI provider for a plain-English summary of an
+    already-measured *dashboard* dict (the exact shape
+    core.build_dashboard_data returns). Never computes or alters a metric —
+    advisory text only.
+
+    provider/model_id are forwarded to ai_providers.get_provider(); None
+    reads REPOGUARD_AI_PROVIDER, defaulting to "watsonx".
     """
-    api_key = api_key or os.environ.get("WATSONX_APIKEY")
-    project_id = project_id or os.environ.get("WATSONX_PROJECT_ID")
-    url = url or os.environ.get("WATSONX_URL", DEFAULT_URL)
-
-    if not api_key or not project_id:
-        return NarrativeResult(
-            ok=False,
-            error="WATSONX_APIKEY and WATSONX_PROJECT_ID must be set — see docs/WATSONX_SETUP.md",
-        )
-
-    try:
-        from ibm_watsonx_ai import Credentials
-        from ibm_watsonx_ai.foundation_models import ModelInference
-    except ImportError:
-        return NarrativeResult(
-            ok=False,
-            error="ibm-watsonx-ai is not installed (pip install 'repoguard[ai]')",
-        )
-
+    resolved_provider = provider or os.environ.get("REPOGUARD_AI_PROVIDER", "watsonx")
     prompt = _build_prompt(dashboard)
 
     try:
-        model = ModelInference(
-            model_id=model_id,
-            credentials=Credentials(url=url, api_key=api_key),
-            project_id=project_id,
+        chat = get_provider(provider=provider, model_id=model_id)
+        response = chat.chat(
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=_MAX_NEW_TOKENS,
+            timeout_ms=_TIMEOUT_SECONDS * 1000,
         )
-        response = model.generate_text(
-            prompt=prompt,
-            params={"time_limit": _TIMEOUT_SECONDS * 1000},
-        )
-        text = response if isinstance(response, str) else str(response)
-        return NarrativeResult(ok=True, text=text.strip())
+        text = response["choices"][0]["message"]["content"]
+        return NarrativeResult(ok=True, text=text.strip(), provider=resolved_provider)
     except Exception as exc:
         # Any SDK/auth/network failure -- never fabricate a summary.
-        return NarrativeResult(ok=False, error=str(exc))
+        return NarrativeResult(ok=False, error=str(exc), provider=resolved_provider)

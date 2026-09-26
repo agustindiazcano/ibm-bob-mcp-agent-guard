@@ -424,7 +424,7 @@ Key decisions:
 | Tier | `db-f1-micro` (Enterprise edition), `deletion_protection = false` | Cheapest shared-core tier for a demo; confirm current price in the GCP pricing calculator; `terraform destroy` after the event |
 | Image ownership | Terraform owns the service; CD owns the image. `lifecycle { ignore_changes = [template[0].containers[0].image] }` | Otherwise every `terraform apply` rolls back CD's latest deploy |
 | Request timeout | 900 s, 2 vCPU / 2 GiB | A full mutation run on demo-repo takes several minutes (`CLAUDE.md §9`); the 300 s default would cut it |
-| CD auth | Workload Identity Federation; `cd.yml` switches `credentials_json` → `workload_identity_provider` + `service_account` | Removes the `GCP_SA_KEY` secret — the follow-up `DEPLOY.md` already recommends |
+| CD auth | Workload Identity Federation; `cd.yml` uses `workload_identity_provider` + `service_account` | **Already done** as part of Phase 13, ahead of this phase — see `docs/DEPLOY.md`. Terraform (B1 below) should import the existing pool/provider, not recreate them |
 | Frontend | Stays on Vercel, no Terraform | Phase 14's decision stands; only the backend gets IaC |
 
 The app composes its URL from env vars Terraform sets:
@@ -466,7 +466,7 @@ measurements; the cut line is explicit.
 | **A1 — Store** | `store/models.py` (tables §4.2), `store/repository.py` (`save_run`, read queries), `[db]` extra, SQLite tests | 3 h | Round-trip test green on SQLite |
 | **A2 — Engine data** | Per-mutant outcomes + fingerprints, `junit.xml` parse (§4.1); `pipeline.py` persists when URL set | 2 h | §7 checks unchanged: 65.1%, 16/79 twice |
 | **B1 — Terraform** | State bucket (one `gcloud storage buckets create`), all of §8, `infra-ci.yml` | 3 h | `fmt`/`validate` green; human runs `apply` (~10–15 min, Cloud SQL creation is slow) |
-| **B2 — CD on WIF** | Switch `cd.yml` auth; Cloud Run gets DB env + socket; delete `GCP_SA_KEY` | 1 h | Deploy green, `/api/projects` returns `[]` from Postgres |
+| **B2 — CD on WIF** | ~~Switch `cd.yml` auth~~ already done (Phase 13); remaining: Cloud Run gets DB env + socket | 1 h | Deploy green, `/api/projects` returns `[]` from Postgres |
 | **A3 — API + ingest** | §7 routes, `--push` in CLI, CI step pushing each commit's run | 2 h | A commit on `main` appears as a new row |
 | **C1 — Charts** | Charts 1, 2, 4 first; 5, 6 as tables; 3 last | 3 h | Dashboard shows before/after demo-repo from stored runs |
 | ✂ *cut line* | Everything below is first to drop if time runs short | | |

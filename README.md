@@ -116,13 +116,13 @@ flowchart TB
 - **Test writer agent:** its own system prompt, and a tool-calling loop over `read_source_file` and `write_test_file`. The write tool is hard-guarded to `tests/`.
 - **Critic agent:** a separate system prompt, with the same guarded tools, reviewing what the writer produced.
 
-After both, the orchestrator re-measures deterministically. Both agents use the same watsonx.ai model, and measurement itself never uses AI.
+After both, the orchestrator re-measures deterministically. Both agents use the same configured AI provider (watsonx.ai by default, or Vertex AI once `ai_providers/vertex.py` lands), and measurement itself never uses AI.
 
 The engine is also exposed through **MCP** (9 tools), so external agents such as Claude Code or any other MCP client can call the same measurements. The fix loop itself calls the engine directly rather than through MCP.
 
 **What it is not (yet):**
 - **Not a parallel swarm yet.** A parallel multi-agent design for IBM Bob exists in `.bob/`, but it was retired before its first full run (`.bob/DEPRECATED.md`). Its return, rebuilt on watsonx.ai, is planned: see [Multi-agent swarm (planned)](#multi-agent-swarm-planned).
-- **Not provider-agnostic.** watsonx.ai is the only AI provider in the code today. A `ChatProvider` abstraction that would add Google Vertex AI is designed but not built: see [`docs/MULTICLOUD_AI.md`](docs/MULTICLOUD_AI.md) (`PENDING.md` Phase 16).
+- **Multicloud, for real.** The `ChatProvider` abstraction (`repoguard_engine/ai_providers/`) is implemented; both watsonx.ai and Google Vertex AI (Gemini) run through it, `REPOGUARD_AI_PROVIDER`/`--provider` select which — see [`docs/MULTICLOUD_AI.md`](docs/MULTICLOUD_AI.md) (`PENDING.md` Phase 16).
 
 ```mermaid
 flowchart TB
@@ -183,7 +183,13 @@ repoguard serve                     # web UI at http://127.0.0.1:8765
 | `repoguard serve [--port 8000]` | Web UI with live progress, metrics and the report |
 | `repoguard mcp` | Starts the MCP server (9 tools) for any MCP client |
 
-## Using the watsonx.ai fix loop
+## Using the AI fix loop
+
+TestMind AI is multicloud: the fix loop and the advisory summary run against
+whichever provider `REPOGUARD_AI_PROVIDER` selects (`watsonx`, the default,
+or `vertex`), or per call via `--provider` — see
+[`docs/MULTICLOUD_AI.md`](docs/MULTICLOUD_AI.md). Vertex AI support
+(`ai_providers/vertex.py`) isn't built yet; watsonx.ai works today.
 
 1. Get IBM Cloud credentials and install the optional extra — see [`docs/WATSONX_SETUP.md`](docs/WATSONX_SETUP.md):
    ```bash
@@ -194,15 +200,19 @@ repoguard serve                     # web UI at http://127.0.0.1:8765
 2. Run it:
    ```bash
    repoguard fix demo-repo
+   repoguard fix demo-repo --provider watsonx   # equivalent, explicit
    ```
 3. Without credentials, `fix` fails immediately with a clear error — it never
    silently skips the AI stages or fabricates a result.
 
-`repoguard_engine/watson_agent/` is the whole implementation: `client.py`
-(the watsonx.ai chat connection), `tools.py` (the one write tool, hard-guarded
-to `tests/`), `prompts.py` (the writer/critic system prompts), and
-`orchestrator.py` (the loop itself). It calls `pipeline`/`core` directly, the
-same way `web/server.py` does — no MCP round-trip needed for its own use.
+`repoguard_engine/ai_providers/` holds the provider abstraction
+(`base.py`'s `ChatProvider` protocol, `watsonx.py`'s implementation,
+`vertex.py` once built) behind `get_provider()`.
+`repoguard_engine/watson_agent/` is the rest of the fix loop: `tools.py` (the
+one write tool, hard-guarded to `tests/`), `prompts.py` (the writer/critic
+system prompts), and `orchestrator.py` (the loop itself, provider-agnostic).
+It calls `pipeline`/`core` directly, the same way `web/server.py` does — no
+MCP round-trip needed for its own use.
 
 ## Requirements
 
@@ -234,10 +244,10 @@ Status key: ✅ implemented and running in this repo · ⚠️ implemented but n
 | Visual checks | Playwright (Chromium), Pillow | Screenshots and pixel diff (MCP tools) | ✅ locally · not in the Docker image (no Chromium) |
 | Accessibility | axe-playwright-python (axe-core) | Accessibility violations (MCP tool) | ✅ locally · not in the Docker image |
 | Agent protocol | MCP via FastMCP (stdio) | 9 tools for any MCP client | ✅ |
-| AI agents | IBM watsonx.ai (`ibm-watsonx-ai`), default model `meta-llama/llama-3-3-70b-instruct` | Writer and critic agents with tool calling (`repoguard fix`), `--summarize` prose | ⚠️ SDK call shapes checked against the real package; no live run with real credentials yet |
+| AI agents | IBM watsonx.ai (`ibm-watsonx-ai`), default model `mistralai/mistral-small-3-1-24b-instruct-2503` | Writer and critic agents with tool calling (`repoguard fix`), `--summarize` prose | ✅ live-verified with real credentials — `--summarize` returns real generated text; `repoguard fix`'s tool-calling round trip runs for real, though this default model doesn't reliably invoke tools (a model-choice quality gap, not an SDK/plumbing issue — see `PENDING.md` Phase 16) |
 | Multi-agent swarm | Parallel agent lanes (`ThreadPoolExecutor`), per-lane sandboxes, file-based agent contract | Parallel Test Writer / Verifier / Critic per file, parallel mutation workers | 🗺️ Phase 18 ([design](docs/MULTI_AGENT_SWARM.md)) |
-| AI provider abstraction | `ChatProvider` protocol | Switching between providers without touching the agents | 🗺️ Phase 16 ([design](docs/MULTICLOUD_AI.md)) |
-| AI (second provider) | Google Vertex AI | Alternative model provider + model benchmarking by mutation-score delta | 🗺️ Phase 16 ([design](docs/MULTICLOUD_AI.md)) |
+| AI provider abstraction | `ChatProvider` protocol (`repoguard_engine/ai_providers/`) | Switching between providers without touching the agents (`REPOGUARD_AI_PROVIDER` / `--provider`) | ✅ Phase 16 Stage A ([details](docs/MULTICLOUD_AI.md)) |
+| AI (second provider) | Google Vertex AI (`google-genai`, Gemini) | Alternative model provider — no free-tier rate limits, unlike watsonx.ai's shared pool | ✅ live-verified: real text generation and a full tool-calling round trip against a real GCP project ([details](docs/VERTEX_SETUP.md)) |
 | Frontend | Next.js 16.3.6, React 19.2.8, TypeScript 5, ESLint 9 | `web-next/` dashboard | ✅ (lint + build pass; end-to-end checked in a browser locally) |
 | Legacy UI | Static HTML served by FastAPI | `repoguard serve` dashboard | ✅ |
 | Charts (docs) | matplotlib (`[docs]` extra) | README before/after image | ✅ |
@@ -246,7 +256,7 @@ Status key: ✅ implemented and running in this repo · ⚠️ implemented but n
 | CI | GitHub Actions: `ci.yml`, `frontend-ci.yml` | Verify checks, tests, coverage gate, mutation determinism, frontend lint/build | ✅ green on `main` |
 | CD | GitHub Actions: `cd.yml` | Build → Artifact Registry → Cloud Run | ⚠️ fails at the Google auth step on every push to `main` until the one-time GCP setup is done ([`docs/DEPLOY.md`](docs/DEPLOY.md)) |
 | Cloud (backend) | Google Cloud Run, Artifact Registry | Hosting the API + dashboard | ⚠️ not deployed yet (human GCP setup pending) |
-| Cloud (frontend) | Vercel | Hosting `web-next/` | 🗺️ not deployed yet (human step, Phase 14) |
+| Cloud (frontend) | Vercel | Hosting `web-next/` | ✅ deployed: https://ibm-bob-mcp-agent-guard.vercel.app/ — `NEXT_PUBLIC_REPOGUARD_API_BASE` still points at `localhost:8000` until the backend (row above) is deployed |
 | Database | PostgreSQL 16 on Cloud SQL; SQLite locally | Run history per commit | 🗺️ Phase 17 ([design](docs/DATA_PLATFORM.md#4-database-design)) |
 | Data access | SQLAlchemy 2 (Core), psycopg 3 | One code path for SQLite and Postgres | 🗺️ Phase 17 |
 | Infrastructure as code | Terraform (google, random providers), GCS remote state | Provisioning GCP | 🗺️ Phase 17 ([design](docs/DATA_PLATFORM.md#8-infrastructure-as-code-terraform)) |
@@ -274,8 +284,9 @@ ibm-bob-mcp-agent-guard/
 │   ├── core.py                     Coverage measurement, gap detection, mutation testing, risk score, dashboard
 │   ├── api_check.py                FastAPI endpoint discovery (AST) + HTTP smoke tests
 │   ├── visual.py                   Playwright screenshots, pixel diff, console logs, axe-core a11y
-│   ├── narrative.py                watsonx.ai prose summary of an already-measured dashboard (never a metric source)
-│   ├── watson_agent/               watsonx.ai fix loop: client, guarded tools, prompts, orchestrator
+│   ├── narrative.py                AI prose summary of an already-measured dashboard (never a metric source)
+│   ├── ai_providers/               ChatProvider abstraction: base.py, watsonx.py (done), vertex.py (planned)
+│   ├── watson_agent/               AI fix loop: guarded tools, prompts, orchestrator
 │   ├── pipeline.py                 Ordered pipeline: measure → gaps → risk → gate
 │   ├── cli.py                      CLI entry point: analyze | fix | gate | serve | mcp
 │   ├── mcp_server.py               9 MCP tools via FastMCP (stdio transport)
@@ -339,19 +350,19 @@ baseline, so it fails on a real regression instead of always or never.
 ## Deploy to Google Cloud
 
 The backend (`repoguard serve`: API + dashboard + bundled `demo-repo/`)
-deploys to **Cloud Run** through `cd.yml`. The workflow is in the repo; the
-one-time GCP setup (project, Artifact Registry, service account, GitHub
-secrets and variables) needs a person with GCP access and is written out
-step by step in [`docs/DEPLOY.md`](docs/DEPLOY.md). That setup has not been
-run yet, so there is no live URL, and `cd.yml` currently fails at its Google
-authentication step on every push to `main`, because the GCP credentials
-(`GCP_SA_KEY`) aren't configured yet. It stops before building anything.
+deploys to **Cloud Run** through `cd.yml`. The one-time GCP setup (project,
+Artifact Registry, service account, Workload Identity Federation) is done —
+see [`docs/DEPLOY.md`](docs/DEPLOY.md) for exactly what was created. Auth
+uses WIF, not a long-lived JSON key: GitHub Actions exchanges its own OIDC
+token for short-lived Google credentials at run time, so no GCP secret is
+ever stored in the repo. `cd.yml` deploys on every push to `main` once the
+GitHub repo variables (`WIF_PROVIDER`, `DEPLOYER_SA`, etc. — see
+`docs/DEPLOY.md` §2) are set.
 
 Known limits of today's deploy: the service is public
-(`--allow-unauthenticated`, fine for a judged demo), CD authenticates with
-a long-lived JSON key, and the container's filesystem is ephemeral, so
-results in `repoguard-out/` are lost when an instance stops. The next two
-sections plan fixes for the last two.
+(`--allow-unauthenticated`, fine for a judged demo), and the container's
+filesystem is ephemeral, so results in `repoguard-out/` are lost when an
+instance stops. The next section plans a fix for that.
 
 The Next.js dashboard (`web-next/`) is a separate Vercel project — see
 [`docs/ARCHITECTURE-front.md`](docs/ARCHITECTURE-front.md).
@@ -508,8 +519,8 @@ The rest of this section is about the first one — how the repo itself gets bui
 - [Data platform (design)](docs/DATA_PLATFORM.md): run history on Postgres, Terraform on GCP, data-driven charts
 - [Multi-agent swarm (design)](docs/MULTI_AGENT_SWARM.md): parallel Test Writer / Verifier / Critic lanes per file, the return of IBM Bob's swarm design on watsonx.ai
 - [Frontend architecture](docs/ARCHITECTURE-front.md): the Next.js dashboard on Vercel
-- [watsonx.ai setup](docs/WATSONX_SETUP.md): IBM Cloud credentials for `narrative.py` / `watson_agent`
-- [Multicloud AI (design)](docs/MULTICLOUD_AI.md): adding Google Vertex AI alongside watsonx.ai, and benchmarking models
+- [watsonx.ai setup](docs/WATSONX_SETUP.md): IBM Cloud credentials for the default AI provider
+- [Multicloud AI](docs/MULTICLOUD_AI.md): the `ChatProvider` abstraction (built), Vertex AI (planned), and model benchmarking
 - [AI-Assisted Development Framework](docs/AI_ASSISTED_DEVELOPMENT_FRAMEWORK.md): how this repo itself is built — contract files and git workflow
 
 ## Roadmap
@@ -540,19 +551,20 @@ Critic lanes, one per file, bringing back IBM Bob's swarm design on
 watsonx.ai. See [Multi-agent swarm (planned)](#multi-agent-swarm-planned)
 (`PENDING.md` Phase 18). Design only.
 
-**Also planned: multicloud AI.** watsonx.ai is the only provider today. See
-[`docs/MULTICLOUD_AI.md`](docs/MULTICLOUD_AI.md) (`PENDING.md` Phase 16) for
-the design — a small `ChatProvider` abstraction so Google Vertex AI can be
-added without touching the write-guarded tools or the orchestrator loop,
-plus a benchmark script to compare models by measured mutation-score deltas
-rather than opinion. Design only; nothing under `ai_providers/` exists yet.
+**Multicloud AI: the abstraction is built, Vertex AI isn't yet.** See
+[`docs/MULTICLOUD_AI.md`](docs/MULTICLOUD_AI.md) (`PENDING.md` Phase 16) —
+`repoguard_engine/ai_providers/` now holds a `ChatProvider` abstraction with
+watsonx.ai behind it (`REPOGUARD_AI_PROVIDER` / `--provider` select the
+backend); a Vertex AI implementation still needs real GCP credentials to
+live-verify against the installed SDK, plus a benchmark script to compare
+models by measured mutation-score deltas rather than opinion.
 
 ## Limitations
 
 - Python + pytest only. API checks support FastAPI only.
 - Equivalent mutants (changes with no observable effect) are reported, not filtered out automatically.
 - The accessibility check is basic. Use axe-core for a full audit.
-- `repoguard fix` needs real IBM Cloud credentials (`docs/WATSONX_SETUP.md`); without them it fails with a clear error rather than degrading silently. An actual live generation with real credentials hasn't been verified yet — see `PENDING.md` Phase 16.
+- `repoguard fix` needs real credentials for the selected provider (`docs/WATSONX_SETUP.md`; Vertex AI setup not written yet); without them it fails with a clear error rather than degrading silently. Live-verified this session with real watsonx.ai credentials: `--summarize` generates real text, and the fix loop's tool-calling round trip runs for real — though the current default model doesn't reliably invoke tools (see `PENDING.md` Phase 16), which is exactly why Vertex AI is next.
 
 ## Author
 

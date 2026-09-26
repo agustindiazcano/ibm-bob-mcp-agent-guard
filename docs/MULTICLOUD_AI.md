@@ -1,9 +1,13 @@
 # Multicloud AI: watsonx.ai + Google Vertex AI
 
-**Status: design only — nothing in this document is implemented yet.**
-`repoguard_engine/watson_agent/` and `narrative.py` are watsonx.ai-only today.
-This is the plan for making both provider-agnostic, plus a way to compare
-models against each other once that's in place. See `PENDING.md` Phase 17.
+**Status: both providers implemented and live-verified.**
+`repoguard_engine/ai_providers/` has `base.py`, `watsonx.py`, `vertex.py`,
+and `__init__.py`'s `get_provider()`. `narrative.py` and
+`watson_agent/orchestrator.py` call it instead of importing a cloud SDK
+directly; `REPOGUARD_AI_PROVIDER` (default `"watsonx"`) and `--provider` on
+`repoguard fix`/`repoguard analyze --summarize` select the backend. See
+`PENDING.md` Phase 16 and `docs/VERTEX_SETUP.md` for what was actually
+verified live against a real GCP project (not just SDK inspection).
 
 ## Why
 
@@ -23,61 +27,64 @@ Two independent reasons, not one:
    more gaps for the same repo. That's an empirical question the engine can
    already answer — see [Benchmarking](#benchmarking-models) below.
 
-## Current state (single-provider)
+## Current state (both stages implemented)
 
 ```
 repoguard_engine/
-├── narrative.py              generate_summary() -- hardcodes ibm_watsonx_ai imports
+├── narrative.py              generate_summary() -- calls ai_providers.get_provider()
+├── ai_providers/
+│   ├── __init__.py           get_provider() -- reads REPOGUARD_AI_PROVIDER, default "watsonx"
+│   ├── base.py                ChatProvider protocol, AIProviderError
+│   ├── watsonx.py              moved from watson_agent/client.py
+│   └── vertex.py               google-genai, Vertex AI mode -- live-verified
 └── watson_agent/
-    ├── client.py              get_chat_model() -- hardcodes ibm_watsonx_ai imports
-    ├── tools.py               provider-agnostic already (plain Python + dataclasses)
-    ├── prompts.py             provider-agnostic already (plain strings)
-    └── orchestrator.py        calls client.get_chat_model() directly
+    ├── tools.py               provider-agnostic (plain Python + dataclasses) -- unchanged
+    ├── prompts.py             provider-agnostic (plain strings) -- unchanged
+    └── orchestrator.py        calls ai_providers.get_provider() directly
 ```
 
-The only two places that know about a specific cloud SDK are `narrative.py`'s
-`generate_summary()` and `watson_agent/client.py`'s `get_chat_model()`. Both
-already return/raise in a normalized shape (`NarrativeResult`, a dict shaped
-like `response["choices"][0]["message"]`, `WatsonxCredentialsError`) — the
-refactor is about generalizing *those two call sites*, not the tools, prompts,
-or orchestrator loop, which don't reference watsonx.ai at all.
+`narrative.py` and `watson_agent/orchestrator.py` both call
+`ai_providers.get_provider()` and never import a cloud SDK directly.
+`generate_summary()` returns a normalized `NarrativeResult` (now including a
+`provider` field); the fix loop raises `AIProviderError` (a
+`WatsonxCredentialsError`/`VertexCredentialsError` subclass depending on
+which provider is active) — same fail-loud contract as before, just
+provider-neutral at the call site.
 
-## Proposed architecture
+## Architecture (implemented)
 
 A small `ChatProvider` protocol, one implementation per cloud, selected by an
 environment variable — the same pattern `AGENTS.md` already uses for
 graceful degradation (fail loud on missing config, never fabricate a result).
 
-```
-repoguard_engine/
-└── ai_providers/
-    ├── __init__.py         get_provider() -- reads REPOGUARD_AI_PROVIDER, returns one below
-    ├── base.py             ChatProvider protocol: chat(messages, tools=None) -> dict
-    ├── watsonx.py           today's watson_agent/client.py, moved here unchanged
-    └── vertex.py            new: Google Vertex AI implementation
-```
-
 ```python
-# base.py
-from typing import Protocol
+# ai_providers/base.py
+class AIProviderError(RuntimeError): ...
 
 class ChatProvider(Protocol):
-    def chat(self, messages: list[dict], tools: list[dict] | None = None) -> dict:
+    def chat(
+        self, messages: list[dict], tools: list[dict] | None = None, *,
+        max_tokens: int | None = None, timeout_ms: int | None = None,
+    ) -> dict:
         """Returns a dict shaped like {"choices": [{"message": {...}}]} --
         the same OpenAI-compatible shape ModelInference.chat() already
         returns, so tools.py/orchestrator.py need zero changes."""
 ```
 
-Both `narrative.py` and `watson_agent/orchestrator.py` call
-`ai_providers.get_provider()` instead of importing a specific SDK. Neither
-file needs to know which cloud is configured — same principle as
-`core.py` not knowing which CI system calls it.
+`narrative.py` was also unified onto this single interface (it previously
+used a separate completion-style `generate_text()` call) — it now sends one
+`{"role": "user", "content": prompt}` message through the same `chat()`,
+reading `response["choices"][0]["message"]["content"]` back.
 
 ### Provider selection
 
 ```bash
-export REPOGUARD_AI_PROVIDER=watsonx   # default, matches today's behavior
+export REPOGUARD_AI_PROVIDER=watsonx   # default, matches pre-refactor behavior
 export REPOGUARD_AI_PROVIDER=vertex
+
+# or, per call, without touching the environment:
+repoguard analyze demo-repo --summarize --provider vertex
+repoguard fix demo-repo --provider vertex
 ```
 
 `get_provider()` raises immediately (fail loud, per `AGENTS.md §9`) if the
@@ -86,32 +93,44 @@ back to a different provider than the one asked for.
 
 ### `vertex.py`
 
-Google Vertex AI's Gemini models support the same OpenAI-compatible
-tool-calling shape via the `google-genai` SDK's `Client.chat.completions`
-surface (or `google-cloud-aiplatform`'s `GenerativeModel` with `tools=` —
-whichever is actually current when this is implemented needs to be
-re-confirmed the same way `client.py`'s watsonx.ai calls were verified
-against the real installed SDK via `inspect.signature()`/`help()`, not
-assumed from memory).
+**The `Client.chat.completions` surface this doc originally guessed at does
+not exist in `google-genai==2.25.0`.** Confirmed via `inspect.signature()`/
+`model_fields` against the real installed package (see
+`docs/VERTEX_SETUP.md`'s verification section for the full list): the real
+fit is the stateless `client.models.generate_content(model=, contents=<list
+of Content>, config=GenerateContentConfig(...))` — `client.chats.create()`
+is a *stateful* session object that keeps its own history and takes one
+message at a time, which doesn't match how
+`watson_agent/orchestrator.py` rebuilds the full message list fresh every
+round. `FunctionDeclaration.parameters_json_schema` accepts a plain JSON
+Schema dict directly, so `watson_agent/tools.py`'s existing `TOOL_SCHEMAS`
+pass through unconverted. Gemini's "thinking" tokens are deducted from
+`max_output_tokens` by default (confirmed live: a 300-token budget left
+only 66 for the actual answer) — `vertex.py` disables it
+(`ThinkingConfig(thinking_budget=0)`) for both speed and predictable output
+length.
 
 ```bash
-export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
 export VERTEX_PROJECT_ID="<gcp-project-id>"
-export VERTEX_LOCATION="us-central1"          # optional, sensible default
-export VERTEX_MODEL_ID="gemini-<current-flash-or-pro-id>"  # confirm what's
-                                                             # actually available
-                                                             # in the target
-                                                             # project/region
-                                                             # before hardcoding
-                                                             # a default
+export VERTEX_LOCATION="us-central1"          # optional, this is the default
+
+# Credentials: no separate API key. Either:
+gcloud auth application-default login          # local dev -- this is what
+                                                # this project was verified with
+# or, for CI / service accounts:
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
 ```
+
+Default model: `gemini-2.5-flash` (live-verified this session, real GCP
+project, `us-central1`) — chosen as a real, currently-available model, not
+guessed.
 
 Same optional-dependency pattern as `[ai]`/`[docs]` in `pyproject.toml`:
 
 ```toml
 [project.optional-dependencies]
 ai = ["ibm-watsonx-ai>=1.7"]
-vertex = ["google-genai>=<pin-to-whatever-is-current>"]
+vertex = ["google-genai>=2.25"]
 ```
 
 Nothing in the core install needs either extra — same as today.
@@ -145,13 +164,13 @@ before any code exists, not because it can be verified in this environment.
 
 ## Refactor steps (phased, one branch each per `AGENTS.md §11`)
 
-| Step | What | Depends on |
+| Step | What | Status |
 |---|---|---|
-| 1 | Extract `base.py`'s `ChatProvider` protocol; move `watson_agent/client.py`'s logic into `ai_providers/watsonx.py` unchanged | — |
-| 2 | Point `narrative.py` and `watson_agent/orchestrator.py` at `ai_providers.get_provider()` instead of importing watsonx directly; re-run `phase15`/`phase16` to confirm no behavior change | 1 |
-| 3 | Implement `ai_providers/vertex.py`; verify its SDK call shapes against the real installed package the same way `client.py` was verified (fake-credentials call reaching the real endpoint, `inspect.signature` on the chat method) | 1 |
-| 4 | `scripts/benchmark_models.py` + a new `scripts/verify.py` phase confirming the benchmark script degrades gracefully with partial credentials | 2, 3 |
-| 5 | Docs: this file moves from "design only" to describing what's actually built; `README.md`/`AGENTS.md`/`CLAUDE.md` gain a real multicloud section (mirroring how the watsonx.ai migration updated them) | 1–4 |
+| 1 | Extract `base.py`'s `ChatProvider` protocol; move `watson_agent/client.py`'s logic into `ai_providers/watsonx.py` | 🟢 done (`feat/16-ai-providers`) |
+| 2 | Point `narrative.py` and `watson_agent/orchestrator.py` at `ai_providers.get_provider()`; add `--provider` CLI flag to `repoguard fix`/`analyze --summarize`; `phase15`/`phase16`/new `multicloud` check all PASS, zero behavior change confirmed live with real watsonx credentials | 🟢 done |
+| 3 | Implement `ai_providers/vertex.py`; verified its SDK call shapes against the real installed package (`inspect.signature`/`model_fields` on `google-genai==2.25.0`) and live-verified a real text call + a full tool-calling round trip against a real GCP project | 🟢 done |
+| 4 | `scripts/benchmark_models.py` + a new `scripts/verify.py` phase confirming the benchmark script degrades gracefully with partial credentials | 🔴 deferred — needs a full fix-loop run with each provider to mean anything; not this session's goal |
+| 5 | Docs: this file moves from "design only" to describing what's actually built; `README.md`/`AGENTS.md`/`CLAUDE.md` gain a real multicloud section (mirroring how the watsonx.ai migration updated them) | 🟢 done |
 
 ## Non-goals
 
@@ -164,10 +183,13 @@ before any code exists, not because it can be verified in this environment.
 
 ## Open questions for a human
 
-- Which Vertex AI model(s) to default to, and in which GCP project/region —
-  same kind of decision `docs/WATSONX_SETUP.md` already leaves to whoever
-  sets up real credentials, not something to guess here.
-- Whether `REPOGUARD_AI_PROVIDER` should support per-call override (e.g. a
-  `--provider` CLI flag on `repoguard fix`) or stay a single env var for the
-  whole process — leaning toward the flag, since benchmarking needs to run
-  multiple providers in the same session, but not decided.
+- ~~Which Vertex AI model(s) to default to, and in which GCP project/region~~
+  — resolved: `gemini-2.5-flash` in `us-central1`, confirmed available and
+  working against the real GCP project used to verify this. A different
+  project/region may need a different model; `VERTEX_LOCATION` and
+  `get_provider(model_id=...)` are both overridable.
+- ~~Whether `REPOGUARD_AI_PROVIDER` should support per-call override~~ —
+  resolved: `get_provider(provider=...)` takes the override, and
+  `repoguard fix --provider` / `repoguard analyze --summarize --provider`
+  expose it on the CLI (`watsonx` or `vertex`, defaulting to
+  `REPOGUARD_AI_PROVIDER`, itself defaulting to `"watsonx"`).

@@ -61,7 +61,7 @@ def api_summary(dashboard: dict) -> dict:
     from ..narrative import generate_summary
 
     result = generate_summary(dashboard)
-    return {"ok": result.ok, "text": result.text, "error": result.error, "provider": "watsonx.ai"}
+    return {"ok": result.ok, "text": result.text, "error": result.error, "provider": result.provider}
 
 
 @app.get("/api/stream")

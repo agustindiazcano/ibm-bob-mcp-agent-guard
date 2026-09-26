@@ -416,6 +416,29 @@ def run_mutation(
     repo = Path(repo_path).resolve()
     mutate_root = (repo / paths_to_mutate).resolve()
 
+    # A mutation score only means anything relative to a passing baseline --
+    # _run_mutant() scores a mutant "killed" whenever pytest exits non-zero,
+    # so if the *unmutated* suite is already red, every single mutant looks
+    # "killed" trivially, producing a meaningless (and misleadingly perfect)
+    # score. Confirm the baseline passes first; never fabricate a number
+    # against a broken suite (AGENTS.md Section 4).
+    baseline = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "--tb=no", "--no-header", tests_dir],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    if baseline.returncode != 0:
+        raise RuntimeError(
+            "Mutation testing requires a passing baseline test suite, but "
+            f"pytest failed on the unmutated code (exit code {baseline.returncode}).\n"
+            "Every mutant would trivially score \"killed\" against an already-"
+            "failing suite, so no mutation score can be reported until this "
+            "is fixed.\n"
+            f"stdout:\n{baseline.stdout}\nstderr:\n{baseline.stderr}"
+        )
+
     # Collect all .py files under paths_to_mutate, excluding tests and hidden dirs
     py_files: list[Path] = sorted(
         p for p in mutate_root.rglob("*.py")

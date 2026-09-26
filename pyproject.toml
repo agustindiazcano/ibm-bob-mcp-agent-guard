@@ -32,6 +32,10 @@ docs = ["matplotlib>=3.8"]
 # Everything else (measurement, CLI, MCP tools 1-8) works with zero AI calls
 # and zero credentials, so this stays out of the core deps too.
 ai = ["ibm-watsonx-ai>=1.7"]
+# REPOGUARD_AI_PROVIDER=vertex / --provider vertex. Credentials via
+# Application Default Credentials (gcloud auth application-default login)
+# or GOOGLE_APPLICATION_CREDENTIALS -- see docs/VERTEX_SETUP.md.
+vertex = ["google-genai>=2.25"]
 
 [project.scripts]
 repoguard = "repoguard_engine.cli:main"

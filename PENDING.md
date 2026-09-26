@@ -201,7 +201,9 @@ This is what gets recorded for the demo: it's the proof that the system works as
 | Cloud Run readiness | Handled in the Dockerfile's `CMD` (`--host 0.0.0.0 --port ${PORT:-8080}`) rather than changing `cli.py`'s locally-safe defaults | 🟢 |
 | CI workflow | `.github/workflows/ci.yml` — `verify.py phase0/phase7`, demo-repo pytest, `repoguard gate demo-repo --threshold 60` on every push/PR; mutation determinism (`phase3`) as its own slower job | 🟢 |
 | CD workflow | `.github/workflows/cd.yml` — builds the image, pushes to Artifact Registry, deploys to Cloud Run on push to `main` (or manual dispatch) | 🟢 |
-| GCP setup doc | `docs/DEPLOY.md` — one-time steps a human with GCP access must do (project, Artifact Registry, service account, GitHub secrets/vars) | 🟢 |
+| GCP setup doc | `docs/DEPLOY.md` — one-time steps a human with GCP access must do | 🟢 |
+| GCP resources | Artifact Registry repo, `repoguard-deployer` service account + roles, Workload Identity Federation pool/provider scoped to this exact GitHub repo | 🟢 done for real (`gcloud`, real project, real ADC credentials) |
+| CD auth | `cd.yml` switched from a static `GCP_SA_KEY` JSON key to Workload Identity Federation — no long-lived GCP secret ever stored in GitHub | 🟢 |
 
 Verified locally before marking done: `docker`'s daemon isn't reachable from
 this sandbox (nested containerization blocked), so the `docker build` itself
@@ -213,10 +215,15 @@ passed for real (65.1% ≥ 60%, exit 0). Both workflow YAML files parse
 successfully. The first real `docker build` should happen in CI itself or
 on a machine with Docker access before trusting the image blindly.
 
-Deploying itself (the `gcloud`/console steps, granting the service account,
-adding repo secrets) needs a human with GCP access — Claude can write and
-locally verify the Dockerfile and both workflow files, but can't create
-cloud resources or hold real cloud credentials.
+The GCP side is done for real, not just written and locally checked: the
+user has a working `gcloud` ADC login (already used for Vertex AI, Phase
+16), so the Artifact Registry repo, service account, IAM bindings, and WIF
+pool/provider were all created directly against a real project this
+session — see `docs/DEPLOY.md` §1 for the exact commands run and their
+real output (project `project-e0ad10c9-0b2f-4dc0-ac6`, project number
+`993240087609`). **Still pending, human-only:** `gh` CLI isn't available in
+this environment, so the 6 GitHub repo Variables (`docs/DEPLOY.md` §2) have
+to be added through the GitHub web UI before the first real deploy can run.
 
 ---
 
@@ -251,7 +258,7 @@ contract. (This section absorbed the former satellite `PENDING-front.md`.)
 | `StatCards` + `GapsList` + `RiskTable` | Coverage, mutation score, gaps, risk ranking — verbatim from `AnalyzeResponse`, no new numbers | 🟢 |
 | `SummaryPanel` | AI prose, labeled advisory + which provider generated it (PRs #26/#27) | 🟢 |
 | CI split | `frontend-ci.yml` (lint+build, `web-next/**` only) separate from backend `ci.yml`/`cd.yml` (`paths-ignore: web-next/**`) | 🟢 |
-| Vercel deploy | Connect repo/subfolder to Vercel; no IaC, config in `vercel.json` / project settings; `NEXT_PUBLIC_REPOGUARD_API_BASE` per environment | 🔴 human step |
+| Vercel deploy | Connect repo/subfolder to Vercel; no IaC, config in `vercel.json` / project settings; `NEXT_PUBLIC_REPOGUARD_API_BASE` per environment | 🟢 deployed: https://ibm-bob-mcp-agent-guard.vercel.app/ — `NEXT_PUBLIC_REPOGUARD_API_BASE` still points at `localhost:8000` (placeholder); update once Cloud Run (Phase 13) is deployed |
 | Docs | Fold `docs/ARCHITECTURE-front.md` into `docs/ARCHITECTURE.md`; add the deployed URL and real screenshots to `README.md` | 🔴 |
 
 **Verified so far:** `npm run lint` and `npm run build` pass. End-to-end on
@@ -295,7 +302,7 @@ of any number, per `AGENTS.md §4`. Optional dependency (`pip install -e
 ---
 
 ## Phase 16 — Multicloud AI: watsonx.ai + Google Vertex AI
-**Priority: 2 · Depends on: 8, 15** (design only — see `docs/MULTICLOUD_AI.md`; nothing in this phase is implemented yet)
+**Priority: 2 · Depends on: 8, 15** (Stage A implemented — see `docs/MULTICLOUD_AI.md`; Stage B (`vertex.py`) needs real GCP credentials)
 
 The user asked for this project to not be single-cloud: watsonx.ai is the
 only provider today (`narrative.py`, `watson_agent/client.py`). This phase
@@ -304,14 +311,25 @@ future provider) can be added without touching `tools.py`, `prompts.py`, or
 the orchestrator loop, plus a way to benchmark models against each other
 using the engine's own mutation-score measurement, not a subjective opinion.
 
+Real watsonx.ai credentials were configured and live-tested this session,
+which surfaced two real findings driving this phase's urgency: the free-tier
+concurrency pool for the best tool-calling model (`llama-3-3-70b-instruct`)
+hits `429` under real load, and a smaller model that does respond
+(`mistral-small-3-1-24b-instruct-2503`) doesn't reliably honor tool-calling —
+a real `repoguard fix demo-repo` run produced zero mutation-score improvement
+because the model replied in plain text instead of calling tools. The user
+has a separate Vertex AI account with credit and no rate limits, motivating
+Vertex as the reliable/fast provider once Stage B lands.
+
 | Deliverable | Description | Status |
 |---|---|---|
 | `docs/MULTICLOUD_AI.md` | Design doc: architecture, env vars, refactor steps, benchmarking plan, open questions | 🟢 |
-| `ai_providers/base.py` | `ChatProvider` protocol | 🔴 |
-| `ai_providers/watsonx.py` | Today's `watson_agent/client.py` logic, moved unchanged | 🔴 |
-| `ai_providers/vertex.py` | Google Vertex AI implementation; SDK call shapes to be verified against the real installed package before shipping, same rigor as `client.py` | 🔴 |
-| `narrative.py` / `orchestrator.py` switched to `get_provider()` | No behavior change for watsonx.ai; re-run `phase15`/`phase16` after | 🔴 |
-| `scripts/benchmark_models.py` | Runs the fix loop against fresh `demo-repo` copies per `(provider, model_id)`, compares real mutation-score deltas | 🔴 |
+| `ai_providers/base.py` | `ChatProvider` protocol, `AIProviderError` | 🟢 |
+| `ai_providers/watsonx.py` | `watson_agent/client.py`'s logic, moved here; `narrative.py` unified onto the same `chat()` interface (previously a separate `generate_text()` call) | 🟢 |
+| `ai_providers/vertex.py` | Google Vertex AI implementation; SDK call shapes to be verified against the real installed package before shipping, same rigor as `watsonx.py` | 🔴 needs real GCP credentials |
+| `narrative.py` / `orchestrator.py` switched to `get_provider()` | No behavior change for watsonx.ai — confirmed live (`phase15`/`phase16`/new `multicloud` check all PASS; a real `--summarize` call with real watsonx credentials still returns real text) | 🟢 |
+| `--provider` CLI flag | `repoguard fix --provider` / `repoguard analyze --summarize --provider` override `REPOGUARD_AI_PROVIDER` per call | 🟢 |
+| `scripts/benchmark_models.py` | Runs the fix loop against fresh `demo-repo` copies per `(provider, model_id)`, compares real mutation-score deltas | 🔴 deferred — needs live credentials for 2+ providers |
 
 Live cross-provider benchmarking needs real credentials for at least two
 clouds — same human-gated situation as `docs/WATSONX_SETUP.md` and Phase 11.
@@ -332,8 +350,8 @@ Persistence is off unless `REPOGUARD_DATABASE_URL` is set.
 | A1 | `repoguard_engine/store/` (SQLAlchemy Core, SQLite + Postgres), `[db]` extra | 🔴 |
 | A2 | Engine: per-mutant outcomes + stable fingerprints, `junit.xml` per-test outcomes; `pipeline.py` persists | 🔴 |
 | A3 | API read routes + `POST /api/runs` ingest (project token) + `repoguard analyze --push` | 🔴 |
-| B1 | `infra/terraform/` — Artifact Registry, Cloud SQL, Secret Manager, Cloud Run, WIF; `infra-ci.yml` (fmt/validate) | 🔴 |
-| B2 | `cd.yml` on Workload Identity Federation (drop `GCP_SA_KEY`) | 🔴 |
+| B1 | `infra/terraform/` — Artifact Registry, Cloud SQL, Secret Manager, Cloud Run, WIF; `infra-ci.yml` (fmt/validate) | 🔴 (WIF pool/provider itself already exist for real, done early as part of Phase 13 — Terraform would just codify what's already there, not create it fresh) |
+| B2 | `cd.yml` on Workload Identity Federation (drop `GCP_SA_KEY`) | 🟢 done early, as part of Phase 13 — see `docs/DEPLOY.md` |
 | C1 | web-next charts: trend, survival by operator, fix effect, survivors, flaky | 🔴 |
 | C2 | Risk heatmap (below the cut line) | 🔴 |
 | D | User accounts (below the cut line — optional) | 🔴 |
@@ -378,7 +396,7 @@ show it's faster (H1) and at least as good (H2) as the sequential loop.
 - [x] **Verify demo-repo baseline numbers** — measured 65.1% coverage, 20.25% mutation (16/79), 4 files with gaps (AST engine; old mutmut numbers were 74.5%/23.6% — now stale)
 - [x] **Add `.gitattributes`** — normalize line endings (CRLF warnings on every commit)
 - [x] ~~Populate `bob-evidence/`~~ — moot: `bob-evidence/` is retired along with the rest of `.bob/` (see `.bob/DEPRECATED.md`); `repoguard fix` now auto-writes its own run report to `<target-repo>/watson-evidence/` instead
-- [ ] **Decide on renaming the GitHub repo/local directory** (`ibm-bob-mcp-agent-guard`) now that IBM Bob is retired — an external-visible identity change, deliberately not done as part of the watsonx.ai migration; needs an explicit human decision
+- [x] **Decide on renaming the GitHub repo/local directory** — kept as `ibm-bob-mcp-agent-guard`; it's the hackathon's name, so it stays even though IBM Bob itself is retired
 - [x] **Populate `docs/img/`** — `docs/make_results_chart.py` rewritten (it previously printed hardcoded fictional numbers, not a real chart) to render both PNGs from the real AGENTS.md §7 numbers via matplotlib (`docs` optional dependency, added to `pyproject.toml`)
 - [x] **CI workflow** — done as part of Phase 13 above (`.github/workflows/ci.yml`), not the standalone `gate.yml` originally sketched in `RUNBOOK.md §7`
 - [x] **Write the missing `docs/expected-after-tests/*.py` reference tests** — all 4 files written (`test_pricing_complete.py`, `test_cart_complete.py`, `test_inventory_complete.py`, `test_api_complete.py`). Measured against the real engine: 71 passed, 100% coverage, 89.87% mutation (71/79), 7 of 7 API endpoints tested. Never left inside `demo-repo/tests/` after measuring, per AGENTS.md §7. Also corrected a pre-existing doc error found along the way: `api.py` has 7 endpoints, not the 8 documented everywhere (README, AGENTS.md's directory tree and old baseline table).
