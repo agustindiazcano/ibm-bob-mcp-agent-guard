@@ -1,6 +1,6 @@
 import type { AnalyzeResponse, RepoFormValues, StreamEvent, SummaryResponse } from "./types";
 
-function apiBase(): string {
+export function apiBase(): string {
   const base = process.env.NEXT_PUBLIC_REPOGUARD_API_BASE;
   if (!base) {
     throw new Error("NEXT_PUBLIC_REPOGUARD_API_BASE is not set");
@@ -8,7 +8,7 @@ function apiBase(): string {
   return base;
 }
 
-async function request(url: string, init?: RequestInit): Promise<Response> {
+export async function request(url: string, init?: RequestInit): Promise<Response> {
   try {
     return await fetch(url, init);
   } catch {
@@ -21,7 +21,7 @@ async function request(url: string, init?: RequestInit): Promise<Response> {
   }
 }
 
-async function failure(res: Response, what: string): Promise<Error> {
+export async function failure(res: Response, what: string): Promise<Error> {
   try {
     const body = (await res.json()) as { detail?: unknown };
     if (typeof body.detail === "string") {

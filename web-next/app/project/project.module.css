@@ -1,0 +1,77 @@
+.metric {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.metricEmphasis {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.metricLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.metricValues {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.before {
+  font-size: 18px;
+  font-weight: 550;
+  color: var(--text-muted);
+}
+
+.arrow {
+  color: var(--text-muted);
+  font-size: 16px;
+}
+
+.after {
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.metricEmphasis .after {
+  color: var(--accent);
+}
+
+.metricDetail {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.caption {
+  max-width: 820px;
+  font-size: 13.5px;
+  color: var(--text-muted);
+  text-wrap: pretty;
+}
+
+.caption code {
+  font-size: 0.92em;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.entryHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
