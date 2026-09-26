@@ -1,5 +1,5 @@
-"""IBM watsonx.ai ChatProvider -- the default provider (REPOGUARD_AI_PROVIDER
-unset or "watsonx"). Replaces the former watson_agent/client.py; moved here
+"""IBM watsonx.ai ChatProvider -- the alternative provider
+(REPOGUARD_AI_PROVIDER=watsonx / --provider watsonx; the default is vertex). Replaces the former watson_agent/client.py; moved here
 unchanged apart from wrapping ModelInference.chat() behind the normalized
 ChatProvider.chat(messages, tools=, max_tokens=, timeout_ms=) signature so
 narrative.py and the fix-loop orchestrator never import ibm_watsonx_ai

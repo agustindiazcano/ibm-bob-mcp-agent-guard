@@ -87,6 +87,7 @@ def _drain(events: "queue.Queue[dict | None]") -> Iterator[str]:
 
 def _run(repo_path: str, gate_threshold: float, provider: str | None, events: "queue.Queue[dict | None]") -> None:
     """Worker body: copy, run the loop, report the tests it wrote, clean up."""
+    from ..ai_providers import resolve_provider_name
     from ..watson_agent import run_fix_loop
 
     def emit(event_type: str, data: dict) -> None:
@@ -98,7 +99,7 @@ def _run(repo_path: str, gate_threshold: float, provider: str | None, events: "q
         sandbox = Path(tempfile.mkdtemp(prefix="repoguard-fix-"))
         work = sandbox / original.name
         shutil.copytree(original, work, ignore=_COPY_IGNORE)
-        resolved_provider = provider or os.environ.get("REPOGUARD_AI_PROVIDER", "watsonx")
+        resolved_provider = resolve_provider_name(provider)
         emit("start", {"repo_path": str(original), "provider": resolved_provider})
 
         result = run_fix_loop(

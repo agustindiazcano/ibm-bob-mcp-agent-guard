@@ -9,7 +9,7 @@ Section 4: "cli.py, mcp_server.py and web/server.py are thin adapters over
 pipeline/core").
 
 Provider-agnostic: drives whichever ai_providers.get_provider() returns
-(watsonx.ai by default, or Vertex AI via REPOGUARD_AI_PROVIDER=vertex) --
+(Vertex AI by default, or watsonx.ai via REPOGUARD_AI_PROVIDER=watsonx) --
 see docs/MULTICLOUD_AI.md.
 """
 
@@ -60,6 +60,21 @@ class StageResult:
     tool_calls: list[str] = field(default_factory=list)
     llm_calls: int = 0
     wall_s: float = 0.0
+
+
+def describe_survivors(mutation, file_rel: str) -> str:
+    """One line per surviving mutant in file_rel -- line, function, what
+    changed, the original source line -- instead of bare positional IDs the
+    writer can't map back to code."""
+    if mutation is None:
+        return "  (mutation not measured)"
+    target = Path(file_rel).as_posix()  # coverage.py reports OS-native separators
+    lines = [
+        f"  - line {m.lineno} in {m.function}: {m.description}  | {m.original_line}"
+        for m in mutation.mutants
+        if m.file == target and m.outcome == "survived"
+    ]
+    return "\n".join(lines) or "  (none -- every mutant in this file is already killed)"
 
 
 def _priority_files(risk: list) -> list[str]:
@@ -162,7 +177,7 @@ def run_fix_loop(
     7. Write an evidence report to watson-evidence/.
 
     provider: forwarded to ai_providers.get_provider() (None reads
-    REPOGUARD_AI_PROVIDER, defaulting to "watsonx").
+    REPOGUARD_AI_PROVIDER, defaulting to "vertex").
 
     on_event: optional progress callback, called as on_event(type, data) at
     each stage boundary (web/fix_job.py streams these to the browser). It
@@ -206,7 +221,7 @@ def run_fix_loop(
         writer_prompt = (
             f"File: {file_rel}\n"
             f"Coverage gaps (missing lines): {baseline.gap.missing_lines_by_file.get(file_rel, []) if baseline.gap else []}\n"
-            f"Surviving mutant IDs: {baseline.mutation.surviving_mutant_ids if baseline.mutation else []}\n\n"
+            f"Surviving mutants in this file:\n{describe_survivors(baseline.mutation, file_rel)}\n\n"
             "Read this file, then write one pytest test file under tests/ "
             "that kills as many of the surviving mutants as possible."
         )
