@@ -30,20 +30,46 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Trims each repo Variable and fails loud on anything empty, instead of
+      # leaking a raw-value typo (e.g. a leading/trailing space pasted into
+      # the GitHub UI) into a Docker tag or gcloud flag, where it surfaces as
+      # a confusing "invalid reference format" several steps later.
+      - name: Normalize and validate repo variables
+        run: |
+          for NAME in GCP_PROJECT_ID GCP_REGION GAR_REPOSITORY CLOUD_RUN_SERVICE WIF_PROVIDER DEPLOYER_SA; do
+            VALUE="${!NAME}"
+            TRIMMED="$(echo "$VALUE" | xargs)"
+            if [ -z "$TRIMMED" ]; then
+              echo "::error::Repo variable $NAME is unset or blank — see docs/DEPLOY.md §2." >&2
+              exit 1
+            fi
+            if [ "$VALUE" != "$TRIMMED" ]; then
+              echo "::warning::Repo variable $NAME had leading/trailing whitespace — trimmed to '$TRIMMED'."
+            fi
+            echo "$NAME=$TRIMMED" >> "$GITHUB_ENV"
+          done
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ vars.GCP_REGION }}
+          GAR_REPOSITORY: ${{ vars.GAR_REPOSITORY }}
+          CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
+          WIF_PROVIDER: ${{ vars.WIF_PROVIDER }}
+          DEPLOYER_SA: ${{ vars.DEPLOYER_SA }}
+
       - id: auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
-          service_account: ${{ vars.DEPLOYER_SA }}
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SA }}
 
       - uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
 
       - name: Build image
         run: |
-          IMAGE="${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/repoguard:${{ github.sha }}"
+          IMAGE="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/repoguard:${{ github.sha }}"
           docker build -t "$IMAGE" .
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
 
@@ -53,8 +79,8 @@ jobs:
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
         with:
-          service: ${{ vars.CLOUD_RUN_SERVICE }}
-          region: ${{ vars.GCP_REGION }}
+          service: ${{ env.CLOUD_RUN_SERVICE }}
+          region: ${{ env.GCP_REGION }}
           image: ${{ env.IMAGE }}
           flags: --allow-unauthenticated
 
