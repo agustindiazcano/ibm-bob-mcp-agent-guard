@@ -56,7 +56,7 @@ async def api_analyze(
 
 
 @app.post("/api/summary")
-async def api_summary(dashboard: dict) -> dict:
+def api_summary(dashboard: dict) -> dict:
     """Wrap narrative.generate_summary() over an already-measured dashboard dict."""
     from ..narrative import generate_summary
 
