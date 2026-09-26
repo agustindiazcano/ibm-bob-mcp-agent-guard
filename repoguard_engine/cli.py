@@ -103,6 +103,9 @@ def fix(repo_path: str, threshold: float, publish: bool, provider: str | None) -
     except AIProviderError as exc:
         console.print(f"[bold red]✗ {exc}[/]")
         sys.exit(1)
+    except RuntimeError as exc:
+        console.print(f"[bold red]✗ Gate failed:[/] {exc}")
+        sys.exit(1)
 
     console.print(f"Files attempted: {', '.join(result.files_attempted) or '(none)'}")
     before = result.baseline.get("mutation") or {}
