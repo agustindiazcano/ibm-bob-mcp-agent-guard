@@ -592,11 +592,48 @@ credentials, and the Cloud Run token isn't attached yet. Gap 3 stays 🟡
 until a real run from the Vercel demo shows a measured mutation score above
 20.25%, and `/api/analyze` on the same service still reports 65.1% after it.
 
+### Session 23 — Phase 19 plan: evaluation & guardrails for the fix loop (`claude/pensive-rubin-7nhvkh`)
+
+The user asked whether code-review/healing LLM apps have guardrails and
+evaluation, and what the benchmark is, then asked for a plan doc, an
+implementation doc and README phases. A second Claude session was
+refactoring docs in parallel, so edits outside the two new docs were kept
+small and additive.
+
+Before planning, the current guardrails were probed on throwaway
+`demo-repo` copies with the real `write_test_file` / `run_tests` /
+`measure_coverage` / `run_mutation` functions (script not committed;
+`demo-repo/` unchanged afterwards):
+
+| # | Probe | Measured |
+|---|---|---|
+| P1 | Test that only asserts `shop/*.py` hashes are unchanged (no behavioral assertion) | Mutation **100% (79/79)**, above the honest reference's 89.87% (71/79); coverage 66.1% (+5 lines of the test file itself) |
+| P2 | Model-written test prints `REPOGUARD_FIX_TOKEN` | Leaked through `run_tests` output: every pytest subprocess inherits the full env |
+| P3 | `write_test_file("tests/test_cart.py", "")` | Accepted |
+| P4 | `write_test_file("tests/conftest.py", ...)` | Accepted |
+| P5 | Coverage with bare `--cov` vs `--cov=shop` | 65.1% (112/172) vs **60.26% (91/151)**: `tests/` counts toward its own coverage |
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Plan: how the loop acts on code today (writes whole files via one tool, runs in our backend, `--publish` → PR → `ci.yml`), benchmark landscape (TestGenEval, SWT-Bench, BugsInPy; why not SWE-bench), measured gaps, three layers G/E/O, metrics, hypotheses, decisions D1–D9 | `docs/EVAL_GUARDRAILS_PLAN.md` (new) |
+| 2 | Implementation: 13 steps with signatures, `verify.py phase19*` checks, cut line, shared work with Phase 18 | `docs/EVAL_GUARDRAILS_IMPLEMENTATION.md` (new) |
+| 3 | README "Evaluation & guardrails (planned)" section with the 19.x phase table, TOC, docs list, roadmap | `README.md` |
+| 4 | Phase 19 table; Phase 16's `benchmark_models.py` row marked superseded by Phase 19 step 9 | `PENDING.md` |
+| 5 | New docs added to the directory tree | `CLAUDE.md` + `AGENTS.md` (still byte-identical) |
+
+### Key decisions (Session 23)
+
+- **No guardrail product** (NeMo Guardrails, Guardrails AI, Llama Guard): the model's only effects are tool calls and executed tests, so deterministic checks at those two points cover it. A second model would add its own unmeasured error rate.
+- **Every measurement gets a control:** no-op source canary (P1), sham mutant (shared with Phase 18 S1), 3× repetition, monotonic kill set, and the reference suite as calibration (must pass every guard at 71/79).
+- **Waiting on the user:** D1 (policy inside `write_test_file`, an `AGENTS.md §8` item), D3 (held-out fixture), D4 (BugsInPy subset), D9 (source-only coverage moves 65.1% → 60.26%, and `ci.yml`'s threshold of 60 would pass by 0.26 pp).
+- Nothing in `repoguard_engine/` changed this session; the §7 baseline is untouched.
+
 ---
 
 ## Current repo state
 
-- **Session 22 (Autofix) is on `claude/eager-gauss-ifyd8w` (commit `1e97a8c` plus this doc follow-up), pushed but not merged and with no PR opened yet.** `main` doesn't have Autofix until that merges and `cd.yml` redeploys.
+- Session 22 (Autofix) merged to `main` as PR #55.
+- **Session 23 (Phase 19 plan, docs only) is on `claude/pensive-rubin-7nhvkh`.** Phase 19 is 🔴 apart from its docs. Decisions D1/D3/D4/D9 are waiting on the user (`docs/EVAL_GUARDRAILS_PLAN.md` §9).
 - Branch: `main` — PR #37 (Phase 16 + 13 WIF), #38 (doc fixes), #39 (Phase 17 B1 Terraform), #40 (session log), #41 (cd.yml trim fix), #42 (cli graceful failure), #43 (frontend context docs), #44 (dashboard visual design), #45 (Phase 11 Gemini 3 + `run_tests` + `thought_signature` fixes), #46 (Phase 17/18 planning corrections), #47 (`/api/analyze` 400-vs-500 fix), #48 (frontend: clear backend-unreachable error + real screenshots) all merged
 - All Session 21 fixes merged: PR #49 (CORS), #51 (ImportError detail), #52 (`Dockerfile` `[vertex]` extra + docs — recovered after #49/#51 both dropped commits pushed post-merge, see Session 21 item 5), #53 (frontend live-deploy docs). `ok: true` summary path verified live for real
 - Phase 0/3/7/8/9/13/15/16: 🟢. Phase 11: 🟢 (see Session 20) — first genuinely successful live AI fix-loop run, 89.87%/71/79. Phase 17 B1/B2: 🟢 (Terraform-managed WIF)
@@ -620,3 +657,4 @@ until a real run from the Vercel demo shows a measured mutation score above
 5. Autofix: attach `REPOGUARD_FIX_TOKEN` (`docs/DEPLOY.md` §5), then run it from the Vercel demo against `demo-repo` and record the measured before/after. If you change a Vercel env var, Redeploy the **newest `main`** deployment, never an older row (`docs/ARCHITECTURE-front.md`, Session 21-front item 5).
 6. If tightening `repoguard-deployer`'s IAM roles, or moving the new `aiplatform.user` grant into Terraform: read `infra/terraform/README.md`'s "Known gap" section first — real permissions change against a live project, own PR.
 7. The repo-rename decision is open and low-urgency — decide whenever, it's cosmetic.
+8. Phase 19: build from `docs/EVAL_GUARDRAILS_IMPLEMENTATION.md` in step order. Steps 1, 3, 4, 5, 7 and 8 need no approval; step 2 needs D1, step 6 needs D9. Step 4 is shared with Phase 18 S1/S2, so check which phase built it first.

@@ -116,6 +116,8 @@ ibm-bob-mcp-agent-guard/
 │   ├── WATSONX_SETUP.md          IBM Cloud credentials for the default AI provider
 │   ├── MULTICLOUD_AI.md          ChatProvider abstraction + Vertex AI — both built, see docs/VERTEX_SETUP.md
 │   ├── VERTEX_SETUP.md           Google Cloud credentials for the Vertex AI provider
+│   ├── EVAL_GUARDRAILS_PLAN.md            Phase 19 plan: fix-loop guardrails, evaluation, benchmark (measured gaps P1–P5)
+│   ├── EVAL_GUARDRAILS_IMPLEMENTATION.md  Phase 19 build steps, signatures, verify.py phase19 checks
 │   ├── AI_ASSISTED_DEVELOPMENT_FRAMEWORK.md  How this repo itself is built
 │   ├── make_results_chart.py     Generates before/after results chart
 │   ├── expected-after-tests/     Reference tests — copy in to verify "after" numbers; remove after
