@@ -16,6 +16,8 @@ Bob's repository impact for this repo specifically:
 |---|---|---|---|---|---|
 | `agustindiazcano/ibm-bob-mcp-agent-guard` | 820 | 4,314 | 5,134 | 16.0% | 12 |
 
+IBM Bob Hackaton Ranking (Bob IDE ussage):
+
 | Metric | Value | Ranking |
 |---|---|---|
 | Bob commits | 12 | 1st |
