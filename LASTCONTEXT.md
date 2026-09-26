@@ -526,7 +526,7 @@ Demo-repo's tests/ were restored to the documented weak baseline (5 passed, 65.1
 
 ---
 
-### Session 21 — Frontend punch list: PR #48 (parallel), CORS + Vertex-on-Cloud-Run fixes (PR pending)
+### Session 21 — Frontend punch list: PR #48 (parallel), CORS + Vertex-on-Cloud-Run (PRs #49/#50, then a stray-commit chase)
 
 Two sessions worked in parallel against a shared punch list the frontend
 session produced (Vercel → real backend, `ok=true` summary, Autofix).
@@ -535,31 +535,39 @@ session produced (Vercel → real backend, `ok=true` summary, Autofix).
 |---|---|---|
 | 1 | Frontend session: clear "backend unreachable" error message + real production dashboard screenshots (light/dark) replacing placeholders | `web-next/app/lib/api.ts`, `README.md`, `docs/img/dashboard-{light,dark}.png` — PR #48, merged |
 | 2 | `/api/analyze` 400-vs-500 fix (already logged) merged as PR #47; `cd.yml` auto-redeployed on the `main` push — confirmed live: bad `repo_path` now returns 400, not 500 | — |
-| 3 | Punch-list item 3 (Vercel → real backend): set `NEXT_PUBLIC_REPOGUARD_API_BASE` to the real Cloud Run URL (user, in Vercel); backend needed `REPOGUARD_CORS_ORIGINS` to allow the Vercel origin — added to `cd.yml`'s `env_vars` and applied live via `gcloud run services update`, confirmed with a real CORS preflight request | `.github/workflows/cd.yml` — branch `fix/cd-cors-vercel-origin`, not yet a PR at first, then extended (next row) |
-| 4 | Punch-list item 4 (`ok=true` summary path): live-tested `/api/summary` against the deployed service — found 3 real gaps (independently confirmed by the frontend session too): `REPOGUARD_AI_PROVIDER` unset on the service (defaulted to watsonx, not configured there), the deployed image never had `google-genai` installed (`Dockerfile` used the bare package, no `[vertex]` extra), and the Cloud Run runtime SA (`993240087609-compute@developer.gserviceaccount.com`) has no `roles/aiplatform.user` grant on the project. Fixed the first two (`Dockerfile`, `cd.yml`); the IAM grant needs a human to run it — a permission-grant action, blocked here by Claude Code's own auto-mode classifier regardless of scope | `Dockerfile`, `.github/workflows/cd.yml` — same branch, `fix/cd-cors-vercel-origin`, PR not yet opened |
-| 5 | Doc staleness the frontend session flagged: `PENDING.md`'s Phase 14 "Vercel deploy" row still said `NEXT_PUBLIC_REPOGUARD_API_BASE` pointed at `localhost:8000` (it's pointed at Cloud Run and been verified end-to-end for a while); this `LASTCONTEXT.md` entry itself was the other gap (nothing recorded past PR #44) | `PENDING.md`, `LASTCONTEXT.md` |
+| 3 | Punch-list item 3 (Vercel → real backend): `REPOGUARD_CORS_ORIGINS` set to the Vercel origin, applied live via `gcloud run services update`, confirmed with a real CORS preflight — PR #49, merged | `.github/workflows/cd.yml` |
+| 4 | Punch-list item 4 (`ok=true` summary): found 3 real gaps live-testing `/api/summary` (independently confirmed by the frontend session too) — `REPOGUARD_AI_PROVIDER` unset (defaulted to watsonx), the deployed image missing `google-genai` (`Dockerfile` had no `[vertex]` extra), and the Cloud Run runtime SA missing `roles/aiplatform.user`. User ran the IAM grant by hand (blocked for an agent session — a permission grant, not something Claude Code's auto-mode classifier allows regardless of scope, even via Terraform apply, which would be "the same outcome through another tool") | — |
+| 5 | **Real process mistake, twice:** pushed the `Dockerfile`/docs fixes to `fix/cd-cors-vercel-origin` *after* the user had already merged that branch as PR #49 — the same race that orphaned a commit on PR #47 earlier this session. The merged PR (parents `9786ed24`/`f8f636a`) never actually included the `[vertex]` extra, so the redeploy kept failing with the exact same "google-genai is not installed" error, which looked like a code bug but was really a git-timing bug: **check whether a PR has already merged before assuming a push will land in it — a branch that's already been merged can still take new commits, but they go nowhere until pushed as a *new* PR.** Recovered both times by moving the orphaned commit(s) onto a fresh branch (`git merge origin/<old-branch>` into the new one) rather than losing the work | `LASTCONTEXT.md` (this entry) |
+| 6 | While chasing the above as if it might be a real bug: `vertex.py`'s `except ImportError` caught *any* import failure under one fixed message, discarding the real inner exception — genuinely worth fixing regardless (a masked error is a real diagnosability gap), just not what was actually blocking this specific case. Reproduced `pip install -e ".[vertex]"` locally in a clean venv first, confirmed it installs and imports fine, before concluding the error had to be a deploy/config problem, not a dependency one | `repoguard_engine/ai_providers/vertex.py` |
+| 7 | Doc staleness the frontend session flagged: `PENDING.md`'s Phase 14 "Vercel deploy" row still said `NEXT_PUBLIC_REPOGUARD_API_BASE` pointed at `localhost:8000`; `LASTCONTEXT.md` had nothing recorded past PR #44 | `PENDING.md`, `LASTCONTEXT.md` |
+
+All of items 4-7's fixes ended up consolidated onto one branch,
+`fix/vertex-import-error-detail` (PR not yet opened as of this writing) —
+check `git log origin/main..origin/fix/vertex-import-error-detail` before
+assuming this is merged.
 
 **Real, measured chain of Cloud Run env-var changes this session** (all
 via `gcloud run services update --update-env-vars`, each confirmed with a
 real request before moving to the next): `REPOGUARD_CORS_ORIGINS` →
-`VERTEX_PROJECT_ID` → `REPOGUARD_AI_PROVIDER=vertex`. The image itself
-still needs a rebuild (the `[vertex]` extra) before `ok=true` can work —
-that only happens once `fix/cd-cors-vercel-origin` merges and `cd.yml`
-redeploys.
+`VERTEX_PROJECT_ID` → `REPOGUARD_AI_PROVIDER=vertex`. Real IAM policy
+confirms `roles/aiplatform.user` granted to
+`993240087609-compute@developer.gserviceaccount.com`. **Not yet
+re-verified**: `ok: true` from `/api/summary` against the live service —
+that needs the pending branch above to actually merge this time.
 
 ---
 
 ## Current repo state
 
 - Branch: `main` — PR #37 (Phase 16 + 13 WIF), #38 (doc fixes), #39 (Phase 17 B1 Terraform), #40 (session log), #41 (cd.yml trim fix), #42 (cli graceful failure), #43 (frontend context docs), #44 (dashboard visual design), #45 (Phase 11 Gemini 3 + `run_tests` + `thought_signature` fixes), #46 (Phase 17/18 planning corrections), #47 (`/api/analyze` 400-vs-500 fix), #48 (frontend: clear backend-unreachable error + real screenshots) all merged
-- Pending: `fix/cd-cors-vercel-origin` branch (not yet a PR) — `REPOGUARD_CORS_ORIGINS`, `REPOGUARD_AI_PROVIDER=vertex`, `VERTEX_PROJECT_ID` in `cd.yml`, `[vertex]` extra in `Dockerfile`. Already applied live to the running Cloud Run service via `gcloud run services update` (confirmed with real requests); this PR just makes it survive the next deploy
+- Pending: `fix/vertex-import-error-detail` branch (not yet a PR) — `REPOGUARD_AI_PROVIDER=vertex`, `VERTEX_PROJECT_ID` in `cd.yml`, `[vertex]` extra in `Dockerfile`, plus `vertex.py`'s clearer ImportError message. `fix/cd-cors-vercel-origin` (PR #49) is merged but only got as far as the CORS env var — its `Dockerfile`/docs commits were pushed too late and had to be recovered onto this branch (Session 21 item 5) — that branch is deleted now, don't look for it
 - Phase 0/3/7/8/9/13/15/16: 🟢. Phase 11: 🟢 (see Session 20) — first genuinely successful live AI fix-loop run, 89.87%/71/79. Phase 17 B1/B2: 🟢 (Terraform-managed WIF)
-- Phase 14: 🟡 — PR #43 closed gaps 4/5/6, PR #44 added visual design, PR #48 added a clear backend-unreachable error + real production screenshots. `NEXT_PUBLIC_REPOGUARD_API_BASE` now points at the real Cloud Run URL (Vercel, type "Config" not "Secret" since it's not sensitive), verified end-to-end including CORS. Remaining: gap 3 (Autofix, `POST /api/fix`); the summary's real `ok=true` path is blocked on the pending branch above plus a human-run IAM grant (see Session 21)
+- Phase 14: 🟡 — PR #43 closed gaps 4/5/6, PR #44 added visual design, PR #48 added a clear backend-unreachable error + real production screenshots. `NEXT_PUBLIC_REPOGUARD_API_BASE` now points at the real Cloud Run URL (Vercel, type "Config" not "Secret" since it's not sensitive), verified end-to-end including CORS. Remaining: gap 3 (Autofix, `POST /api/fix`); the summary's real `ok=true` path needs the pending branch above merged and redeployed, then re-verified for real (IAM grant is already done)
 - Phase 17 A1-A3 (DB store) and C1-C2 (charts) still 🔴, but `docs/DATA_PLATFORM.md` §13 now has a corrected, step-by-step Block A build plan (Session 20) — build from that, not the doc's original sketch
 - Phase 18 (swarm) still 🔴, `docs/MULTI_AGENT_SWARM.md` §14 now has a corrected S0–S8 plan + 15 risks (Session 20) — Phase 11's merge (PR #45) clears its §14 R1 blocker; demo-repo's 71/79 ceiling still means H2 can only tie there (§14 R2)
 - IBM Bob is retired. `.bob/` stays on disk as inert legacy (`.bob/DEPRECATED.md`); `repoguard_engine/watson_agent/` is the live replacement.
 - GCP Cloud Run: identity is Terraform-managed and a real deploy has succeeded. `GCP_PROJECT_ID`'s raw value in GitHub Settings still has the leading space (cosmetic — `cd.yml` auto-trims it every run; clean it up next time you're in Settings)
-- **Human-only, blocking the summary's `ok=true` path:** grant `roles/aiplatform.user` to the Cloud Run runtime SA (`993240087609-compute@developer.gserviceaccount.com`) — `gcloud projects add-iam-policy-binding project-e0ad10c9-0b2f-4dc0-ac6 --member="serviceAccount:993240087609-compute@developer.gserviceaccount.com" --role="roles/aiplatform.user" --condition=None`. Claude Code's own auto-mode classifier blocks IAM permission grants regardless of scope, so this can't be done from an agent session here
+- **Done, human-run:** `roles/aiplatform.user` granted to the Cloud Run runtime SA (`993240087609-compute@developer.gserviceaccount.com`) — confirmed in the real IAM policy. Was blocked for an agent session (Claude Code's auto-mode classifier blocks IAM permission grants regardless of scope), so the user ran `gcloud projects add-iam-policy-binding ...` directly
 - Open, not yet decided: repo rename; tightening `repoguard-deployer`'s 3 project-wide IAM roles (`infra/terraform/README.md`); whether the new `aiplatform.user` grant above should also move into `infra/terraform/` for consistency (suggested by the frontend session); the 6 Phase 17 decisions (now listed with recommendations in `docs/DATA_PLATFORM.md` §13's table) and 15 Phase 18 risks (`docs/MULTI_AGENT_SWARM.md` §14)
 - Unexplained, found mid-session: an auto-generated `bobalytics` usage-stats update to `README.md` (badge reorder + a new dated impact row) sitting uncommitted in the working tree, origin unknown — left alone, not folded into any PR
 
@@ -569,7 +577,7 @@ redeploys.
 
 1. Read `PENDING.md` for the task list (Phase 11 is now 🟢 — read its "3 attempts, 3 bugs" narrative before touching `watson_agent/` again, it explains real, non-obvious API constraints).
 2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16`, `multicloud` to confirm baseline holds.
-3. Run the IAM grant above, then open/merge `fix/cd-cors-vercel-origin` — that's the last blocker for the summary's `ok=true` path. Re-test `POST /api/summary` against the live service afterward.
+3. IAM grant is done. Open/merge `fix/vertex-import-error-detail` (not `fix/cd-cors-vercel-origin` — that one's already merged and deleted) — that's what's actually needed for the `[vertex]` extra to reach the deployed image. Re-test `POST /api/summary` against the live service afterward, and watch for the same "pushed after merge" race before assuming any branch is fully landed (Session 21 item 5).
 4. Build Phase 17/18 from `docs/DATA_PLATFORM.md` §13 / `docs/MULTI_AGENT_SWARM.md` §14, not their original sketches.
 5. Autofix (`POST /api/fix`, Phase 14 gap 3) is the last open frontend punch-list item.
 6. If tightening `repoguard-deployer`'s IAM roles, or moving the new `aiplatform.user` grant into Terraform: read `infra/terraform/README.md`'s "Known gap" section first — real permissions change against a live project, own PR.
