@@ -86,13 +86,14 @@ ibm-bob-mcp-agent-guard/
 │   │   ├── models.py         SQLAlchemy Core tables (Double, JSON/JSONB, UUID strings)
 │   │   ├── views.py          portable view DDL — derived values (passed_gate, trends) live only here
 │   │   ├── db.py             get_engine, init_db (tables + views; the fail-fast connectivity check)
-│   │   └── repository.py     save_record — one transaction per run, stores, never computes
+│   │   ├── repository.py     save_record — one transaction per run, stores, never computes
+│   │   └── queries.py        latest_endpoints — read-only queries (Phase 17 A1-gap's first consumer of endpoint_results)
 │   ├── pipeline.py       run_pipeline — ordered steps; returns PipelineResult; persists when asked
 │   ├── cli.py            repoguard analyze | fix | gate | serve | mcp  (click entry point)
 │   ├── mcp_server.py     9 FastMCP tools (thin wrappers, stdio transport)
 │   └── web/
 │       ├── __init__.py
-│       ├── server.py         FastAPI app: GET / · GET /api/analyze · GET /api/stream (SSE) · POST /api/summary · POST /api/fix
+│       ├── server.py         FastAPI app: GET / · GET /api/analyze · GET /api/stream (SSE) · POST /api/summary · POST /api/fix · GET /api/projects/{slug}/endpoints
 │       ├── fix_job.py        Autofix over HTTP: token gate, one-run lock, sandbox copy, NDJSON event stream
 │       └── static/index.html Web dashboard
 │

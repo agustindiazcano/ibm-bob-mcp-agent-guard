@@ -10,6 +10,10 @@ Phase 17 checks for scripts/verify.py (measurement history store).
                         not stored, byte-identical repoguard-out/*.json; stored 16/79 = 20.25;
                         bad URL / missing [db] fail before measuring; CLI output; web and the
                         MCP summary tool never write
+    phase17-endpoints — GET /api/projects/{slug}/endpoints (Phase 17 A1-gap: the first real
+                        consumer of store.endpoint_results): 503 with no database, 404 for an
+                        unknown project, 200 with the 7 demo-repo endpoints (1 tested) after a
+                        stored run
 
 Each check runs its script in a fresh interpreter (sys.executable), same as verify.py.
 """
@@ -260,6 +264,56 @@ print('OK')
 """
 
 
+_ENDPOINTS = _COMMON + r"""
+from fastapi.testclient import TestClient
+from repoguard_engine.web.server import app
+
+tmp = Path(tempfile.mkdtemp(prefix='verify17e-'))
+try:
+    client = TestClient(app)
+
+    # 1. No database configured -> 503, not a raw 500 or a silent empty list
+    res = client.get('/api/projects/verify-endpoints/endpoints')
+    assert res.status_code == 503, res.status_code
+    print(f"  no REPOGUARD_DATABASE_URL -> 503: {res.json()['detail']!r}")
+
+    db_path = tmp / 'history.db'
+    os.environ['REPOGUARD_DATABASE_URL'] = f'sqlite:///{db_path}'
+
+    # 2. Database configured, project doesn't exist yet -> 404
+    res = client.get('/api/projects/verify-endpoints/endpoints')
+    assert res.status_code == 404, res.status_code
+    print(f"  unknown project -> 404: {res.json()['detail']!r}")
+
+    # 3. Store a real run with endpoints measured, then read it back
+    from repoguard_engine.pipeline import run_pipeline
+    demo = run_pipeline(copy_demo(tmp), project='verify-endpoints')
+    assert demo.run_id is not None, 'run was not stored'
+
+    res = client.get('/api/projects/verify-endpoints/endpoints')
+    assert res.status_code == 200, res.status_code
+    rows = res.json()
+    assert len(rows) == 7 and sum(r['has_test'] for r in rows) == 1, rows
+    assert [(r['method'], r['path']) for r in rows] == \
+           [(e.method, e.path) for e in demo.endpoints], 'route order must match the engine, not re-sorted'
+    assert {'file', 'function', 'method', 'path', 'has_test'} == set(rows[0]), rows[0]
+    print(f"  stored run -> 200: {len(rows)} endpoints, {sum(r['has_test'] for r in rows)} tested (matches demo-repo)")
+
+    # 4. A run that never measured endpoints doesn't shadow the one that did
+    small = tmp / 'small'; (small / 'tests').mkdir(parents=True)
+    (small / 'calc.py').write_text('def add(a, b):\n    return a + b\n')
+    (small / 'tests' / 'test_calc.py').write_text('from calc import add\ndef test_add():\n    assert add(2, 3) == 5\n')
+    (small / 'pytest.ini').write_text('[pytest]\npythonpath = .\n')
+    run_pipeline(small, include_endpoints=False, project='verify-endpoints')
+    res = client.get('/api/projects/verify-endpoints/endpoints')
+    assert res.status_code == 200 and len(res.json()) == 7, 'a run with no endpoints measured shadowed the real one'
+    print('  a later run with include_endpoints=False does not shadow the last real measurement')
+finally:
+    shutil.rmtree(tmp, ignore_errors=True)
+print('OK')
+"""
+
+
 def _check(title: str, script: str, timeout: int) -> bool:
     print(f"=== {title} ===")
     rc, out = _run_script(script, timeout)
@@ -275,3 +329,7 @@ def check_phase17_store() -> bool:
 
 def check_phase17_pipeline() -> bool:
     return _check("Phase 17 A1.2: pipeline persistence can't change a measurement", _PIPELINE, timeout=900)
+
+
+def check_phase17_endpoints() -> bool:
+    return _check("Phase 17 A1-gap: GET /api/projects/{slug}/endpoints", _ENDPOINTS, timeout=120)

@@ -71,6 +71,30 @@ def api_analyze(
     return {**result.dashboard, "endpoints": endpoints, "passed_gate": result.passed_gate}
 
 
+@app.get("/api/projects/{slug}/endpoints")
+def api_project_endpoints(slug: str) -> list[dict]:
+    """Endpoint coverage from *slug*'s most recently measured run. The first
+    reader of `store.endpoint_results` (Phase 17 A1-gap) -- everything else
+    persisted since Phase 17 A1 already has one (dashboard JSON, /api/analyze,
+    or a SQL view), this table didn't."""
+    from .. import store
+    from ..store.db import get_engine, init_db
+    from ..store.queries import latest_endpoints
+
+    url = store.database_url()
+    if url is None:
+        raise HTTPException(status_code=503, detail="Run history isn't configured on this backend: it has no database.")
+    try:
+        engine = get_engine(url)
+        init_db(engine)  # idempotent; a fresh database has no tables yet
+        result = latest_endpoints(engine, slug)
+    except store.StoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"no measured endpoints for project {slug!r}")
+    return result
+
+
 @app.post("/api/summary")
 def api_summary(dashboard: dict) -> dict:
     """Wrap narrative.generate_summary() over an already-measured dashboard dict."""
