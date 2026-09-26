@@ -8,7 +8,7 @@ Vercel" section is a short summary pointing here.**
 
 **Status: built in `web-next/` and deployed to Vercel
 (https://ibm-bob-mcp-agent-guard.vercel.app/). Still open: pointing the
-deployment at a real backend, README screenshots, and Autofix — tracker in
+deployment at a real backend, and Autofix — tracker in
 `PENDING.md` Phase 14.**
 
 The original web UI (`web/static/index.html`, served by `web/server.py`)
