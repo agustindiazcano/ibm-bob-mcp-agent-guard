@@ -157,7 +157,12 @@ flowchart TB
 
 ## Multi-agent swarm (planned)
 
-> Design only (`PENDING.md` Phase 18). Full plan: [`docs/MULTI_AGENT_SWARM.md`](docs/MULTI_AGENT_SWARM.md).
+> `PENDING.md` Phase 18. **Built (Step 0):** groundwork only — the fix loop
+> now takes an injectable `ChatProvider`, reports per-stage wall time, and a
+> credential-free `ScriptedProvider` drives it end to end in CI
+> (`verify.py phase18-seq-stub`). **Not yet:** the parallel lanes themselves
+> (S1–S8) — everything below is still design. Full plan:
+> [`docs/MULTI_AGENT_SWARM.md`](docs/MULTI_AGENT_SWARM.md).
 
 The swarm IBM Bob was designed to run (`.bob/custom_modes.yaml`: Orchestrator, Test Writer, Critic, Gate, Publisher…), rebuilt in-process on watsonx.ai. Instead of one loop working file by file, the Orchestrator opens **one lane per source file** and runs the lanes **in parallel**. Each lane has three agents:
 
@@ -287,7 +292,7 @@ Status key: ✅ implemented and running in this repo · ⚠️ implemented but n
 | Accessibility | axe-playwright-python (axe-core) | Accessibility violations (MCP tool) | ✅ locally · not in the Docker image |
 | Agent protocol | MCP via FastMCP (stdio) | 9 tools for any MCP client | ✅ |
 | AI agents | IBM watsonx.ai (`ibm-watsonx-ai`), default model `mistralai/mistral-small-3-1-24b-instruct-2503` | Writer and critic agents with tool calling (`repoguard fix`), `--summarize` prose | ✅ live-verified with real credentials — `--summarize` returns real generated text; `repoguard fix`'s tool-calling round trip runs for real, though this default model doesn't reliably invoke tools (a model-choice quality gap, not an SDK/plumbing issue — see `PENDING.md` Phase 16) |
-| Multi-agent swarm | Parallel agent lanes (`ThreadPoolExecutor`), per-lane sandboxes, file-based agent contract | Parallel Test Writer / Verifier / Critic per file, parallel mutation workers | 🗺️ Phase 18 ([design](docs/MULTI_AGENT_SWARM.md)) |
+| Multi-agent swarm | Parallel agent lanes (`ThreadPoolExecutor`), per-lane sandboxes, file-based agent contract | Parallel Test Writer / Verifier / Critic per file, parallel mutation workers | 🟡 Step 0 done (injectable provider, `ScriptedProvider`, stage timing); lanes themselves still 🗺️ Phase 18 ([design](docs/MULTI_AGENT_SWARM.md)) |
 | AI provider abstraction | `ChatProvider` protocol (`repoguard_engine/ai_providers/`) | Switching between providers without touching the agents (`REPOGUARD_AI_PROVIDER` / `--provider`) | ✅ Phase 16 Stage A ([details](docs/MULTICLOUD_AI.md)) |
 | AI (second provider) | Google Vertex AI (`google-genai`, Gemini) | Alternative model provider — no free-tier rate limits, unlike watsonx.ai's shared pool | ✅ live-verified: real text generation and a full tool-calling round trip against a real GCP project ([details](docs/VERTEX_SETUP.md)) |
 | Frontend | Next.js 16.3.6, React 19.2.8, TypeScript 5, ESLint 9 | `web-next/` dashboard | ✅ (lint + build pass; end-to-end checked in a browser locally) |
@@ -595,6 +600,16 @@ backend on Cloud Run; checked end to end in a real browser (Analyze on
 `./demo-repo`: 65.1% coverage, 4 gap files, gate FAIL). The current web UI (`repoguard serve`,
 `web/static/index.html`) stays as the reference implementation — the new
 frontend consumes the same endpoints rather than replacing them.
+
+**Site restructure: nav, footer, and four new screens.** `web-next/` is now a
+small multi-page site, not a single dashboard: a shared `SiteNav`/`SiteFooter`
+(`web-next/app/components/site/`) links **Analyze** (`/`, the dashboard
+above), **Results** (`/results`, a run-history view — reads `fetchProjects`/
+`fetchView` and shows "Run history isn't on this backend yet" until Phase 17
+A3's read routes exist), **Project** (`/project`), **Technical**
+(`/technical`) and **AI-assisted dev** (`/ai-development`) — the last three
+are explainer pages covering the same ground as this README's sections, laid
+out for someone who lands on the deployed site instead of GitHub.
 
 The AI summary works on the public demo (`provider: vertex`). **Autofix** is
 built: with a token, the button runs the AI fix loop through `POST /api/fix`
