@@ -31,6 +31,7 @@ IBM Bob Hackaton Ranking (Bob IDE ussage):
 - [How it works](#how-it-works)
 - [Is it multi-agent?](#is-it-multi-agent)
 - [Multi-agent swarm (planned)](#multi-agent-swarm-planned)
+- [Evaluation & guardrails (planned)](#evaluation--guardrails-planned)
 - [Quick start](#quick-start)
 - [Commands](#commands)
 - [Using the watsonx.ai fix loop](#using-the-watsonxai-fix-loop)
@@ -176,6 +177,32 @@ The swarm has to earn its place with two measurements: it must be faster than th
 | [§6](docs/MULTI_AGENT_SWARM.md#6-communication-contract-the-blackboard) | The file contract between agents |
 | [§10](docs/MULTI_AGENT_SWARM.md#10-build-order) | Build order and cut line |
 | [§11](docs/MULTI_AGENT_SWARM.md#11-verification-scriptsverifypy-phase18) | Verification, including a credential-free end-to-end test |
+
+## Evaluation & guardrails (planned)
+
+> Design only (`PENDING.md` Phase 19). Plan: [`docs/EVAL_GUARDRAILS_PLAN.md`](docs/EVAL_GUARDRAILS_PLAN.md) · build steps: [`docs/EVAL_GUARDRAILS_IMPLEMENTATION.md`](docs/EVAL_GUARDRAILS_IMPLEMENTATION.md).
+
+The fix loop is already guarded against **damage**: it can only write under `tests/`. It is not yet guarded against **gaming its own score**. Measured on a throwaway copy of `demo-repo`: a single test with no behavioral assertions, which only checks that the source files' hashes haven't changed, scores **100% (79/79)** on mutation. That's higher than the honest reference suite's 89.87%. The same probes showed that model-written tests can read server secrets from the environment, overwrite the repo's existing tests, and write a `conftest.py`, and that coverage counts the test files themselves (65.1% today, 60.26% source-only).
+
+Phase 19 adds a control to every measurement, the way an experiment has a blank run, and a benchmark that is binary and counted, never an LLM's opinion:
+
+| Phase | What | Needs |
+|---|---|---|
+| 19.0 | Plan + implementation docs (this section) | Done |
+| 19.1 · G1 | Pytest subprocesses get an allow-listed environment: no tokens or credentials | — |
+| 19.2 · G2 | Static policy on every test file the model writes (no source reads/hashing, no pytest hooks, no skip, no unseeded randomness…) | Approval: changes the write guard |
+| 19.3 · G3 | Per-file acceptance: 3 identical passing runs, a no-op source canary, existing tests preserved. Failures are quarantined | — |
+| 19.4 · G4 | Mutation integrity: sham mutant, killed/survived/timeout/error, no previously killed mutant may survive | Shared with Phase 18 |
+| 19.5 · G5 | Run status (`accepted`/`partial`/`rejected`), evidence always written, `--publish` gated on mutation gain + integrity, not only coverage | — |
+| 19.6 · G6 | Source-only coverage | Approval: moves the published 65.1% → 60.26% |
+| 19.7 · E1 | Scripted provider + 8 attack scripts in CI: 8/8 stopped, honest run still 71/79 | — |
+| 19.8 · O1 | `repoguard-out/fix_run.json`: every tool call, guard event, token count when the provider reports it | — |
+| 19.9 · E2 | `scripts/eval_fixloop.py`: 3 repeats × provider/model × fixture, ΔMS, gap closure, validity, success *k of K* | Credentials |
+| 19.10 · E3 | A held-out fixture the prompts were never tuned on | Approval |
+| 19.11 · E4 | Real-fault check on a BugsInPy subset: tests written on the fixed version must fail on the buggy one | Approval |
+| 19.12–13 | Integrity badge in the dashboard · Pynguin / TestGenEval comparison | Below the cut line |
+
+External reference: **TestGenEval** (the same metrics: coverage and mutation score, on real Python repos), **SWT-Bench** (fail-to-pass tests for real issues) and **BugsInPy** (real Python bugs). SWE-bench measures source fixes, which this tool never makes, so it isn't the right yardstick here.
 
 ## Quick start
 
@@ -533,6 +560,8 @@ The rest of this section is about the first one — how the repo itself gets bui
 - [Deploy to Cloud Run](docs/DEPLOY.md): one-time GCP setup for the CD workflow
 - [Data platform (design)](docs/DATA_PLATFORM.md): run history on Postgres, Terraform on GCP, data-driven charts
 - [Multi-agent swarm (design)](docs/MULTI_AGENT_SWARM.md): parallel Test Writer / Verifier / Critic lanes per file, the return of IBM Bob's swarm design on watsonx.ai
+- [Evaluation & guardrails (plan)](docs/EVAL_GUARDRAILS_PLAN.md): benchmark landscape, measured gaps in today's fix loop, the three layers (guardrails, evaluation, observability), decisions
+- [Evaluation & guardrails (implementation)](docs/EVAL_GUARDRAILS_IMPLEMENTATION.md): step-by-step build of Phase 19, with signatures and `verify.py phase19` checks
 - [Frontend architecture](docs/ARCHITECTURE-front.md): the Next.js dashboard on Vercel
 - [watsonx.ai setup](docs/WATSONX_SETUP.md): IBM Cloud credentials for the default AI provider
 - [Multicloud AI](docs/MULTICLOUD_AI.md): the `ChatProvider` abstraction, watsonx.ai + Vertex AI (both built), and model benchmarking (planned)
@@ -573,6 +602,12 @@ Phase 14 and `docs/ARCHITECTURE-front.md`.
 Critic lanes, one per file, bringing back IBM Bob's swarm design on
 watsonx.ai. See [Multi-agent swarm (planned)](#multi-agent-swarm-planned)
 (`PENDING.md` Phase 18). Design only.
+
+**Also planned: evaluation and guardrails for the fix loop.** Controls that
+stop it from inflating its own score, and a benchmark with repeats, a
+held-out fixture and real bugs. See
+[Evaluation & guardrails (planned)](#evaluation--guardrails-planned)
+(`PENDING.md` Phase 19). Design only; it absorbs the model benchmark below.
 
 **Multicloud AI: built; model benchmarking still planned.** See
 [`docs/MULTICLOUD_AI.md`](docs/MULTICLOUD_AI.md) (`PENDING.md` Phase 16) —
