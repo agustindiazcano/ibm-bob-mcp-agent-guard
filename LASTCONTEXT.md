@@ -478,14 +478,35 @@ Found while designing (not fixed, planned as S1/§3 of the doc):
 
 ---
 
+### Session 18 — Phase 16 Stage A+B (multicloud AI) + Phase 13 Cloud Run deploy via WIF (`feat/16-ai-providers`, PR #37, merged)
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Extracted `ChatProvider` abstraction (`ai_providers/base.py`); moved `watson_agent/client.py`'s watsonx.ai logic to `ai_providers/watsonx.py`; `get_provider()` reads `REPOGUARD_AI_PROVIDER` (default `watsonx`) | `ai_providers/__init__.py`, `base.py`, `watsonx.py`; `watson_agent/client.py` deleted |
+| 2 | `narrative.py` and `watson_agent/orchestrator.py` switched to `get_provider().chat()`; `--provider` flag added to `repoguard fix` / `analyze --summarize` | `narrative.py`, `orchestrator.py`, `cli.py` |
+| 3 | Implemented `ai_providers/vertex.py` against real `google-genai==2.25.0`; live-verified against a real GCP project (`gemini-2.5-flash`, `us-central1`): plain text call + full tool-calling round trip both work | `ai_providers/vertex.py`, `docs/VERTEX_SETUP.md` |
+| 4 | Fixed 2 real integrity bugs found via that live testing: (a) orchestrator tool dispatch only caught `SourceEditRejected`, so a hallucinated tool path crashed the whole fix loop with a raw exception; (b) `run_mutation()` never checked the unmutated baseline passes first, so a broken AI-written test suite could report a false 100% mutation score | `orchestrator.py`, `core.py` |
+| 5 | Cloud Run deploy via Workload Identity Federation, done early (better than the static-key path originally planned). Created for real against `project-e0ad10c9-0b2f-4dc0-ac6`: Artifact Registry repo, `repoguard-deployer` service account + IAM roles, WIF pool/provider scoped to this repo. `cd.yml` switched from `GCP_SA_KEY` to WIF — no long-lived GCP secret in GitHub | `.github/workflows/cd.yml`, `docs/DEPLOY.md` |
+| 6 | `web-next/` deployed to Vercel (https://ibm-bob-mcp-agent-guard.vercel.app/); `NEXT_PUBLIC_REPOGUARD_API_BASE` still a `localhost` placeholder until the Cloud Run URL exists | — |
+| 7 | Docs updated to match, PR opened and merged | `PENDING.md`, `README.md`, `AGENTS.md`+`CLAUDE.md`, `docs/MULTICLOUD_AI.md`, `docs/ARCHITECTURE.md`, `docs/DATA_PLATFORM.md` |
+| 8 | Found `PENDING.md` Phase 16 was left stale by the merged PR itself (`vertex.py` still shown 🔴 "needs real GCP credentials" after it had already been built and live-verified in the same PR) — corrected, plus this session log entry | `PENDING.md`, `LASTCONTEXT.md` |
+
+Verified before/after merge: `verify.py multicloud` PASS, `verify.py phase16` PASS, `verify.py phase3` PASS (20.25%, 16/79, both runs — unaffected by the `run_mutation` baseline-check fix).
+
+Key findings:
+- Real watsonx.ai credentials were used this session; the default tool-calling model (`llama-3-3-70b-instruct`) hits free-tier `429`s under load, and the fallback (`mistral-small-3-1-24b-instruct-2503`) doesn't reliably call tools — a real `repoguard fix demo-repo` run with watsonx produced zero mutation-score improvement. This is what motivated Vertex as the more reliable provider, not just a diversification goal.
+- Both cloud providers now have real, live-verified credentials configured — the remaining Phase 11 blocker is model tool-calling reliability, not credential availability (see below).
+
+---
+
 ## Current repo state
 
-- Branch: `main` at `6a48bbf` — all Session 14/15 branches merged (PRs #26–#33)
-- Phase 0: 🟢 · Phase 3: 🟢 · Phase 7: 🟢 · Phase 8: 🟢 (redefined for watsonx.ai) · Phase 9: 🟢 (`repoguard fix` now real) · Phase 13: 🟢 · Phase 15: 🟢 (narrative, PR #18)
-- Phase 14: 🟡 — all dashboard components including `SummaryPanel` merged and verified end-to-end in a browser (see `PENDING.md` Phase 14); remaining: Autofix (gap 3, no `POST /api/fix`), Vercel deploy, folding `docs/ARCHITECTURE-front.md` into `docs/ARCHITECTURE.md`, and the `ok=true` summary path (needs credentials)
+- Branch: `main` at `c626e6e` — Phase 16 (Stage A+B) and Phase 13's WIF deploy merged (PR #37)
+- Phase 0: 🟢 · Phase 3: 🟢 · Phase 7: 🟢 · Phase 8: 🟢 (redefined for watsonx.ai) · Phase 9: 🟢 (`repoguard fix` now real) · Phase 13: 🟢 (incl. WIF, done early) · Phase 15: 🟢 (narrative) · Phase 16: 🟢 (both providers built, live-verified)
+- Phase 14: 🟡 — all dashboard components including `SummaryPanel` merged and verified end-to-end in a browser (see `PENDING.md` Phase 14); remaining: Autofix (gap 3, no `POST /api/fix`), folding `docs/ARCHITECTURE-front.md` into `docs/ARCHITECTURE.md`, and updating `NEXT_PUBLIC_REPOGUARD_API_BASE` once Cloud Run's real URL exists (Vercel deploy itself is done)
 - IBM Bob is retired. `.bob/` stays on disk as inert legacy (`.bob/DEPRECATED.md`); `repoguard_engine/watson_agent/` is the live replacement.
-- Remaining 🔴 critical-path item: Phase 11, a real end-to-end `repoguard fix` run against `demo-repo` with actual IBM Cloud credentials — same human-gated situation as GCP deploy, not something any agent here can supply
-- GCP deploy still pending a human running `docs/DEPLOY.md`'s one-time setup
+- Remaining 🔴 critical-path item: Phase 11 — a real `repoguard fix demo-repo` run that measurably raises the mutation score above 20.25%/16/79. No longer credential-gated (both watsonx and Vertex credentials exist and were live-tested this session) — the blocker is tool-calling reliability of the models tried so far; Vertex (Gemini) hasn't been run through a full fix loop against demo-repo yet and is the next thing to try.
+- GCP Cloud Run deploy is done (WIF); still pending, human-only: adding the 6 GitHub repo Variables (`docs/DEPLOY.md` §2) through the GitHub web UI before the first real CD run, since `gh` CLI isn't available in this environment.
 - Open, not yet decided: whether to rename the GitHub repo/local directory (`ibm-bob-mcp-agent-guard`) now that Bob is gone — flagged in `PENDING.md`, deliberately not done here
 
 ---
@@ -493,8 +514,8 @@ Found while designing (not fixed, planned as S1/§3 of the doc):
 ## How to resume
 
 1. Read `PENDING.md` for the task list (Phase 14 now holds the frontend tracker too).
-2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16` to confirm baseline holds.
+2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16`, `multicloud` to confirm baseline holds.
 3. For the frontend: CORS and `/api/summary` are on `main`; run `PYTHONIOENCODING=utf-8 repoguard serve` + `npm run dev` (with `NEXT_PUBLIC_REPOGUARD_API_BASE`) for the still-pending browser end-to-end check.
-4. Get real IBM Cloud credentials (`docs/WATSONX_SETUP.md`) and run `repoguard fix demo-repo` for the first live Phase 11 run — that's the one thing no agent session here can do without a human providing an account.
-5. GCP setup (`docs/DEPLOY.md`) is the other remaining human-only task — do it whenever, it doesn't block anything else.
+4. For Phase 11: try `repoguard fix demo-repo --provider vertex` (credentials in `docs/VERTEX_SETUP.md`) — Vertex hasn't had a full fix-loop run against demo-repo yet, and its tool-calling was reliable in the Stage B live tests, unlike watsonx's fallback model.
+5. Add the 6 GitHub repo Variables from `docs/DEPLOY.md` §2 via the GitHub web UI, then trigger `cd.yml` for the first real Cloud Run deploy.
 6. The repo-rename decision (`ibm-bob-mcp-agent-guard`) is open and low-urgency — decide whenever, it's cosmetic.
