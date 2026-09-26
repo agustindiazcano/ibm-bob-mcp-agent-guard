@@ -594,9 +594,36 @@ until a real run from the Vercel demo shows a measured mutation score above
 
 ---
 
+### Session 23 — Frontend gaps: endpoints card, honest mutation progress, Gate, `verify.py phase14ui` (`claude/eloquent-fermat-4e9gir`)
+
+Frontend-only session, run in parallel with other agents on docs, the
+database (Phase 17) and planning, so it stayed out of `core.py` and
+`pipeline.py`. The only backend change is in `web/server.py`.
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | `/api/analyze` returns `endpoints`: `run_pipeline` already ran `find_untested_endpoints`, and the route dropped the result. Added in `server.py`, not `build_dashboard_data`, so `/api/summary`'s input and `/api/fix`'s `before`/`after` are unchanged | `web/server.py` |
+| 2 | New `EndpointsList` card: method + path, "tested"/"no test", "1 / 7 tested" on `demo-repo`. Footnote says "tested" is a static mention in a test file, not a request | `web-next/app/components/EndpointsList.tsx`, `Lists.module.css`, `lib/types.ts`, `page.tsx` |
+| 3 | Bug: `/api/stream` was opened without `gate_threshold`, so at a 60% threshold the log said `passed_gate: false` while the gate card said PASS | `web-next/app/lib/api.ts`, `page.tsx` |
+| 4 | Bug: with mutation on, the log's badge said "Done" as soon as the stream (coverage/gaps/risk only) ended, while `/api/analyze` kept running mutation. Now a "Running mutation testing" line with an elapsed clock stays active and the badge stays "Running" until the dashboard is in | `StreamLog.tsx`, `page.tsx` |
+| 5 | Gate was a second Analyze button and ran mutation when the box was ticked. It now sends `mutation=false`, like `repoguard gate` | `ActionBar.tsx`, `page.tsx` |
+| 6 | `verify.py phase14ui`: production build + real backend in Chromium via Python Playwright (no new dependency), no stubs. Checks rendered numbers against `/api/analyze` and against `AGENTS.md §7`, including a real mutation run (20.25%, 16 / 79). Against the previous frontend it FAILs on items 2 and 3 | `scripts/verify.py` |
+| 7 | Docs: component table, `endpoints` contract, verification section, and the stale "summary still unavailable" paragraph in `ARCHITECTURE-front.md`; Phase 14 rows in `PENDING.md`; the tree's component line in `AGENTS.md`+`CLAUDE.md` | docs |
+
+Verified: `verify.py phase14ui` PASS (mutation run 63 s here);
+phase0/phase3/phase7/phase15/phase16/multicloud/phase14fix PASS; `demo-repo`
+5 passed; `repoguard analyze ./demo-repo --mutation` → 65.1%, 20.25%
+(16/79), 4 gap files. `web-next` lint + build clean. Checked by eye in
+light, dark and at 390px.
+
+In this container Playwright 1.63 didn't match the preinstalled Chromium
+build, so the check was run with `REPOGUARD_CHROMIUM=/opt/pw-browsers/chromium`.
+
+---
+
 ## Current repo state
 
-- **Session 22 (Autofix) is on `claude/eager-gauss-ifyd8w` (commit `1e97a8c` plus this doc follow-up), pushed but not merged and with no PR opened yet.** `main` doesn't have Autofix until that merges and `cd.yml` redeploys.
+- **Session 23 (frontend gaps) is on `claude/eloquent-fermat-4e9gir`, pushed, not merged.** Session 22's Autofix is on `main` (PR #55).
 - Branch: `main` — PR #37 (Phase 16 + 13 WIF), #38 (doc fixes), #39 (Phase 17 B1 Terraform), #40 (session log), #41 (cd.yml trim fix), #42 (cli graceful failure), #43 (frontend context docs), #44 (dashboard visual design), #45 (Phase 11 Gemini 3 + `run_tests` + `thought_signature` fixes), #46 (Phase 17/18 planning corrections), #47 (`/api/analyze` 400-vs-500 fix), #48 (frontend: clear backend-unreachable error + real screenshots) all merged
 - All Session 21 fixes merged: PR #49 (CORS), #51 (ImportError detail), #52 (`Dockerfile` `[vertex]` extra + docs — recovered after #49/#51 both dropped commits pushed post-merge, see Session 21 item 5), #53 (frontend live-deploy docs). `ok: true` summary path verified live for real
 - Phase 0/3/7/8/9/13/15/16: 🟢. Phase 11: 🟢 (see Session 20) — first genuinely successful live AI fix-loop run, 89.87%/71/79. Phase 17 B1/B2: 🟢 (Terraform-managed WIF)
@@ -614,7 +641,7 @@ until a real run from the Vercel demo shows a measured mutation score above
 ## How to resume
 
 1. Read `PENDING.md` for the task list (Phase 11 is now 🟢 — read its "3 attempts, 3 bugs" narrative before touching `watson_agent/` again, it explains real, non-obvious API constraints).
-2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16`, `multicloud`, `phase14fix` to confirm baseline holds. (`ci.yml` doesn't run `phase14fix` yet; it's credential-free, so it could.)
+2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16`, `multicloud`, `phase14fix`, `phase14ui` (needs `npm ci` in `web-next/`) to confirm baseline holds. (`ci.yml` doesn't run `phase14fix` yet; it's credential-free, so it could.)
 3. Frontend punch-list items 1-4 are all done and verified live (Session 21). Autofix (`POST /api/fix`, Phase 14 gap 3) is built (Session 22); what's left is the human token step plus a first live run. When pushing follow-up commits to a branch mid-session, confirm with `git log origin/main..<branch>` that nothing merged out from under you first (Session 21 item 5 — happened 3 times).
 4. Build Phase 17/18 from `docs/DATA_PLATFORM.md` §13 / `docs/MULTI_AGENT_SWARM.md` §14, not their original sketches.
 5. Autofix: attach `REPOGUARD_FIX_TOKEN` (`docs/DEPLOY.md` §5), then run it from the Vercel demo against `demo-repo` and record the measured before/after. If you change a Vercel env var, Redeploy the **newest `main`** deployment, never an older row (`docs/ARCHITECTURE-front.md`, Session 21-front item 5).

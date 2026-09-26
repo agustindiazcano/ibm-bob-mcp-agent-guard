@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from dataclasses import asdict
 from pathlib import Path
 from typing import AsyncGenerator
 
@@ -58,7 +59,11 @@ def api_analyze(
         # Otherwise this reaches subprocess.run(cwd=...) uncaught and the
         # frontend sees a bare 500 for what is really a bad request.
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {**result.dashboard, "passed_gate": result.passed_gate}
+    # run_pipeline already measured the endpoints; they're not part of the
+    # dashboard dict (which /api/summary and /api/fix also use), so they're
+    # added here instead.
+    endpoints = [asdict(ep) for ep in result.endpoints]
+    return {**result.dashboard, "endpoints": endpoints, "passed_gate": result.passed_gate}
 
 
 @app.post("/api/summary")

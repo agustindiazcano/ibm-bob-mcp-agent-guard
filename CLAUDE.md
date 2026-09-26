@@ -105,8 +105,8 @@ ibm-bob-mcp-agent-guard/
 │
 ├── web-next/             Next.js dashboard (Phase 14) — calls the existing FastAPI backend, doesn't replace it
 │   ├── app/
-│   │   ├── components/       RepoForm · ActionBar · StreamLog · StatCards · GapsList · RiskTable
-│   │   ├── lib/               api.ts (fetchAnalyze, streamUrl) · types.ts
+│   │   ├── components/       RepoForm · ActionBar · StreamLog · StatCards · GapsList · RiskTable · EndpointsList · SummaryPanel · FixResultPanel
+│   │   ├── lib/               api.ts (fetchAnalyze, fetchSummary, streamUrl, streamFix) · types.ts
 │   │   └── page.tsx
 │   └── package.json
 │

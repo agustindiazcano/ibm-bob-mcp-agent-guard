@@ -16,7 +16,13 @@ export function ActionBar({ onAnalyze, onGate, onAutofix, busy, canAutofix }: Pr
       <button type="button" className={`${styles.button} ${styles.primary}`} onClick={onAnalyze} disabled={busy}>
         {busy ? "Analyzing…" : "Analyze"}
       </button>
-      <button type="button" className={styles.button} onClick={onGate} disabled={busy}>
+      <button
+        type="button"
+        className={styles.button}
+        onClick={onGate}
+        disabled={busy}
+        title="Coverage-only check against the threshold, like repoguard gate — skips mutation testing"
+      >
         Gate
       </button>
       <button

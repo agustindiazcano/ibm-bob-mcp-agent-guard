@@ -263,9 +263,10 @@ contract. (This section absorbed the former satellite `PENDING-front.md`.)
 | Deliverable | Description | Status |
 |---|---|---|
 | Next.js app scaffold | `web-next/`, calling the existing FastAPI backend, not replacing it | 🟢 |
-| `RepoForm` + `ActionBar` | Repo path input, mutation/endpoints/threshold options, Analyze + Gate + Autofix buttons, Autofix token field (password input, held in memory only) | 🟢 |
-| `StreamLog` | Live progress from `/api/stream` (coverage/gaps/risk events) | 🟢 |
+| `RepoForm` + `ActionBar` | Repo path input, mutation checkbox, threshold, Analyze + Gate + Autofix buttons, Autofix token field (password input, held in memory only). Gate is coverage-only like `repoguard gate` (`mutation=false`); it used to be a second Analyze button and ran mutation when the box was ticked | 🟢 |
+| `StreamLog` | Live progress from `/api/stream` (coverage/gaps/risk events). While `/api/analyze` is still running mutation after the stream ends, a "Running mutation testing" line with an elapsed clock stays active and the badge stays "Running" (it used to say "Done" for the whole mutation run) | 🟢 |
 | `StatCards` + `GapsList` + `RiskTable` | Coverage, mutation score, gaps, risk ranking — verbatim from `AnalyzeResponse`, no new numbers | 🟢 |
+| `EndpointsList` | Every FastAPI route, "tested"/"no test" and "1 / 7 tested" on `demo-repo`, from `/api/analyze`'s new `endpoints` field (`run_pipeline` already measured it; the route dropped it). Footnote: "tested" is a static mention in a test file, not a request | 🟢 |
 | `SummaryPanel` | AI prose, labeled advisory + which provider generated it (PRs #26/#27) | 🟢 |
 | `FixResultPanel` | Autofix result: engine-measured before → after (mutation, coverage), the test files written (expandable), critic notes labeled advisory, provider | 🟡 checked against a stubbed fix loop; live run pending (gap 3) |
 | CI split | `frontend-ci.yml` (lint+build, `web-next/**` only) separate from backend `ci.yml`/`cd.yml` (`paths-ignore: web-next/**`) | 🟢 |
@@ -304,6 +305,14 @@ measured numbers. `roles/aiplatform.user` on the Cloud Run runtime SA
 confirmed in the real IAM policy (granted by hand, blocked for an agent
 session by Claude Code's own permission-grant restriction).
 
+**Verified in a browser, scripted (`verify.py phase14ui`):** production
+build + real backend on `demo-repo` in Chromium, no stubs: 65.1% (112/172),
+4 gap files, 1 / 7 endpoints tested, stream and gate card agree at 60%, Gate
+sends `mutation=false`, a real mutation run renders 20.25% (16 / 79) with the
+badge on "Running" until then, bad path shows the backend's `detail`, no
+console errors. Fails against the previous frontend (stream/gate mismatch,
+no endpoints card). Not in CI yet.
+
 **Not yet verified:** Analyze *with* mutation on Cloud Run (~270 s locally
 — may hit Cloud Run's request timeout).
 
@@ -315,6 +324,7 @@ session by Claude Code's own permission-grant restriction).
 | `/api/stream` stuck at "Running pytest with coverage…" — `/api/analyze` was `async def` running the pipeline synchronously, blocking the event loop while `web-next` had both open | 🟢 fixed (PR #30) |
 | Under `next dev`, `POST /api/summary` fired twice (React StrictMode double mount) — two paid watsonx.ai calls per local test with real credentials | 🟢 fixed (PR #29) (summary requested once, right after `/api/analyze` returns; stale summaries dropped) |
 | `web-next` runs `/api/analyze` and `/api/stream` concurrently → two pytest-cov runs sharing `.coverage`/`coverage.json` at fixed paths in the target repo (could erase each other's data) | 🟢 fixed (PR #32) (`measure_coverage()` uses a per-run temp dir; 4 parallel runs all 65.12%) |
+| `/api/stream` was opened without `gate_threshold`, so the stream judged the gate at 80% whatever the form said: at 60% the log said `passed_gate: false` while the gate card said PASS | 🟢 fixed (`streamUrl(repoPath, gateThreshold)`), covered by `phase14ui` |
 | Vercel served stale builds after the env var change: `NEXT_PUBLIC_*` is inlined at build time, so saving the variable alone changes nothing; a manual "Redeploy" of an older deployment then became the newest Production build and shadowed the later merges (#48/#50), and a "Promote" of the wrong row rolled back to a `127.0.0.1:8000` build | 🟢 resolved — verified the live JS now contains the Cloud Run URL and PR #48/#50's code (a fresh build from current `main`). Rule: after changing a Vercel env var, Redeploy the **newest `main`** deployment, never an older row. Check which build is live by searching the served JS for the API base URL |
 
 ---
