@@ -24,6 +24,11 @@ Phase checks implemented:
     phase17-store     — store round trip on SQLite (+ REPOGUARD_TEST_DATABASE_URL); inert without the env var
     phase17-pipeline  — persisting can't change a measurement; fail-fast before measuring; web never writes
                         (both need the [db] extra; see scripts/verify_phase17.py)
+    phase17-endpoints — GET /api/projects/{slug}/endpoints: 503/404/200, matches demo-repo's 7 endpoints
+                        (needs the [db] extra; see scripts/verify_phase17.py)
+    phase17-api       — Phase 17 A3: read routes, POST /api/runs ingest tokens, a real
+                        `repoguard analyze --push` against a real `repoguard serve`
+                        (needs the [db] extra; see scripts/verify_phase17.py)
 """
 
 from __future__ import annotations
@@ -39,7 +44,9 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from verify_phase17 import check_phase17_pipeline, check_phase17_store  # scripts/ is sys.path[0]
+from verify_phase17 import (  # scripts/ is sys.path[0]
+    check_phase17_api, check_phase17_endpoints, check_phase17_pipeline, check_phase17_store,
+)
 
 
 def run(cmd: list[str], timeout: int = 30) -> tuple[int, str]:
@@ -778,6 +785,8 @@ CHECKS: dict[str, callable] = {
     "phase18-seq-stub": check_phase18_seq_stub,
     "phase17-store": check_phase17_store,
     "phase17-pipeline": check_phase17_pipeline,
+    "phase17-endpoints": check_phase17_endpoints,
+    "phase17-api": check_phase17_api,
     "phase18-s1": check_phase18_s1,
     "phase17-engine": check_phase17_engine,
     "phase18-s2": check_phase17_engine,

@@ -9,7 +9,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -69,6 +69,100 @@ def api_analyze(
     # added here instead.
     endpoints = [asdict(ep) for ep in result.endpoints]
     return {**result.dashboard, "endpoints": endpoints, "passed_gate": result.passed_gate}
+
+
+def _history_engine():
+    """The store engine for a read/ingest route, schema guaranteed to exist.
+    Raises 503 if no database is configured or it can't be reached -- the
+    frontend tells that apart from "no runs yet" ([]), per DATA_PLATFORM.md
+    §13 step A3.1."""
+    from .. import store
+    from ..store.db import get_engine, init_db
+
+    url = store.database_url()
+    if url is None:
+        raise HTTPException(status_code=503, detail="Run history isn't configured on this backend: it has no database.")
+    try:
+        engine = get_engine(url)
+        init_db(engine)  # idempotent; a fresh database has no tables yet
+        return engine
+    except store.StoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/api/projects")
+def api_projects() -> list[dict]:
+    """Every project with at least one persisted run (Phase 17 A3.1)."""
+    from ..store.queries import list_projects
+
+    return list_projects(_history_engine())
+
+
+@app.get("/api/projects/{slug}/endpoints")
+def api_project_endpoints(slug: str) -> list[dict]:
+    """Endpoint coverage from *slug*'s most recently measured run. The first
+    reader of `store.endpoint_results` (Phase 17 A1-gap) -- everything else
+    persisted since Phase 17 A1 already has one (dashboard JSON, /api/analyze,
+    or a SQL view), this table didn't."""
+    from ..store.queries import latest_endpoints
+
+    result = latest_endpoints(_history_engine(), slug)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"no measured endpoints for project {slug!r}")
+    return result
+
+
+@app.get("/api/projects/{slug}/trend")
+def api_project_trend(slug: str) -> list[dict]:
+    """v_run_trend for *slug*, oldest first (Phase 17 A3.1, chart 1)."""
+    from ..store.queries import trend
+
+    result = trend(_history_engine(), slug)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"no project {slug!r}")
+    return result
+
+
+@app.get("/api/projects/{slug}/risk-heatmap")
+def api_project_risk_heatmap(slug: str) -> list[dict]:
+    """risk_scores from *slug*'s most recent run (Phase 17 A3.1, chart 3)."""
+    from ..store.queries import risk_heatmap
+
+    result = risk_heatmap(_history_engine(), slug)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"no measured run for project {slug!r}")
+    return result
+
+
+@app.post("/api/runs")
+def api_ingest_run(record: dict, response: Response, authorization: str | None = Header(default=None)) -> dict:
+    """Ingest a run record from a trusted CI caller (Phase 17 A3.2). The
+    bearer token identifies the project -- never a field in the body, so a
+    token for one project can't write another's history. Idempotent on the
+    record's own run_id: a repeat post with the same id changes nothing and
+    returns 200; a new one returns 201."""
+    from ..store import StoreError
+    from ..store.repository import ingest_record, project_for_token
+
+    engine = _history_engine()
+    scheme, _, token = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise HTTPException(status_code=401, detail="Missing or invalid bearer token.")
+    try:
+        slug = project_for_token(engine, token.strip())
+    except StoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if slug is None:
+        raise HTTPException(status_code=401, detail="Missing or invalid bearer token.")
+
+    try:
+        run_id, created = ingest_record(engine, record, project_slug=slug)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except StoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    response.status_code = 201 if created else 200
+    return {"run_id": run_id, "project": slug}
 
 
 @app.post("/api/summary")

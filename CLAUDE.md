@@ -86,13 +86,15 @@ ibm-bob-mcp-agent-guard/
 │   │   ├── models.py         SQLAlchemy Core tables (Double, JSON/JSONB, UUID strings)
 │   │   ├── views.py          portable view DDL — derived values (passed_gate, trends) live only here
 │   │   ├── db.py             get_engine, init_db (tables + views; the fail-fast connectivity check)
-│   │   └── repository.py     save_record — one transaction per run, stores, never computes
+│   │   ├── repository.py     save_record, ingest_record, create_project/create_token/project_for_token
+│   │   └── queries.py        list_projects, latest_endpoints, trend, risk_heatmap — read-only queries
 │   ├── pipeline.py       run_pipeline — ordered steps; returns PipelineResult; persists when asked
-│   ├── cli.py            repoguard analyze | fix | gate | serve | mcp  (click entry point)
+│   ├── cli.py            repoguard analyze | fix | gate | serve | mcp | db  (click entry point; analyze --push, db init/create-project/create-token)
 │   ├── mcp_server.py     9 FastMCP tools (thin wrappers, stdio transport)
 │   └── web/
 │       ├── __init__.py
 │       ├── server.py         FastAPI app: GET / · GET /api/analyze · GET /api/stream (SSE) · POST /api/summary · POST /api/fix
+│       │                     GET /api/projects · GET /api/projects/{slug}/endpoints|trend|risk-heatmap · POST /api/runs (ingest)
 │       ├── fix_job.py        Autofix over HTTP: token gate, one-run lock, sandbox copy, NDJSON event stream
 │       └── static/index.html Web dashboard
 │
@@ -159,6 +161,7 @@ Expected results on a clean copy of `demo-repo/` (delete `demo-repo/repoguard-ou
 | After (reference) | copy `docs/expected-after-tests/*.py` into `demo-repo/tests/`, re-measure | 71 passed, coverage 100%, mutation 89.87% (71/79) |
 | Store (needs `[db]`) | `python3 scripts/verify.py phase17-store` (+ `REPOGUARD_TEST_DATABASE_URL` for Postgres) | PASS: exact round trip, stored coverage `65.11627906976744` (not rounded) |
 | Persistence is inert | `python3 scripts/verify.py phase17-pipeline` | PASS: `repoguard-out/*.json` byte-identical stored vs. not stored; stored mutation 16/79 = 20.25 |
+| History API (needs `[db]`) | `python3 scripts/verify.py phase17-endpoints phase17-api` | PASS: read routes, `POST /api/runs` ingest tokens, a real `repoguard analyze --push` against a real `repoguard serve` |
 
 Never leave the reference tests inside `demo-repo/tests/` after verifying.
 

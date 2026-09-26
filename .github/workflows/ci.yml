@@ -81,6 +81,30 @@ jobs:
       - name: Verify phase18-seq-stub (fix loop, scripted provider)
         run: python scripts/verify.py phase18-seq-stub
 
+  engine-parallel-mutation:
+    runs-on: ubuntu-latest
+    # Phase 18 S1 (parallel mutation workers, file scope, sham-mutant guard)
+    # and Phase 17 A2 / Phase 18 S2 (per-mutant records + stable fingerprints,
+    # per-test JUnit outcomes). Own job for the same reason as the other
+    # mutation-heavy checks above: several full mutation runs, slower than
+    # the fast quality-gate job. No [db] extra needed -- these checks never
+    # touch the store.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install repoguard
+        run: pip install -e .
+
+      - name: Verify phase18-s1 (parallel mutation workers, file scope)
+        run: python scripts/verify.py phase18-s1
+
+      - name: Verify phase17-engine (per-mutant records, per-test outcomes)
+        run: python scripts/verify.py phase17-engine
+
   store:
     runs-on: ubuntu-latest
     # Phase 17 measurement-history store. The jobs above install plain `.`
@@ -118,3 +142,9 @@ jobs:
 
       - name: Verify phase17-pipeline (persisting can't change a measurement)
         run: python scripts/verify.py phase17-pipeline
+
+      - name: Verify phase17-endpoints (GET /api/projects/{slug}/endpoints)
+        run: python scripts/verify.py phase17-endpoints
+
+      - name: Verify phase17-api (history read routes, ingest tokens, analyze --push)
+        run: python scripts/verify.py phase17-api
