@@ -28,13 +28,28 @@ they degrade gracefully (`ok=False`, a real error) if it's missing.
 
 ## 3. Set the environment variables
 
+**`repoguard` does not read `.env` files** (no `python-dotenv`). Putting the
+keys in a `.env` does nothing — set them in the same terminal session you
+run `repoguard` from. `.env.example` at the repo root lists the variables
+as a reference; never commit real values (`.env`/`.env.*` are gitignored,
+only `.env.example` is tracked).
+
 ```bash
+# bash / zsh
 export WATSONX_APIKEY="<your IBM Cloud API key>"
 export WATSONX_PROJECT_ID="<your watsonx project id>"
 export WATSONX_URL="https://us-south.ml.cloud.ibm.com"  # optional, this is the default
 ```
 
-For `.bob/mcp.json`, add them under that server's `"env"` block instead of
+```powershell
+# PowerShell (Windows)
+$env:WATSONX_APIKEY="<your IBM Cloud API key>"
+$env:WATSONX_PROJECT_ID="<your watsonx project id>"
+$env:WATSONX_URL="https://us-south.ml.cloud.ibm.com"  # optional, this is the default
+```
+
+These only last for that terminal session. For an MCP client, add them
+under that server's `"env"` block in the client's config instead of
 relying on ambient environment variables, the same way `repoguard`'s own
 PATH pitfalls are handled (see `AGENTS.md §9`).
 
