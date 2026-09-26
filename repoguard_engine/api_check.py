@@ -30,7 +30,7 @@ def find_untested_endpoints(repo_path: str | Path) -> list[EndpointInfo]:
         if "test_" in py_file.name or py_file.parts[-1].startswith("test"):
             continue
         try:
-            tree = ast.parse(py_file.read_text(), filename=str(py_file))
+            tree = ast.parse(py_file.read_text(encoding="utf-8"),filename=str(py_file))
         except SyntaxError:
             continue
 
@@ -53,7 +53,7 @@ def find_untested_endpoints(repo_path: str | Path) -> list[EndpointInfo]:
     test_bodies: list[str] = []
     for tf in repo.rglob("test_*.py"):
         try:
-            test_bodies.append(tf.read_text())
+            test_bodies.append(tf.read_text(encoding="utf-8"))
         except OSError:
             pass
     combined = "\n".join(test_bodies)
