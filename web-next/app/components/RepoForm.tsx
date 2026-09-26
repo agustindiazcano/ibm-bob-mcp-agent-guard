@@ -1,6 +1,7 @@
 "use client";
 
 import type { RepoFormValues } from "../lib/types";
+import styles from "./Controls.module.css";
 
 type Props = {
   values: RepoFormValues;
@@ -10,17 +11,19 @@ type Props = {
 
 export function RepoForm({ values, onChange, disabled }: Props) {
   return (
-    <fieldset disabled={disabled}>
-      <label>
+    <fieldset className={styles.form} disabled={disabled}>
+      <label className={styles.field}>
         Repo path
         <input
+          className={styles.input}
           type="text"
           value={values.repoPath}
           onChange={(e) => onChange({ ...values, repoPath: e.target.value })}
           placeholder="./demo-repo"
+          spellCheck={false}
         />
       </label>
-      <label>
+      <label className={styles.check}>
         <input
           type="checkbox"
           checked={values.mutation}
@@ -28,9 +31,10 @@ export function RepoForm({ values, onChange, disabled }: Props) {
         />
         Run mutation testing
       </label>
-      <label>
+      <label className={styles.field}>
         Gate threshold (%)
         <input
+          className={styles.input}
           type="number"
           min={0}
           max={100}

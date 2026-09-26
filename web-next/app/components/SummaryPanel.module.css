@@ -1,0 +1,36 @@
+.tag {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  white-space: nowrap;
+}
+
+.text {
+  font-size: 15px;
+  line-height: 1.65;
+  white-space: pre-line;
+}
+
+.provider {
+  display: block;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.pending {
+  color: var(--text-muted);
+}
+
+.unavailable {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.unavailable strong {
+  color: var(--text);
+  font-weight: 600;
+}

@@ -8,7 +8,7 @@ Vercel" section is a short summary pointing here.**
 
 **Status: built in `web-next/` and deployed to Vercel
 (https://ibm-bob-mcp-agent-guard.vercel.app/). Still open: pointing the
-deployment at a real backend, visual design, and Autofix — tracker in
+deployment at a real backend, README screenshots, and Autofix — tracker in
 `PENDING.md` Phase 14.**
 
 The original web UI (`web/static/index.html`, served by `web/server.py`)
@@ -49,9 +49,15 @@ belongs to Phase 17 (`docs/DATA_PLATFORM.md`), not this phase.
 | `RepoForm` | repo path input, mutation checkbox, gate threshold input | user input only |
 | `ActionBar` | "Analyze" and "Gate" buttons; "Autofix" ships disabled (gap 3 below) | triggers the calls below |
 | `StreamLog` | live progress lines as SSE events arrive | `/api/stream` |
-| `StatCards` | coverage %, mutation score, risk count, gate PASS/FAIL | `AnalyzeResponse` |
+| `StatCards` | coverage % (covered/total lines), mutation score or "Not run", files with gaps, gate PASS/FAIL with the threshold that run used | `AnalyzeResponse` + the submitted threshold |
 | `GapsList` | uncovered files + missing lines | `AnalyzeResponse.gaps` |
-| `RiskTable` | file, score, reasons | `AnalyzeResponse.risk` |
+| `RiskTable` | file + reasons, score with a bar (the score is already a 0–1 uncovered-line ratio, so the bar width is the score itself) | `AnalyzeResponse.risk` |
+| `Card` | shared section frame (title, optional badge) | — |
+
+Styling is CSS Modules next to each component plus design tokens in
+`app/globals.css` (light and dark via `prefers-color-scheme`), no CSS
+dependency. Formatting is display-only (`toFixed`, same decimals everywhere);
+no component derives a new metric.
 | `SummaryPanel` | AI prose, labeled "advisory, not a measurement", plus which provider generated it; "Summary unavailable: …" when `ok=false` | `SummaryResponse`, passed in by `page.tsx` |
 
 `page.tsx` owns all fetching. One Analyze click opens the `/api/stream`
