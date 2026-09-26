@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { SiteNav } from "./components/site/SiteNav";
+import { SiteFooter } from "./components/site/SiteFooter";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,14 +15,18 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TestMind AI",
+  title: { default: "TestMind AI", template: "%s · TestMind AI" },
   description: "Test-quality dashboard for the RepoGuard engine",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <SiteNav />
+        {children}
+        <SiteFooter />
+      </body>
     </html>
   );
 }
