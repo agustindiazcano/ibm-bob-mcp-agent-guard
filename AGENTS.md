@@ -51,6 +51,12 @@ Python ≥ 3.10 · pytest · coverage.py · stdlib `ast` (own mutation engine, n
 ibm-bob-mcp-agent-guard/
 ├── .bob/                              RETIRED — see .bob/DEPRECATED.md; left on disk, nothing depends on it
 │
+├── .github/
+│   └── workflows/
+│       ├── ci.yml            backend CI: phase0/phase7 verify, demo-repo pytest, gate, mutation determinism — paths-ignore: web-next/**
+│       ├── cd.yml            backend CD: build/push image, deploy to Cloud Run — paths-ignore: web-next/**
+│       └── frontend-ci.yml   frontend CI: npm lint + build — paths: web-next/** only
+│
 ├── repoguard_engine/
 │   ├── __init__.py
 │   ├── core.py           measure_coverage · find_coverage_gaps · run_mutation · compute_risk · build_dashboard_data
@@ -84,6 +90,13 @@ ibm-bob-mcp-agent-guard/
 │   │   ├── test_cart.py      Weak baseline
 │   │   └── test_pricing.py   Weak baseline
 │   └── web/index.html        Shop UI for visual checks
+│
+├── web-next/             Next.js dashboard (Phase 14) — calls the existing FastAPI backend, doesn't replace it
+│   ├── app/
+│   │   ├── components/       RepoForm · ActionBar · StreamLog · StatCards · GapsList · RiskTable
+│   │   ├── lib/               api.ts (fetchAnalyze, streamUrl) · types.ts
+│   │   └── page.tsx
+│   └── package.json
 │
 ├── docs/
 │   ├── ARCHITECTURE.md           Layer diagram, data flow, MCP tool list

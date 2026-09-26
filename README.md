@@ -343,18 +343,22 @@ The rest of this section is about the first one — how the repo itself gets bui
 
 ## Roadmap
 
-**Next up: a Next.js dashboard on Vercel.** The current web UI
-(`repoguard serve`, `web/static/index.html`) stays as the reference
-implementation and keeps serving `/api/analyze` and `/api/stream`. Planned
-on top of it: a richer Next.js frontend — charts for coverage/mutation/risk,
-a surviving-mutants table, and one-click buttons for "Analyze", "Gate" and
-"Autofix (watsonx.ai)" — deployed to Vercel, consuming the same FastAPI
-endpoints rather than replacing them.
+**In progress: a Next.js dashboard on Vercel.** `web-next/` is scaffolded
+and merged to `main` — `RepoForm`/`ActionBar` drive `/api/analyze`, `StreamLog`
+renders `/api/stream` live, `StatCards`/`GapsList`/`RiskTable` render the
+measured numbers verbatim. The current web UI (`repoguard serve`,
+`web/static/index.html`) stays as the reference implementation and keeps
+serving both endpoints — the new frontend consumes them rather than
+replacing them. Still open: `SummaryPanel` and the "Autofix (watsonx.ai)"
+button, both blocked on backend work (a summary endpoint, `POST /api/fix`,
+AI-provider labeling); CI for `web-next/` is split from the backend's
+(`.github/workflows/frontend-ci.yml`, path-filtered) so frontend-only
+changes don't trigger the Python/mutation pipeline or a Cloud Run deploy.
 
 We're deliberately not adopting Terraform or new GCP infrastructure for
 this: the existing Cloud Run deploy (`docs/DEPLOY.md`, Phase 13) is left
 as-is, and the new frontend ships as a plain Vercel project (no IaC). See
-`PENDING.md` Phase 14 and `docs/ARCHITECTURE.md` for details. Not built yet.
+`PENDING-front.md` and `docs/ARCHITECTURE-front.md` for the full tracker.
 
 **Also planned: multicloud AI.** watsonx.ai is the only provider today. See
 [`docs/MULTICLOUD_AI.md`](docs/MULTICLOUD_AI.md) (`PENDING.md` Phase 16) for
