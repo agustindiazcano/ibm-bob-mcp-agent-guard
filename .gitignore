@@ -53,3 +53,10 @@ repoguard-out/
 # repoguard fix's auto-written run reports (target repo; never commit)
 watson-evidence/
 **/watson-evidence/
+
+# Terraform local state — can contain sensitive attribute values; state
+# for this project is local on purpose (see infra/terraform/README.md)
+infra/terraform/.terraform/
+infra/terraform/terraform.tfstate
+infra/terraform/terraform.tfstate.backup
+infra/terraform/*.tfplan

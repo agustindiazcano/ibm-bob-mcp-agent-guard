@@ -59,7 +59,11 @@ ibm-bob-mcp-agent-guard/
 │   └── workflows/
 │       ├── ci.yml            backend CI: phase0/phase7 verify, demo-repo pytest, gate, mutation determinism — paths-ignore: web-next/**
 │       ├── cd.yml            backend CD: build/push image, deploy to Cloud Run — paths-ignore: web-next/**
-│       └── frontend-ci.yml   frontend CI: npm lint + build — paths: web-next/** only
+│       ├── frontend-ci.yml   frontend CI: npm lint + build — paths: web-next/** only
+│       └── infra-ci.yml      infra CI: terraform fmt -check + validate, no credentials — paths: infra/terraform/** only
+│
+├── infra/
+│   └── terraform/        Codifies Phase 13's WIF identity (Artifact Registry, deployer SA + roles, WIF pool/provider) — README.md has the terraform import steps; state is local and gitignored
 │
 ├── repoguard_engine/
 │   ├── __init__.py
