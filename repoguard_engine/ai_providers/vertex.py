@@ -21,10 +21,23 @@ inspect.signature()/model_fields (not assumed from memory):
   the function name itself as the round-trip id -- self-consistent within
   this translation layer, never surfaced to callers.
 
-Live-verified this session against a real GCP project (gemini-2.5-flash,
-us-central1): a plain text call, and a full function-call round trip
-(model requests a tool, we send back a function response, model produces
-final text) -- both worked on the first real call, no retries needed.
+Live-verified against a real GCP project: a plain text call, and a full
+function-call round trip (model requests a tool, we send back a function
+response, model produces final text) -- both worked with gemini-2.5-flash
+in an earlier session, and again with gemini-3.5-flash / gemini-3.8-flash
+(both text and tool-calling) when the model lineup moved to Gemini 3 for
+better resistance to the hallucinated-API-call failures Phase 11 hit twice
+with 2.5-flash (see PENDING.md Phase 11 / tools.py's run_tests).
+
+Real finding, not assumed: gemini-3.5-flash and gemini-3.8-flash 404 at
+location="us-central1" ("Publisher model ... was not found") but work at
+location="global" -- Gemini 3's flash tier isn't regionally available the
+way 2.5-flash was. gemini-3.1-pro (the Gemini 3 Pro tier) 404s even at
+global on this project -- likely needs separate preview allowlisting;
+not used here. DEFAULT_LOCATION is "global" accordingly; anything using
+this provider with an older region override in VERTEX_LOCATION needs to
+drop it for a Gemini 3 model_id.
+
 Credentials come from Application Default Credentials (gcloud auth
 application-default login) or GOOGLE_APPLICATION_CREDENTIALS; there is no
 separate API key. google.auth.default() is used as the fail-loud
@@ -35,13 +48,14 @@ failure is instant, before the caller's multi-minute mutation baseline runs
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 
 from .base import AIProviderError
 
-DEFAULT_MODEL_ID = "gemini-2.5-flash"
-DEFAULT_LOCATION = "us-central1"
+DEFAULT_MODEL_ID = "gemini-3.8-flash"
+DEFAULT_LOCATION = "global"
 
 
 class VertexCredentialsError(AIProviderError):
@@ -87,7 +101,11 @@ class VertexChatProvider:
                             args = {}
                         call_id = call.get("id", name)
                         id_to_name[call_id] = name
-                        parts.append(types.Part.from_function_call(name=name, args=args))
+                        part = types.Part.from_function_call(name=name, args=args)
+                        signature = call.get("thought_signature")
+                        if signature:
+                            part.thought_signature = base64.b64decode(signature)
+                        parts.append(part)
                     contents.append(types.Content(role="model", parts=parts))
                 else:
                     contents.append(
@@ -145,29 +163,45 @@ class VertexChatProvider:
 
     @staticmethod
     def _to_openai_shape(response) -> dict:
-        function_calls = response.function_calls or []
-        if function_calls:
-            tool_calls = [
-                {
+        # Iterates response.candidates[0].content.parts directly rather than
+        # the response.function_calls convenience property -- that shortcut
+        # returns bare FunctionCall objects and drops each Part's
+        # thought_signature, which Gemini 3 (unlike 2.5) requires to be
+        # replayed on the next turn's function-call Part or the API rejects
+        # the request with 400 INVALID_ARGUMENT ("Function call is missing a
+        # thought_signature"). Real finding, live-verified: a 3.8-flash tool
+        # call carried an 85-byte signature even with thinking disabled.
+        candidates = response.candidates or []
+        parts = candidates[0].content.parts if candidates and candidates[0].content else []
+        function_call_parts = [p for p in parts if p.function_call]
+        if function_call_parts:
+            tool_calls = []
+            for part in function_call_parts:
+                fc = part.function_call
+                call = {
                     "id": fc.name,
                     "type": "function",
                     "function": {"name": fc.name, "arguments": json.dumps(fc.args or {})},
                 }
-                for fc in function_calls
-            ]
+                if part.thought_signature:
+                    call["thought_signature"] = base64.b64encode(part.thought_signature).decode("ascii")
+                tool_calls.append(call)
             return {"choices": [{"message": {"role": "assistant", "content": None, "tool_calls": tool_calls}}]}
         return {"choices": [{"message": {"role": "assistant", "content": response.text or ""}}]}
 
 
-def get_provider(*, model_id: str = DEFAULT_MODEL_ID) -> VertexChatProvider:
+def get_provider(*, model_id: str | None = None) -> VertexChatProvider:
     """
     Build a VertexChatProvider wrapping a google-genai Client configured for
     Vertex AI.
 
-    Uses VERTEX_PROJECT_ID / VERTEX_LOCATION (default "us-central1") env
-    vars; credentials come from Application Default Credentials (`gcloud
-    auth application-default login`) or GOOGLE_APPLICATION_CREDENTIALS --
-    see docs/VERTEX_SETUP.md.
+    Uses VERTEX_PROJECT_ID / VERTEX_LOCATION (default "global") /
+    VERTEX_MODEL_ID (default "gemini-3.8-flash", overridden by the model_id
+    kwarg if given) env vars; credentials come from Application Default
+    Credentials (`gcloud auth application-default login`) or
+    GOOGLE_APPLICATION_CREDENTIALS -- see docs/VERTEX_SETUP.md.
+    VERTEX_MODEL_ID exists so gemini-3.5-flash / gemini-3.8-flash can be
+    A/B'd against real mutation-score deltas without a code change.
 
     Raises VertexCredentialsError immediately if VERTEX_PROJECT_ID is
     unset, no usable credentials are found, or the SDK isn't installed --
@@ -176,6 +210,8 @@ def get_provider(*, model_id: str = DEFAULT_MODEL_ID) -> VertexChatProvider:
     """
     project = os.environ.get("VERTEX_PROJECT_ID")
     location = os.environ.get("VERTEX_LOCATION", DEFAULT_LOCATION)
+    if model_id is None:
+        model_id = os.environ.get("VERTEX_MODEL_ID", DEFAULT_MODEL_ID)
 
     if not project:
         raise VertexCredentialsError("VERTEX_PROJECT_ID must be set -- see docs/VERTEX_SETUP.md")

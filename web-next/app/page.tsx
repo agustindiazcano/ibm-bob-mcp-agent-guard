@@ -8,6 +8,8 @@ import { StatCards } from "./components/StatCards";
 import { GapsList } from "./components/GapsList";
 import { RiskTable } from "./components/RiskTable";
 import { SummaryPanel } from "./components/SummaryPanel";
+import { Card } from "./components/Card";
+import styles from "./page.module.css";
 import { fetchAnalyze, fetchSummary, streamUrl } from "./lib/api";
 import type { AnalyzeResponse, RepoFormValues, StreamEvent, SummaryResponse } from "./lib/types";
 
@@ -24,6 +26,9 @@ export default function Home() {
   const [result, setResult] = useState<AnalyzeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
+  // The threshold the shown result was measured against, so editing the
+  // input afterwards doesn't relabel an old PASS/FAIL.
+  const [ranThreshold, setRanThreshold] = useState(DEFAULT_VALUES.gateThreshold);
   const runRef = useRef(0);
 
   // The summary is fetched here rather than in a SummaryPanel effect because
@@ -47,6 +52,7 @@ export default function Home() {
 
   async function runAnalyze(gateThreshold: number) {
     const run = ++runRef.current;
+    setRanThreshold(gateThreshold);
     setBusy(true);
     setError(null);
     setEvents([]);
@@ -76,21 +82,37 @@ export default function Home() {
   }
 
   return (
-    <main>
-      <h1>TestMind AI</h1>
-      <RepoForm values={values} onChange={setValues} disabled={busy} />
-      <ActionBar
-        busy={busy}
-        onAnalyze={() => runAnalyze(values.gateThreshold)}
-        onGate={() => runAnalyze(values.gateThreshold)}
-      />
-      {error && <p role="alert">{error}</p>}
+    <main className={styles.main}>
+      <header className={styles.header}>
+        <h1 className={styles.title}>TestMind AI</h1>
+        <p className={styles.subtitle}>Measures whether a Python repo&rsquo;s tests actually catch bugs.</p>
+      </header>
+      <Card title="Analyze a repository">
+        <RepoForm values={values} onChange={setValues} disabled={busy} />
+        <ActionBar
+          busy={busy}
+          onAnalyze={() => runAnalyze(values.gateThreshold)}
+          onGate={() => runAnalyze(values.gateThreshold)}
+        />
+      </Card>
+      {error && (
+        <p className={styles.alert} role="alert">
+          {error}
+        </p>
+      )}
       <StreamLog events={events} />
+      {!result && !busy && !error && events.length === 0 && (
+        <p className={styles.empty}>
+          Enter a repo path on the backend&rsquo;s machine and press Analyze to measure it.
+        </p>
+      )}
       {result && (
         <>
-          <StatCards result={result} />
-          <GapsList gaps={result.gaps} />
-          <RiskTable risk={result.risk} />
+          <StatCards result={result} gateThreshold={ranThreshold} />
+          <div className={styles.columns}>
+            <GapsList gaps={result.gaps} />
+            <RiskTable risk={result.risk} />
+          </div>
           <SummaryPanel summary={summary} />
         </>
       )}
