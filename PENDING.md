@@ -246,7 +246,7 @@ contract. (This section absorbed the former satellite `PENDING-front.md`.)
 | 3 | No `POST /api/fix` — the fix loop is CLI-only | Autofix button | 🔴 revisit once the fix loop (Phase 11) *and* Phase 16's `ChatProvider` are both stable, so the endpoint isn't built twice |
 | 4 | `POST /api/summary` — body: `/api/analyze`'s dashboard; returns `{ok, text, error, provider}` (PR #27) | `SummaryPanel` | 🟢 |
 | 5 | `/api/stream` takes `gate_threshold` (default 80.0) instead of a hardcoded 80% (PR #27) | live-progress gate readout | 🟢 |
-| 6 | `provider` field exists on `/api/summary`, fixed to `"watsonx.ai"` (the only provider today) | future Autofix result view | 🟡 source it from `ChatProvider` once Phase 16 lands; add it to gap 3's response |
+| 6 | `provider` on `/api/summary` comes from the provider actually used (`"watsonx"` or `"vertex"`, via `narrative.py`/`get_provider()`), on both `ok` paths | future Autofix result view | 🟢 add it to gap 3's response when that endpoint exists |
 
 **Deliverables**
 
@@ -259,7 +259,8 @@ contract. (This section absorbed the former satellite `PENDING-front.md`.)
 | `SummaryPanel` | AI prose, labeled advisory + which provider generated it (PRs #26/#27) | 🟢 |
 | CI split | `frontend-ci.yml` (lint+build, `web-next/**` only) separate from backend `ci.yml`/`cd.yml` (`paths-ignore: web-next/**`) | 🟢 |
 | Vercel deploy | Connect repo/subfolder to Vercel; no IaC, config in `vercel.json` / project settings; `NEXT_PUBLIC_REPOGUARD_API_BASE` per environment | 🟢 deployed: https://ibm-bob-mcp-agent-guard.vercel.app/ — `NEXT_PUBLIC_REPOGUARD_API_BASE` still points at `localhost:8000` (placeholder); update once Cloud Run (Phase 13) is deployed |
-| Docs | Fold `docs/ARCHITECTURE-front.md` into `docs/ARCHITECTURE.md`; add the deployed URL and real screenshots to `README.md` | 🔴 |
+| Docs | `docs/ARCHITECTURE-front.md` updated to what's built (real `/api/summary` contract, closed gaps); `docs/ARCHITECTURE.md`'s section now a short summary pointing to it (kept as a satellite so front/back sessions don't edit the same paragraphs); deployed URL in `README.md` and `web-next/README.md` | 🟡 real screenshots in `README.md` still pending — wait for the visual design |
+| Visual design | Dashboard is unstyled HTML today; layout, stat cards, tables, loading/error states, dark mode — CSS Modules, no new dependency; display-only formatting (numbers stay verbatim from the API) | 🔴 |
 
 **Verified so far:** `npm run lint` and `npm run build` pass. End-to-end on
 `main` (`50fe2e6`): headless Chrome (Playwright) clicked Analyze against

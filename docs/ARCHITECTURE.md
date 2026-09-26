@@ -103,20 +103,23 @@ is retired. The MCP server (`mcp_server.py`) is unrelated to this loop; it's
 a separate, generic integration for any MCP client, not specific to Bob or
 to the fix loop.
 
-## Planned: Next.js dashboard on Vercel
+## Next.js dashboard on Vercel
 
-**Not built yet — roadmap only, see `PENDING.md` Phase 14.**
+**Built in `web-next/` and deployed to https://ibm-bob-mcp-agent-guard.vercel.app/
+— full component breakdown, data contract and open gaps in
+[`ARCHITECTURE-front.md`](ARCHITECTURE-front.md); status in `PENDING.md` Phase 14.**
 
-The current web UI (`web/static/index.html`, served by `web/server.py`) stays as the
-reference implementation. The plan is a richer frontend, built separately and consuming
-the same FastAPI endpoints (`/api/analyze`, `/api/stream`) rather than replacing them:
+The original web UI (`web/static/index.html`, served by `web/server.py`) stays as the
+reference implementation. `web-next/` is a separate, richer frontend consuming the same
+FastAPI endpoints rather than replacing them:
 
 ```
-┌───────────────────────────────┐        ┌──────────────────────────────┐
+┌───────────────────────────────┐        ┌───────────────────────────────┐
 │  Next.js dashboard (Vercel)   │  HTTP  │  repoguard_engine/web/server  │
-│  charts, risk table, action   │ ─────▶ │  (FastAPI, unchanged)         │
-│  buttons ("Autofix", "Gate")  │  + SSE │  /api/analyze · /api/stream   │
-└───────────────────────────────┘        └──────────────────────────────┘
+│  stats, gaps, risk table,     │ ─────▶ │  (FastAPI)                    │
+│  AI summary, Analyze / Gate   │  + SSE │  /api/analyze · /api/stream   │
+│                               │        │  /api/summary                 │
+└───────────────────────────────┘        └───────────────────────────────┘
 ```
 
 No Terraform, no GCP-specific IaC for this piece — Vercel builds and hosts the
