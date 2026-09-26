@@ -9,7 +9,7 @@ Section 4: "cli.py, mcp_server.py and web/server.py are thin adapters over
 pipeline/core").
 
 Provider-agnostic: drives whichever ai_providers.get_provider() returns
-(watsonx.ai by default, or Vertex AI via REPOGUARD_AI_PROVIDER=vertex) --
+(Vertex AI by default, or watsonx.ai via REPOGUARD_AI_PROVIDER=watsonx) --
 see docs/MULTICLOUD_AI.md.
 """
 
@@ -124,7 +124,7 @@ def run_fix_loop(
     7. Write an evidence report to watson-evidence/.
 
     provider: forwarded to ai_providers.get_provider() (None reads
-    REPOGUARD_AI_PROVIDER, defaulting to "watsonx").
+    REPOGUARD_AI_PROVIDER, defaulting to "vertex").
 
     on_event: optional progress callback, called as on_event(type, data) at
     each stage boundary (web/fix_job.py streams these to the browser). It

@@ -1,7 +1,7 @@
 """
 Narrative summary: turns an already-measured dashboard dict into human-
 readable prose via whichever AI provider REPOGUARD_AI_PROVIDER selects
-(watsonx.ai by default, or Vertex AI) -- see docs/MULTICLOUD_AI.md. This
+(Vertex AI by default, or watsonx.ai) -- see docs/MULTICLOUD_AI.md. This
 module never measures anything itself and never invents a number — every
 figure it can mention has to already exist in the dict it's given. See
 AGENTS.md Section 4: "the AI decides, the engine measures."
@@ -14,10 +14,9 @@ credentials are missing — same pattern as visual.py's Playwright/axe checks.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 
-from .ai_providers import get_provider
+from .ai_providers import get_provider, resolve_provider_name
 
 _TIMEOUT_SECONDS = 30
 _MAX_NEW_TOKENS = 300
@@ -83,9 +82,9 @@ def generate_summary(
     advisory text only.
 
     provider/model_id are forwarded to ai_providers.get_provider(); None
-    reads REPOGUARD_AI_PROVIDER, defaulting to "watsonx".
+    reads REPOGUARD_AI_PROVIDER, defaulting to "vertex".
     """
-    resolved_provider = provider or os.environ.get("REPOGUARD_AI_PROVIDER", "watsonx")
+    resolved_provider = resolve_provider_name(provider)
     prompt = _build_prompt(dashboard)
 
     try:

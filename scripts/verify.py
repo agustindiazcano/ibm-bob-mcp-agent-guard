@@ -11,7 +11,7 @@ Phase checks implemented:
     phase0      — package installs cleanly, `repoguard --help` exits 0
     phase3      — AST mutation engine is deterministic (two runs produce identical results)
     phase7      — MCP tools accept `detail` param; compact response is the default
-    phase15     — narrative.py degrades gracefully with no watsonx credentials
+    phase15     — narrative.py degrades gracefully with no AI credentials
     phase16     — fix-loop write guard + fail-loud credential check
     multicloud  — ai_providers.get_provider() dispatch, defaults, and unknown-provider handling
     phase14fix  — POST /api/fix: token gate, single-run lock, NDJSON events, sandbox leaves the target repo untouched
@@ -129,15 +129,15 @@ print('All 9 tools have detail:bool=False')
 
 
 def check_phase15() -> bool:
-    """Verify the watsonx narrative module degrades gracefully instead of
+    """Verify the narrative module degrades gracefully instead of
     fabricating a summary when credentials aren't configured."""
-    print("=== Phase 15: watsonx narrative summary ===")
+    print("=== Phase 15: AI narrative summary ===")
 
     script = """
-from repoguard_engine.narrative import generate_summary
 import os
-os.environ.pop('WATSONX_APIKEY', None)
-os.environ.pop('WATSONX_PROJECT_ID', None)
+for var in ('WATSONX_APIKEY', 'WATSONX_PROJECT_ID', 'VERTEX_PROJECT_ID', 'REPOGUARD_AI_PROVIDER'):
+    os.environ.pop(var, None)
+from repoguard_engine.narrative import generate_summary
 r = generate_summary({'coverage': {'percent': 1.0}, 'gaps': {'uncovered_files': []}, 'mutation': None, 'risk': []})
 assert r.ok is False, 'expected ok=False with no credentials configured'
 assert r.text == '', 'expected no fabricated text'
@@ -163,8 +163,8 @@ def check_phase16() -> bool:
 import os, tempfile
 from pathlib import Path
 
-os.environ.pop('WATSONX_APIKEY', None)
-os.environ.pop('WATSONX_PROJECT_ID', None)
+for var in ('WATSONX_APIKEY', 'WATSONX_PROJECT_ID', 'VERTEX_PROJECT_ID', 'REPOGUARD_AI_PROVIDER'):
+    os.environ.pop(var, None)
 
 from repoguard_engine.watson_agent.tools import write_test_file, read_source_file, SourceEditRejected
 from repoguard_engine.ai_providers import get_provider, AIProviderError
@@ -212,7 +212,7 @@ print('OK: write guard enforced, path traversal rejected, fail-loud credential c
 
 
 def check_multicloud() -> bool:
-    """Verify ai_providers.get_provider()'s dispatch: default-to-watsonx
+    """Verify ai_providers.get_provider()'s dispatch: default-to-vertex
     fail-loud behavior, an unrecognized provider name failing loud, and that
     watson_agent/orchestrator.py + narrative.py import cleanly now that
     watson_agent/client.py no longer exists."""
@@ -227,17 +227,20 @@ os.environ.pop('REPOGUARD_AI_PROVIDER', None)
 
 from repoguard_engine.ai_providers import get_provider, AIProviderError
 
-# Default (unset REPOGUARD_AI_PROVIDER) resolves to watsonx and fails loud
+from repoguard_engine.ai_providers import DEFAULT_PROVIDER, resolve_provider_name
+
+# Default (unset REPOGUARD_AI_PROVIDER) resolves to vertex and fails loud
+assert DEFAULT_PROVIDER == 'vertex' and resolve_provider_name() == 'vertex', 'expected vertex as the default provider'
 try:
     get_provider()
-    raise AssertionError('expected AIProviderError for the default (watsonx) provider with no credentials')
+    raise AssertionError('expected AIProviderError for the default (vertex) provider with no VERTEX_PROJECT_ID')
 except AIProviderError as exc:
     assert str(exc), 'expected a real error message'
 
-# Vertex fails loud with no VERTEX_PROJECT_ID configured
+# watsonx, explicitly selected, fails loud with no credentials configured
 try:
-    get_provider(provider='vertex')
-    raise AssertionError('expected AIProviderError for vertex with no VERTEX_PROJECT_ID configured')
+    get_provider(provider='watsonx')
+    raise AssertionError('expected AIProviderError for watsonx with no credentials configured')
 except AIProviderError as exc:
     assert str(exc), 'expected a real error message'
 
@@ -252,7 +255,7 @@ except AIProviderError as exc:
 import repoguard_engine.narrative
 import repoguard_engine.watson_agent.orchestrator
 
-print('OK: default-provider fail-loud, unknown-provider fail-loud, callers import cleanly')
+print('OK: default is vertex and fails loud, watsonx fails loud, unknown-provider fail-loud, callers import cleanly')
 """
 
     rc, out = run([sys.executable, "-c", script], timeout=30)

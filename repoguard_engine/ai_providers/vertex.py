@@ -1,4 +1,5 @@
-"""Google Vertex AI ChatProvider (REPOGUARD_AI_PROVIDER=vertex / --provider vertex).
+"""Google Vertex AI ChatProvider -- the default provider (REPOGUARD_AI_PROVIDER
+unset or "vertex").
 
 Verified against the actually-installed google-genai==2.25.0 via
 inspect.signature()/model_fields (not assumed from memory):

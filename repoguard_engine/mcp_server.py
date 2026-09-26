@@ -280,7 +280,7 @@ def tool_check_accessibility(url: str, detail: bool = False) -> dict:
 def tool_generate_summary(repo_path: str, detail: bool = False) -> dict:
     """
     Measure repo_path (coverage, gaps, risk) and ask the configured AI
-    provider (watsonx.ai by default, or Vertex AI) for a short plain-English
+    provider (Vertex AI by default, or watsonx.ai) for a short plain-English
     summary of those exact numbers. Advisory text only — never a source of
     any metric; every number the summary can mention was already measured by
     the engine before this tool ever calls the AI provider.

@@ -31,7 +31,7 @@ def main() -> None:
 )
 @click.option(
     "--provider", default=None,
-    help="AI provider for --summarize: 'watsonx' (default) or 'vertex'. "
+    help="AI provider for --summarize: 'vertex' (default) or 'watsonx'. "
          "Overrides REPOGUARD_AI_PROVIDER for this call.",
 )
 def analyze(repo_path: str, mutation: bool, endpoints: bool, json_output: bool, summarize: bool, provider: str | None) -> None:
@@ -85,7 +85,7 @@ def gate(repo_path: str, threshold: float) -> None:
 @click.option("--publish", is_flag=True, default=False, help="If the gate passes, commit tests/ to a new branch and open a PR.")
 @click.option(
     "--provider", default=None,
-    help="AI provider to drive the fix loop: 'watsonx' (default) or 'vertex'. "
+    help="AI provider to drive the fix loop: 'vertex' (default) or 'watsonx'. "
          "Overrides REPOGUARD_AI_PROVIDER for this call.",
 )
 def fix(repo_path: str, threshold: float, publish: bool, provider: str | None) -> None:
