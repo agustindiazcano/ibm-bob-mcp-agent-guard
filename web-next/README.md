@@ -18,6 +18,8 @@ Run the backend alongside it from the repo root with `repoguard serve`
 (port 8000). Its CORS allows `http://localhost:3000` by default; set
 `REPOGUARD_CORS_ORIGINS` to allow any other origin. On Windows, start it
 with `PYTHONIOENCODING=utf-8`, or the console output crashes it on startup.
+If the page can't reach the backend, it says so and names the URL it tried
+(a stopped backend and a CORS rejection look identical to the browser).
 
 Without AI credentials on the backend, the summary panel shows "Summary
 unavailable: …" — expected, not a bug. See `../docs/WATSONX_SETUP.md` or

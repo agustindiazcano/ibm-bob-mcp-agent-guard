@@ -8,6 +8,19 @@ function apiBase(): string {
   return base;
 }
 
+async function request(url: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch {
+    // The browser reports "backend down" and "CORS rejected" as the same
+    // opaque TypeError ("Failed to fetch"), so the message names both.
+    throw new Error(
+      `Can't reach the backend at ${apiBase()}. Check that repoguard serve is running there ` +
+        `and that its REPOGUARD_CORS_ORIGINS allows ${window.location.origin}.`,
+    );
+  }
+}
+
 function analyzeParams({ repoPath, mutation, gateThreshold }: RepoFormValues): URLSearchParams {
   return new URLSearchParams({
     repo_path: repoPath,
@@ -17,7 +30,7 @@ function analyzeParams({ repoPath, mutation, gateThreshold }: RepoFormValues): U
 }
 
 export async function fetchAnalyze(values: RepoFormValues): Promise<AnalyzeResponse> {
-  const res = await fetch(`${apiBase()}/api/analyze?${analyzeParams(values)}`);
+  const res = await request(`${apiBase()}/api/analyze?${analyzeParams(values)}`);
   if (!res.ok) {
     throw new Error(`analyze failed: ${res.status} ${res.statusText}`);
   }
@@ -25,7 +38,7 @@ export async function fetchAnalyze(values: RepoFormValues): Promise<AnalyzeRespo
 }
 
 export async function fetchSummary(result: AnalyzeResponse): Promise<SummaryResponse> {
-  const res = await fetch(`${apiBase()}/api/summary`, {
+  const res = await request(`${apiBase()}/api/summary`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(result),
