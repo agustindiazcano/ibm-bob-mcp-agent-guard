@@ -1,4 +1,4 @@
-import type { AnalyzeResponse, RepoFormValues } from "./types";
+import type { AnalyzeResponse, RepoFormValues, SummaryResponse } from "./types";
 
 function apiBase(): string {
   const base = process.env.NEXT_PUBLIC_REPOGUARD_API_BASE;
@@ -22,6 +22,18 @@ export async function fetchAnalyze(values: RepoFormValues): Promise<AnalyzeRespo
     throw new Error(`analyze failed: ${res.status} ${res.statusText}`);
   }
   return res.json() as Promise<AnalyzeResponse>;
+}
+
+export async function fetchSummary(result: AnalyzeResponse): Promise<SummaryResponse> {
+  const res = await fetch(`${apiBase()}/api/summary`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(result),
+  });
+  if (!res.ok) {
+    throw new Error(`summary failed: ${res.status} ${res.statusText}`);
+  }
+  return res.json() as Promise<SummaryResponse>;
 }
 
 export function streamUrl(repoPath: string): string {

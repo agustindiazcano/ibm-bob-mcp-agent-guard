@@ -6,6 +6,13 @@ export type AnalyzeResponse = {
   passed_gate: boolean;
 };
 
+export type SummaryResponse = {
+  ok: boolean;
+  text: string;
+  error: string;
+  provider: string;
+};
+
 export type StreamEventType = "start" | "progress" | "coverage" | "gaps" | "risk" | "done" | "error";
 
 export type StreamEvent = {

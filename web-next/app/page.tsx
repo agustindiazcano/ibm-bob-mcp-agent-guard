@@ -7,6 +7,7 @@ import { StreamLog } from "./components/StreamLog";
 import { StatCards } from "./components/StatCards";
 import { GapsList } from "./components/GapsList";
 import { RiskTable } from "./components/RiskTable";
+import { SummaryPanel } from "./components/SummaryPanel";
 import { fetchAnalyze, streamUrl } from "./lib/api";
 import type { AnalyzeResponse, RepoFormValues, StreamEvent } from "./lib/types";
 
@@ -65,6 +66,7 @@ export default function Home() {
           <StatCards result={result} />
           <GapsList gaps={result.gaps} />
           <RiskTable risk={result.risk} />
+          <SummaryPanel result={result} />
         </>
       )}
     </main>
