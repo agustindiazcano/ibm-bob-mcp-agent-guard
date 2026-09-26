@@ -535,23 +535,23 @@ session produced (Vercel → real backend, `ok=true` summary, Autofix).
 | 2 | `/api/analyze` 400-vs-500 fix (already logged) merged as PR #47; `cd.yml` auto-redeployed on the `main` push — confirmed live: bad `repo_path` now returns 400, not 500 | — |
 | 3 | Punch-list item 3 (Vercel → real backend): `REPOGUARD_CORS_ORIGINS` set to the Vercel origin, applied live via `gcloud run services update`, confirmed with a real CORS preflight — PR #49, merged | `.github/workflows/cd.yml` |
 | 4 | Punch-list item 4 (`ok=true` summary): found 3 real gaps live-testing `/api/summary` (independently confirmed by the frontend session too) — `REPOGUARD_AI_PROVIDER` unset (defaulted to watsonx), the deployed image missing `google-genai` (`Dockerfile` had no `[vertex]` extra), and the Cloud Run runtime SA missing `roles/aiplatform.user`. User ran the IAM grant by hand (blocked for an agent session — a permission grant, not something Claude Code's auto-mode classifier allows regardless of scope, even via Terraform apply, which would be "the same outcome through another tool") | — |
-| 5 | **Real process mistake, twice:** pushed the `Dockerfile`/docs fixes to `fix/cd-cors-vercel-origin` *after* the user had already merged that branch as PR #49 — the same race that orphaned a commit on PR #47 earlier this session. The merged PR (parents `9786ed24`/`f8f636a`) never actually included the `[vertex]` extra, so the redeploy kept failing with the exact same "google-genai is not installed" error, which looked like a code bug but was really a git-timing bug: **check whether a PR has already merged before assuming a push will land in it — a branch that's already been merged can still take new commits, but they go nowhere until pushed as a *new* PR.** Recovered both times by moving the orphaned commit(s) onto a fresh branch (`git merge origin/<old-branch>` into the new one) rather than losing the work | `LASTCONTEXT.md` (this entry) |
+| 5 | **Real process mistake, three times in one session:** pushed the `Dockerfile`/docs fixes *after* the user had already merged the branch they were on (PR #47, then #49, then #51 each ate a trailing commit the same way). A merged PR is closed — new pushes to that branch name go nowhere until opened as a *new* PR, and "the CD run succeeded" doesn't mean *your* commit was in it if something merged out from under you mid-work. **Fix that actually stuck:** stop pushing incremental commits to a branch someone might merge at any moment; instead land all related commits locally first, push once, and treat that push as final rather than a checkpoint. Recovered the orphaned commits each time via `git merge origin/<old-branch>` into a fresh branch rather than losing the work | `LASTCONTEXT.md` (this entry) |
 | 6 | While chasing the above as if it might be a real bug: `vertex.py`'s `except ImportError` caught *any* import failure under one fixed message, discarding the real inner exception — genuinely worth fixing regardless (a masked error is a real diagnosability gap), just not what was actually blocking this specific case. Reproduced `pip install -e ".[vertex]"` locally in a clean venv first, confirmed it installs and imports fine, before concluding the error had to be a deploy/config problem, not a dependency one | `repoguard_engine/ai_providers/vertex.py` |
 | 7 | Doc staleness the frontend session flagged: `PENDING.md`'s Phase 14 "Vercel deploy" row still said `NEXT_PUBLIC_REPOGUARD_API_BASE` pointed at `localhost:8000`; `LASTCONTEXT.md` had nothing recorded past PR #44 | `PENDING.md`, `LASTCONTEXT.md` |
+| 8 | **Success, verified live**: `POST /api/summary` against `https://repoguard-ljm5hefnsq-uc.a.run.app` returned `{"ok": true, "provider": "vertex", "text": "The test suite covers 65.1...% ..."}` — real generated prose matching the measured numbers, not fabricated. Punch-list item 4 is done | `PENDING.md` Phase 14 gap 8 |
 
-All of items 4-7's fixes ended up consolidated onto one branch,
-`fix/vertex-import-error-detail` (PR not yet opened as of this writing) —
-check `git log origin/main..origin/fix/vertex-import-error-detail` before
-assuming this is merged.
+Items 4-7's fixes landed as PR #52 (`fix/vertex-dockerfile-extra-final`,
+after PR #51 dropped the actual `Dockerfile` change the same way #49 had —
+see item 5). `main` at `1da4804` has everything.
 
 **Real, measured chain of Cloud Run env-var changes this session** (all
 via `gcloud run services update --update-env-vars`, each confirmed with a
 real request before moving to the next): `REPOGUARD_CORS_ORIGINS` →
 `VERTEX_PROJECT_ID` → `REPOGUARD_AI_PROVIDER=vertex`. Real IAM policy
 confirms `roles/aiplatform.user` granted to
-`993240087609-compute@developer.gserviceaccount.com`. **Not yet
-re-verified**: `ok: true` from `/api/summary` against the live service —
-that needs the pending branch above to actually merge this time.
+`993240087609-compute@developer.gserviceaccount.com`. **`ok: true`
+re-verified live** against the real deployed service after PR #52 merged
+and redeployed — the full punch-list item 4 chain is closed.
 
 ### Session 21-front — frontend side of the same punch list (parallel Opus session, worktree `ibm-bob-mcp-agent-guard-frontend`)
 
@@ -570,7 +570,7 @@ Only what Session 21 above doesn't already cover.
 ## Current repo state
 
 - Branch: `main` — PR #37 (Phase 16 + 13 WIF), #38 (doc fixes), #39 (Phase 17 B1 Terraform), #40 (session log), #41 (cd.yml trim fix), #42 (cli graceful failure), #43 (frontend context docs), #44 (dashboard visual design), #45 (Phase 11 Gemini 3 + `run_tests` + `thought_signature` fixes), #46 (Phase 17/18 planning corrections), #47 (`/api/analyze` 400-vs-500 fix), #48 (frontend: clear backend-unreachable error + real screenshots) all merged
-- Pending: `fix/vertex-import-error-detail` branch (not yet a PR) — `REPOGUARD_AI_PROVIDER=vertex`, `VERTEX_PROJECT_ID` in `cd.yml`, `[vertex]` extra in `Dockerfile`, plus `vertex.py`'s clearer ImportError message. `fix/cd-cors-vercel-origin` (PR #49) is merged but only got as far as the CORS env var — its `Dockerfile`/docs commits were pushed too late and had to be recovered onto this branch (Session 21 item 5) — that branch is deleted now, don't look for it
+- All Session 21 fixes merged: PR #49 (CORS), #51 (ImportError detail), #52 (`Dockerfile` `[vertex]` extra + docs — recovered after #49/#51 both dropped commits pushed post-merge, see Session 21 item 5), #53 (frontend live-deploy docs). `ok: true` summary path verified live for real
 - Phase 0/3/7/8/9/13/15/16: 🟢. Phase 11: 🟢 (see Session 20) — first genuinely successful live AI fix-loop run, 89.87%/71/79. Phase 17 B1/B2: 🟢 (Terraform-managed WIF)
 - Phase 14: 🟡 — PR #43 closed gaps 4/5/6, PR #44 added visual design, PR #48 added a clear backend-unreachable error + real production screenshots, PR #50 shows the backend's error `detail`. `NEXT_PUBLIC_REPOGUARD_API_BASE` now points at the real Cloud Run URL (Vercel, type "Config" not "Secret" since it's not sensitive), verified end-to-end including CORS (Session 21-front). Remaining: gap 3 (Autofix, `POST /api/fix` — unblocked, needs an auth/job design); the summary's real `ok=true` path needs the pending branch above merged and redeployed, then re-verified for real (IAM grant is already done); Analyze *with* mutation against Cloud Run's request timeout is unchecked
 - Phase 17 A1-A3 (DB store) and C1-C2 (charts) still 🔴, but `docs/DATA_PLATFORM.md` §13 now has a corrected, step-by-step Block A build plan (Session 20) — build from that, not the doc's original sketch
@@ -587,7 +587,7 @@ Only what Session 21 above doesn't already cover.
 
 1. Read `PENDING.md` for the task list (Phase 11 is now 🟢 — read its "3 attempts, 3 bugs" narrative before touching `watson_agent/` again, it explains real, non-obvious API constraints).
 2. Run `python scripts/verify.py phase0`, `phase3`, `phase7`, `phase15`, `phase16`, `multicloud` to confirm baseline holds.
-3. IAM grant is done. Open/merge `fix/vertex-import-error-detail` (not `fix/cd-cors-vercel-origin` — that one's already merged and deleted) — that's what's actually needed for the `[vertex]` extra to reach the deployed image. Re-test `POST /api/summary` against the live service afterward, and watch for the same "pushed after merge" race before assuming any branch is fully landed (Session 21 item 5).
+3. Frontend punch-list items 1-4 are all done and verified live (Session 21). Only Autofix (`POST /api/fix`, Phase 14 gap 3) remains open on that list. When pushing follow-up commits to a branch mid-session, confirm with `git log origin/main..<branch>` that nothing merged out from under you first (Session 21 item 5 — happened 3 times).
 4. Build Phase 17/18 from `docs/DATA_PLATFORM.md` §13 / `docs/MULTI_AGENT_SWARM.md` §14, not their original sketches.
 5. Autofix (`POST /api/fix`, Phase 14 gap 3) is the last open frontend punch-list item. If you change a Vercel env var, Redeploy the **newest `main`** deployment, never an older row (`docs/ARCHITECTURE-front.md`, Session 21-front item 5).
 6. If tightening `repoguard-deployer`'s IAM roles, or moving the new `aiplatform.user` grant into Terraform: read `infra/terraform/README.md`'s "Known gap" section first — real permissions change against a live project, own PR.
