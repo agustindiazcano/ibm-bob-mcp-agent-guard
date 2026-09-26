@@ -21,6 +21,18 @@ async function request(url: string, init?: RequestInit): Promise<Response> {
   }
 }
 
+async function failure(res: Response, what: string): Promise<Error> {
+  try {
+    const body = (await res.json()) as { detail?: unknown };
+    if (typeof body.detail === "string") {
+      return new Error(body.detail);
+    }
+  } catch {
+    // Not a FastAPI JSON error body (e.g. a plain 500 page); fall through.
+  }
+  return new Error(`${what} failed: ${res.status} ${res.statusText}`);
+}
+
 function analyzeParams({ repoPath, mutation, gateThreshold }: RepoFormValues): URLSearchParams {
   return new URLSearchParams({
     repo_path: repoPath,
@@ -32,7 +44,7 @@ function analyzeParams({ repoPath, mutation, gateThreshold }: RepoFormValues): U
 export async function fetchAnalyze(values: RepoFormValues): Promise<AnalyzeResponse> {
   const res = await request(`${apiBase()}/api/analyze?${analyzeParams(values)}`);
   if (!res.ok) {
-    throw new Error(`analyze failed: ${res.status} ${res.statusText}`);
+    throw await failure(res, "analyze");
   }
   return res.json() as Promise<AnalyzeResponse>;
 }
@@ -44,7 +56,7 @@ export async function fetchSummary(result: AnalyzeResponse): Promise<SummaryResp
     body: JSON.stringify(result),
   });
   if (!res.ok) {
-    throw new Error(`summary failed: ${res.status} ${res.statusText}`);
+    throw await failure(res, "summary");
   }
   return res.json() as Promise<SummaryResponse>;
 }
