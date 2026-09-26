@@ -4,14 +4,31 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from pathlib import Path
 from typing import AsyncGenerator
 
 from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="RepoGuard Dashboard", version="0.1.0")
+
+# Frontend origins allowed to call this API (e.g. the web-next dev server and
+# its Vercel deployment). Comma-separated; override with REPOGUARD_CORS_ORIGINS.
+_default_origins = "http://localhost:3000,http://127.0.0.1:3000"
+_allowed_origins = [
+    origin.strip()
+    for origin in os.environ.get("REPOGUARD_CORS_ORIGINS", _default_origins).split(",")
+    if origin.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_allowed_origins,
+    allow_methods=["GET"],
+    allow_headers=["*"],
+)
 
 # Serve static files (index.html)
 _static_dir = Path(__file__).parent / "static"

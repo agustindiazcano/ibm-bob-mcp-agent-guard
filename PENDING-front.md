@@ -24,7 +24,7 @@ and the SSE stream are pure measurement and don't change either way; gaps
 
 | # | Gap | Blocks | Fix belongs to |
 |---|---|---|---|
-| 1 | `web/server.py` has no `CORSMiddleware` | any browser call from a Vercel origin | backend (`web/server.py`) |
+| 1 | ~~`web/server.py` has no `CORSMiddleware`~~ — fixed, `REPOGUARD_CORS_ORIGINS` env var (default `localhost:3000`) | any browser call from a Vercel origin | done |
 | 2 | — | (Gate needs no new endpoint — `/api/analyze?gate_threshold=N` already returns `passed_gate`) | — |
 | 3 | No `POST /api/fix` — the fix loop is CLI-only | Autofix button | ship v1 with it disabled; revisit once the fix loop *and* `docs/MULTICLOUD_AI.md`'s `ChatProvider` are both stable, so the endpoint isn't built twice |
 | 4 | No summary endpoint (`generate_summary` is MCP/CLI-only) | `SummaryPanel` | backend (`web/server.py`), ideally after `ai_providers.get_provider()` lands so it returns `provider` from day one |
