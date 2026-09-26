@@ -14,6 +14,7 @@ RepoGuard is structured as four independent layers that communicate via well-def
 │              repoguard_engine                        │
 │  core.py · api_check.py · visual.py · pipeline.py   │
 │  narrative.py · ai_providers/ · watson_agent/         │
+│  store/  (optional run history, [db] extra)          │
 └────────────┬──────────────────────────┬─────────────┘
              │                          │
 ┌────────────▼────────┐   ┌─────────────▼─────────────┐
@@ -43,7 +44,16 @@ RepoGuard is structured as four independent layers that communicate via well-def
 - `check_accessibility(url)` — axe-core via axe-playwright-python
 
 ### `repoguard_engine/pipeline.py`
-- `run_pipeline(repo_path, ...)` — orchestrates all measurement steps in order; returns `PipelineResult`
+- `run_pipeline(repo_path, ..., persist=None, project=None)` — orchestrates all measurement steps in order; returns `PipelineResult`. With `persist` on (default: iff `REPOGUARD_DATABASE_URL` is set), it opens the store *before* measuring (fail fast) and saves the run *after*; `PipelineResult.run_id` is set when stored. The web API and the fix loop pass `persist=False`
+
+### `repoguard_engine/store/` (Phase 17, optional `[db]` extra — `docs/DATA_PLATFORM.md`)
+- `__init__.py` — `database_url()`, `is_enabled()`, `StoreError`; imports no SQLAlchemy, so the engine works without the extra
+- `context.py` — `collect_context()`: project slug, git sha/branch/dirty, engine version, mutation operators hash
+- `record.py` — `build_run_record()` / `validate_run_record()`: the plain-dict run record, the one interchange format (also for the future `POST /api/runs`)
+- `models.py`, `views.py` — SQLAlchemy Core tables and portable SQL views (`v_runs`, `v_run_trend`); derived values such as `passed_gate` live only in views
+- `db.py` — `get_engine()`, `init_db()` (creates missing tables, recreates views, doubles as the connectivity check)
+- `repository.py` — `save_record()`: one transaction per run; stores, never computes
+- Depends only on `core` (and `api_check` types); `pipeline.py` imports it lazily
 
 ### `repoguard_engine/cli.py`
 - Click group with five commands: `analyze`, `fix`, `gate`, `serve`, `mcp`
@@ -56,7 +66,7 @@ RepoGuard is structured as four independent layers that communicate via well-def
 ### `repoguard_engine/ai_providers/`
 - `base.py` — `ChatProvider` protocol (`chat(messages, tools=, max_tokens=, timeout_ms=) -> dict`), `AIProviderError`
 - `watsonx.py` — the default provider; `get_provider()` builds a watsonx.ai chat (tool-calling) connection, raises `WatsonxCredentialsError` immediately if `WATSONX_APIKEY`/`WATSONX_PROJECT_ID` aren't set
-- `vertex.py` — Google Vertex AI; **Phase 16 Stage B, not built yet** (needs real GCP credentials to live-verify the SDK call shape)
+- `vertex.py` — Google Vertex AI (`google-genai`, Gemini); built and live-verified, see `docs/VERTEX_SETUP.md`
 - `__init__.py` — `get_provider(provider=None, model_id=None)` reads `REPOGUARD_AI_PROVIDER` (default `"watsonx"`), lazily imports the selected module
 
 ### `repoguard_engine/watson_agent/`

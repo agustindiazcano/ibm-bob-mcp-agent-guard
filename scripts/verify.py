@@ -19,6 +19,9 @@ Phase checks implemented:
                   AGENTS.md §7 baseline, including one real mutation run (~5 min). Needs `npm ci` in web-next/;
                   REPOGUARD_CHROMIUM overrides the browser binary if Playwright's own isn't installed
     phase18-seq-stub — the sequential fix loop end to end with a scripted, credential-free provider (Phase 18 Step 0)
+    phase17-store     — store round trip on SQLite (+ REPOGUARD_TEST_DATABASE_URL); inert without the env var
+    phase17-pipeline  — persisting can't change a measurement; fail-fast before measuring; web never writes
+                        (both need the [db] extra; see scripts/verify_phase17.py)
 """
 
 from __future__ import annotations
@@ -33,6 +36,8 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+from verify_phase17 import check_phase17_pipeline, check_phase17_store  # scripts/ is sys.path[0]
 
 
 def run(cmd: list[str], timeout: int = 30) -> tuple[int, str]:
@@ -626,6 +631,8 @@ CHECKS: dict[str, callable] = {
     "phase14fix": check_phase14fix,
     "phase14ui": check_phase14ui,
     "phase18-seq-stub": check_phase18_seq_stub,
+    "phase17-store": check_phase17_store,
+    "phase17-pipeline": check_phase17_pipeline,
 }
 
 

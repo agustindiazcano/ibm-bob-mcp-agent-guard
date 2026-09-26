@@ -1,6 +1,9 @@
 # Data Platform Plan — measurement history, Postgres, Terraform on GCP
 
-> **Status: planned in detail (Phase 17 in `PENDING.md`), nothing built yet.**
+> **Status: Block A1 built (Session 23) — `repoguard_engine/store/` and the
+> pipeline hook, verified on SQLite and a real PostgreSQL 16 (`verify.py
+> phase17-store`, `phase17-pipeline`). A2, A3, B (Cloud SQL) and C (charts)
+> are still planned. See §13's "Built" note for what differs from this plan.**
 > Every number quoted below comes from `CLAUDE.md §7` (measured), and is used
 > only as example data. No number in this document is a prediction.
 >
@@ -829,7 +832,42 @@ corrected in place (done, Session 20); `README.md`/`RUNBOOK.md` (`[db]`
 install, env var, token commands); `docs/ARCHITECTURE.md` (layer diagram
 gains `store/`); `LASTCONTEXT.md`.
 
-### Open decisions (referenced above, not picked silently)
+### Built in Session 23 — A1.1 + A1.2, and where it differs from the plan above
+
+Done as planned: `[db]` extra; `store/{__init__,context,record,models,views,db,repository}.py`
+(no SQLAlchemy import in `__init__`, `context`, `record`); tables `projects`,
+`runs`, `coverage_results`, `file_coverage`, `mutation_results`,
+`risk_scores`, `endpoint_results`; views `v_runs`, `v_run_trend`;
+`run_pipeline(persist=None, project=None)` opening the store before
+measuring; `--project` on `analyze`/`gate`; `ci.yml` job `store` with a
+`postgres:16` service container. `store/queries.py` waits for A3.1 (no
+reader yet).
+
+Differences, each deliberate:
+
+| Plan said | Built | Why |
+|---|---|---|
+| `uuid` ids (§4.2) | `String(36)` canonical UUID strings | `sa.Uuid` returns `UUID` objects on Postgres but 32-char hex on SQLite from raw view queries; strings are identical on both backends and in every view |
+| `MUTATION_OPERATORS_HASH` in A2.1 | Added to `core.py` now (+ `MUTATION_ENGINE_REVISION = 1`, included in the hash) | A constant describing the instrument, no measurement change; otherwise every A1-era run would have a NULL hash and be incomparable with later runs |
+| `GITHUB_SHA`/`GITHUB_REF_NAME` as overrides | git's own answer first, `GITHUB_*` only as fallback (`GITHUB_HEAD_REF` for a detached PR checkout) | `GITHUB_*` describe the workflow's repository, which isn't necessarily the directory being measured |
+| `dirty` = `git status --porcelain` non-empty | Same, limited to the target directory, ignoring the tool's own artifacts (`repoguard-out/`, `watson-evidence/`, `__pycache__/`, `.pytest_cache/`, `*.pyc`, `.coverage*` data files — not `.coveragerc`) | Otherwise every run after the first in a repo that doesn't gitignore them is "dirty" and drops out of the history views |
+| — | `runs.source='cli'` = any direct write by a local engine process (CLI, MCP, library) | `server` (the web service measuring itself) has no writer yet (decision #5); `ci` arrives with A3.2 |
+| — | The fix loop and MCP `tool_generate_summary` pass `persist=False` | Before/after runs only mean something as a linked `fix_sessions` row (A3.4); web Autofix runs on a temp copy whose directory name isn't a project. Asking for prose shouldn't add a history row |
+| — | Only `status='ok'` runs are written locally | A measurement that raises propagates unchanged; recording failed runs is left for the ingest path (A3.2), which the schema already allows |
+| — | `analyze --json-output` prints its "Analysing…" line to stderr | stdout is now the JSON alone, pipeable into `jq`; the stored run id also goes to stderr |
+
+### Decisions (resolved Session 23, by the user)
+
+| # | Decision | Resolution |
+|---|---|---|
+| 1 | JUnit `classname::name` vs. an exact-nodeid pytest plugin | Still open — needed at A2.2 |
+| 2 | DB write failure *after* measuring | **Raise** (`StoreError`) |
+| 3 | Project slug precedence for direct-DB runs | **`--project` > `REPOGUARD_PROJECT` > `GITHUB_REPOSITORY` > repo dir name**; explicit values must be valid slugs, derived ones are slugified |
+| 4 | Drop stored `passed_gate`/`tests_added` in favor of views | **Yes** — `passed_gate` is a column of `v_runs`/`v_run_trend` |
+| 5 | Web writes (`/api/analyze?persist=true`) on the public URL | **None yet** — `/api/analyze` always passes `persist=False`; web writes come with per-project tokens (A3.2) |
+| 6 | Keep `endpoint_results` in Block A | **Keep the skeleton** (table + `runs.endpoints_measured`, written when endpoints are measured). **Missing: a consumer** — no route or chart reads it yet; one must be built (tracked in `PENDING.md` Phase 17) |
+
+### Open decisions (original list, as written in Session 20)
 
 | # | Decision | Recommendation |
 |---|---|---|

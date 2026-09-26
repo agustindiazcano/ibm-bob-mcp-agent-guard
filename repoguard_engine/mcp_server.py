@@ -188,23 +188,26 @@ def tool_full_pipeline(
         detail: If True, return full dashboard dict; otherwise key metrics only.
 
     Returns:
-        Compact: coverage_percent, mutation_score, gap_count, passed_gate.
-        Full (detail=True): full dashboard dict + passed_gate.
+        Compact: coverage_percent, mutation_score, gap_count, passed_gate
+        (+ run_id when the run was stored: REPOGUARD_DATABASE_URL set).
+        Full (detail=True): full dashboard dict + passed_gate (+ run_id).
     """
     result = run_pipeline(
         repo_path,
         include_mutation=include_mutation,
         gate_threshold=gate_threshold,
     )
+    stored = {"run_id": result.run_id} if result.run_id else {}
     compact = {
         "coverage_percent": result.dashboard.get("coverage", {}).get("percent"),
         "mutation_score": result.dashboard.get("mutation", {}).get("score") if result.dashboard.get("mutation") else None,
         "gap_count": len(result.dashboard.get("gaps", {}).get("uncovered_files", [])),
         "passed_gate": result.passed_gate,
+        **stored,
     }
     if not detail:
         return compact
-    return {**result.dashboard, "passed_gate": result.passed_gate}
+    return {**result.dashboard, "passed_gate": result.passed_gate, **stored}
 
 
 # ---------------------------------------------------------------------------
@@ -299,7 +302,9 @@ def tool_generate_summary(repo_path: str, detail: bool = False) -> dict:
         Compact: ok, summary.
         Full (detail=True): + error.
     """
-    result = run_pipeline(repo_path)
+    # persist=False: asking for prose shouldn't add a row to the history;
+    # tool_full_pipeline is the measuring tool that stores runs.
+    result = run_pipeline(repo_path, persist=False)
     narrative = generate_summary(result.dashboard)
     compact = {
         "ok": narrative.ok,

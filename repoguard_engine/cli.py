@@ -7,15 +7,38 @@ import sys
 from pathlib import Path
 
 import click
+# Error text is escaped before printing: Rich would read an install hint
+# like `pip install -e ".[db]"` as markup and silently drop the "[db]".
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 console = Console()
+err_console = Console(stderr=True)
 
 
 @click.group()
 def main() -> None:
     """RepoGuard — AI-powered test quality guard."""
+
+
+_project_option = click.option(
+    "--project", default=None,
+    help="Project slug to store the run under when REPOGUARD_DATABASE_URL is set "
+         "(default: REPOGUARD_PROJECT, then GITHUB_REPOSITORY, then the repo directory name).",
+)
+
+
+def _run_pipeline_or_exit(repo_path: str, **kwargs):
+    """run_pipeline, turning a storage failure into a clean exit 1 (no traceback)."""
+    from .pipeline import run_pipeline
+    from .store import StoreError
+
+    try:
+        return run_pipeline(repo_path, **kwargs)
+    except StoreError as exc:
+        err_console.print(f"[bold red]✗ Storage failed:[/] {escape(str(exc))}")
+        sys.exit(1)
 
 
 @main.command()
@@ -34,22 +57,31 @@ def main() -> None:
     help="AI provider for --summarize: 'watsonx' (default) or 'vertex'. "
          "Overrides REPOGUARD_AI_PROVIDER for this call.",
 )
-def analyze(repo_path: str, mutation: bool, endpoints: bool, json_output: bool, summarize: bool, provider: str | None) -> None:
-    """Measure test coverage and quality gaps in REPO_PATH."""
-    from .pipeline import run_pipeline
+@_project_option
+def analyze(repo_path: str, mutation: bool, endpoints: bool, json_output: bool, summarize: bool, provider: str | None, project: str | None) -> None:
+    """Measure test coverage and quality gaps in REPO_PATH.
 
-    console.print(f"[bold cyan]Analysing[/] {repo_path} …")
-    result = run_pipeline(
+    With REPOGUARD_DATABASE_URL set, the run is also stored (see
+    docs/DATA_PLATFORM.md); nothing measured changes either way.
+    """
+    # With --json-output, stdout carries only the JSON (pipeable into jq)
+    (err_console if json_output else console).print(f"[bold cyan]Analysing[/] {repo_path} …")
+    result = _run_pipeline_or_exit(
         repo_path,
         include_mutation=mutation,
         include_endpoints=endpoints,
+        project=project,
     )
 
     if json_output:
+        # stdout stays the dashboard alone; the stored run id goes to stderr
         click.echo(json.dumps(result.dashboard, indent=2))
+        if result.run_id:
+            click.echo(f"Stored run {result.run_id} (project {result.project})", err=True)
         return
 
     _print_coverage_table(result)
+    _print_stored(result)
 
     if summarize:
         from .narrative import generate_summary
@@ -59,18 +91,18 @@ def analyze(repo_path: str, mutation: bool, endpoints: bool, json_output: bool, 
             console.print(f"\n[bold]AI summary ({narrative.provider} — advisory, not a measurement):[/]")
             console.print(narrative.text)
         else:
-            console.print(f"\n[yellow]Summary unavailable:[/] {narrative.error}")
+            console.print(f"\n[yellow]Summary unavailable:[/] {escape(narrative.error)}")
 
 
 @main.command()
 @click.argument("repo_path", default=".", type=click.Path(exists=True))
 @click.option("--threshold", default=80.0, show_default=True, help="Coverage % gate threshold.")
-def gate(repo_path: str, threshold: float) -> None:
+@_project_option
+def gate(repo_path: str, threshold: float, project: str | None) -> None:
     """CI gate: exit 1 if coverage is below THRESHOLD."""
-    from .pipeline import run_pipeline
-
-    result = run_pipeline(repo_path, gate_threshold=threshold)
+    result = _run_pipeline_or_exit(repo_path, gate_threshold=threshold, project=project)
     _print_coverage_table(result)
+    _print_stored(result)
 
     if result.passed_gate:
         console.print(f"[bold green]✓ Gate passed[/] ({result.coverage.percent:.1f}% ≥ {threshold}%)")
@@ -101,10 +133,10 @@ def fix(repo_path: str, threshold: float, publish: bool, provider: str | None) -
     try:
         result = run_fix_loop(repo_path, gate_threshold=threshold, publish=publish, provider=provider)
     except AIProviderError as exc:
-        console.print(f"[bold red]✗ {exc}[/]")
+        console.print(f"[bold red]✗ {escape(str(exc))}[/]")
         sys.exit(1)
     except RuntimeError as exc:
-        console.print(f"[bold red]✗ Gate failed:[/] {exc}")
+        console.print(f"[bold red]✗ Gate failed:[/] {escape(str(exc))}")
         sys.exit(1)
 
     console.print(f"Files attempted: {', '.join(result.files_attempted) or '(none)'}")
@@ -142,6 +174,11 @@ def mcp() -> None:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _print_stored(result) -> None:
+    if result.run_id:
+        console.print(f"Stored run {result.run_id} (project {result.project})")
+
 
 def _print_coverage_table(result) -> None:
     if not result.coverage:

@@ -26,6 +26,7 @@ Operational reference for installing, running, and troubleshooting RepoGuard in 
 | pip | 23+ | For `pip install -e .` |
 | `ibm-watsonx-ai` + IBM Cloud credentials | current | Required for `repoguard fix` and `analyze --summarize` only (`pip install -e ".[ai]"`, see `docs/WATSONX_SETUP.md`) |
 | Playwright | latest | Only needed for visual / a11y checks |
+| SQLAlchemy 2 + psycopg 3 | current | Only for run history (`pip install -e ".[db]"`, `REPOGUARD_DATABASE_URL`) — see below |
 
 The mutation engine is built on Python's own `ast` module — no `mutmut` dependency.
 
@@ -57,6 +58,21 @@ Expected output lists five sub-commands: `analyze`, `fix`, `gate`, `serve`, `mcp
 pip install playwright
 playwright install chromium
 ```
+
+### Optional: run history database (`[db]` extra)
+
+```bash
+pip install -e ".[db]"
+export REPOGUARD_DATABASE_URL=sqlite:///repoguard-history.db    # or postgresql://user:pass@host:5432/db
+repoguard analyze ./demo-repo --project demo                    # prints "Stored run <id> (project demo)"
+```
+
+- Unset → nothing is stored and SQLAlchemy is never imported.
+- `postgres://` / `postgresql://` URLs use the psycopg 3 driver automatically.
+- Project slug: `--project` > `REPOGUARD_PROJECT` > `GITHUB_REPOSITORY` > the repo directory name. In CI, pass `--project` when measuring a subdirectory, or the run is filed under the workflow's repository.
+- A bad URL, an unreachable database or a missing `[db]` extra fails with `✗ Storage failed: …` (exit 1) **before** measuring.
+- `repoguard serve`'s `/api/analyze` never stores runs, even with the variable set (public route; web writes wait for per-project tokens).
+- Verify: `python scripts/verify.py phase17-store` (set `REPOGUARD_TEST_DATABASE_URL` to also check Postgres) and `phase17-pipeline`.
 
 ---
 
