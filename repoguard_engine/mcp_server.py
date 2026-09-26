@@ -8,6 +8,7 @@ from fastmcp import FastMCP
 
 from .pipeline import run_pipeline
 from .core import measure_coverage, find_coverage_gaps, run_mutation, compute_risk
+from .mutation import NoMutantsError
 from .api_check import find_untested_endpoints, run_endpoint_smoke_tests
 from .visual import capture_screenshot, pixel_diff, check_accessibility
 from .narrative import generate_summary
@@ -78,6 +79,7 @@ def tool_run_mutation(
     repo_path: str,
     paths_to_mutate: str = ".",
     tests_dir: str = "tests",
+    workers: int = 1,
     detail: bool = False,
 ) -> dict:
     """
@@ -85,15 +87,22 @@ def tool_run_mutation(
 
     Args:
         repo_path: Path to the target repository root.
-        paths_to_mutate: Subdirectory or file to mutate (default: ".").
+        paths_to_mutate: Subdirectory or single .py file to mutate (default: ".").
         tests_dir: Test directory (default: "tests").
-        detail: If True, include surviving_mutant_ids in the response.
+        workers: Parallel mutant workers (default 1; results are identical).
+        detail: If True, include the surviving mutants (id, file, function,
+            line, what was changed, fingerprint) in the response.
 
     Returns:
         Compact: score, killed, survived, total.
-        Full (detail=True): + surviving_mutant_ids.
+        Full (detail=True): + surviving_mutant_ids, surviving_mutants,
+        timeout/error counts.
+        {"error": ...} when the scope has no mutants or the baseline fails.
     """
-    result = run_mutation(repo_path, paths_to_mutate=paths_to_mutate, tests_dir=tests_dir)
+    try:
+        result = run_mutation(repo_path, paths_to_mutate=paths_to_mutate, tests_dir=tests_dir, workers=workers)
+    except (NoMutantsError, RuntimeError) as exc:
+        return {"error": str(exc)}
     compact = {
         "score": result.score,
         "killed": result.killed,
@@ -102,7 +111,19 @@ def tool_run_mutation(
     }
     if not detail:
         return compact
-    return {**compact, "surviving_mutant_ids": result.surviving_mutant_ids}
+    survivors = [
+        {k: getattr(m, k) for k in ("index", "file", "function", "lineno", "description", "original_line", "fingerprint")}
+        for m in result.mutants
+        if m.outcome == "survived"
+    ]
+    counts = result.outcome_counts()
+    return {
+        **compact,
+        "surviving_mutant_ids": result.surviving_mutant_ids,
+        "surviving_mutants": survivors,
+        "timeouts": counts["timeout"],
+        "errors": counts["error"],
+    }
 
 
 # ---------------------------------------------------------------------------
