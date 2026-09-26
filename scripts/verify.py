@@ -14,6 +14,7 @@ Phase checks implemented:
     phase15     — narrative.py degrades gracefully with no AI credentials
     phase16     — fix-loop write guard + fail-loud credential check
     multicloud  — ai_providers.get_provider() dispatch, defaults, and unknown-provider handling
+    phase18-seq-stub — sequential fix loop driven by ScriptedProvider (no credentials), pinned after-numbers
     phase14fix  — POST /api/fix: token gate, single-run lock, NDJSON events, sandbox leaves the target repo untouched
 """
 
@@ -354,6 +355,51 @@ print(f'OK: 503/401/400/409 gates, {len(types)} events in order, 1 test file ret
     return ok
 
 
+def check_phase18_seq_stub() -> bool:
+    """Run the real sequential fix loop, credential-free, on a temp copy of
+    demo-repo with ScriptedProvider writing the docs/expected-after-tests/
+    reference file for each file the loop picks. Pins the measured after
+    numbers (3 of 4 files picked by risk -> 68/79, not the 4-file 71/79) and
+    checks the timing fields H1 needs exist."""
+    print("=== Phase 18 S0: sequential fix loop, scripted provider ===")
+
+    script = """
+import shutil, tempfile
+from pathlib import Path
+from repoguard_engine.testing import ScriptedProvider
+from repoguard_engine.watson_agent import run_fix_loop
+
+tmp = Path(tempfile.mkdtemp(prefix='repoguard_seqstub_')) / 'demo-repo'
+shutil.copytree('demo-repo', tmp, ignore=shutil.ignore_patterns('__pycache__', '.pytest_cache', 'repoguard-out', 'watson-evidence'))
+try:
+    provider = ScriptedProvider('docs/expected-after-tests')
+    r = run_fix_loop(str(tmp), model=provider)
+    before, after = r.baseline, r.after
+    assert (before['mutation']['killed'], before['mutation']['total']) == (16, 79), before['mutation']
+    assert r.files_attempted == ['shop/inventory.py', 'shop/api.py', 'shop/pricing.py'], r.files_attempted
+    # Measured once for real (Session 23) and pinned -- 3 reference files, cart's left out by the risk cap.
+    assert (after['mutation']['killed'], after['mutation']['total']) == (68, 79), after['mutation']
+    assert after['mutation']['score'] == 86.08, after['mutation']
+    assert round(after['coverage']['percent'], 2) == 98.64, after['coverage']
+    stages = [t['stage'] for t in r.timings]
+    assert stages == ['baseline'] + ['writer', 'critic'] * 3 + ['remeasure'], stages
+    assert r.wall_s and r.wall_s > 0
+    assert 'Wall time:' in Path(r.evidence_path).read_text(encoding='utf-8')
+    assert [c['role'] for c in provider.calls].count('writer') == 9
+    print(f"OK: {before['mutation']['score']}% -> {after['mutation']['score']}% ({after['mutation']['killed']}/79), "
+          f"coverage {round(before['coverage']['percent'], 1)}% -> {round(after['coverage']['percent'], 2)}%, wall {r.wall_s:.1f} s")
+finally:
+    shutil.rmtree(tmp.parent, ignore_errors=True)
+"""
+
+    rc, out = run([sys.executable, "-c", script], timeout=900)
+    ok = rc == 0
+    status = "PASS" if ok else "FAIL"
+    print(f"  {out.strip()}")
+    print(f"  scripted sequential fix loop -> {status}")
+    return ok
+
+
 CHECKS: dict[str, callable] = {
     "phase0": check_phase0,
     "phase3": check_phase3,
@@ -362,6 +408,7 @@ CHECKS: dict[str, callable] = {
     "phase16": check_phase16,
     "multicloud": check_multicloud,
     "phase14fix": check_phase14fix,
+    "phase18-seq-stub": check_phase18_seq_stub,
 }
 
 

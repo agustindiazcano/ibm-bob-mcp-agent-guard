@@ -17,12 +17,13 @@ from __future__ import annotations
 
 import json
 import subprocess
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from ..ai_providers import get_provider
+from ..ai_providers import ChatProvider, get_provider
 from ..pipeline import run_pipeline
 from .prompts import CRITIC_PROMPT, TEST_WRITER_PROMPT
 from .tools import TOOL_REGISTRY, TOOL_SCHEMAS, SourceEditRejected
@@ -43,6 +44,20 @@ class FixResult:
     critic_notes: list[str] = field(default_factory=list)
     published: bool = False
     evidence_path: str | None = None
+    # Wall-clock seconds per stage (baseline, each writer/critic call,
+    # re-measure) and in total -- the timing baseline Phase 18's H1
+    # (swarm faster than sequential) is measured against.
+    timings: list[dict] = field(default_factory=list)
+    wall_s: float | None = None
+
+
+@dataclass
+class StageResult:
+    """What one chat-with-tools stage produced: the model's final text, the
+    tool calls it made (name + parsed args, in order), and its wall time."""
+    content: str
+    tool_calls: list[dict] = field(default_factory=list)
+    wall_s: float = 0.0
 
 
 def _priority_files(risk: list) -> list[str]:
@@ -51,22 +66,33 @@ def _priority_files(risk: list) -> list[str]:
     return [r.file for r in risk[:MAX_FILES_PER_RUN]]
 
 
-def _run_chat_stage(model, system_prompt: str, user_prompt: str, repo_path: str) -> str:
+def _run_chat_stage(
+    model,
+    system_prompt: str,
+    user_prompt: str,
+    repo_path: str,
+    *,
+    schemas: list[dict] = TOOL_SCHEMAS,
+    registry: dict = TOOL_REGISTRY,
+) -> StageResult:
     """One chat-with-tools stage against the configured AI provider, looping
     on tool calls until the model returns plain content or the round-trip
-    cap is hit."""
+    cap is hit. schemas/registry default to the full guarded toolset; a
+    caller can pass a narrower one (e.g. a read-only critic)."""
+    started = time.perf_counter()
+    calls_made: list[dict] = []
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
 
     for _ in range(MAX_TOOL_ROUNDS_PER_STAGE):
-        response = model.chat(messages=messages, tools=TOOL_SCHEMAS)
+        response = model.chat(messages=messages, tools=schemas)
         message = response["choices"][0]["message"]
         messages.append(message)
         tool_calls = message.get("tool_calls") or []
         if not tool_calls:
-            return message.get("content", "") or ""
+            return StageResult(message.get("content", "") or "", calls_made, time.perf_counter() - started)
 
         for call in tool_calls:
             name = call["function"]["name"]
@@ -74,9 +100,10 @@ def _run_chat_stage(model, system_prompt: str, user_prompt: str, repo_path: str)
                 args = json.loads(call["function"]["arguments"] or "{}")
             except json.JSONDecodeError:
                 args = {}
+            calls_made.append({"name": name, "args": dict(args)})
             args["repo_path"] = repo_path
             try:
-                tool_fn = TOOL_REGISTRY[name]
+                tool_fn = registry[name]
             except KeyError:
                 result = {"error": f"no such tool: {name}"}
             else:
@@ -100,7 +127,9 @@ def _run_chat_stage(model, system_prompt: str, user_prompt: str, repo_path: str)
                 }
             )
 
-    return "(stopped: exceeded tool-call round trip limit for this stage)"
+    return StageResult(
+        "(stopped: exceeded tool-call round trip limit for this stage)", calls_made, time.perf_counter() - started
+    )
 
 
 def run_fix_loop(
@@ -110,6 +139,7 @@ def run_fix_loop(
     publish: bool = False,
     provider: str | None = None,
     on_event: Callable[[str, dict], None] | None = None,
+    model: ChatProvider | None = None,
 ) -> FixResult:
     """
     Run the full AI fix loop against repo_path.
@@ -130,6 +160,10 @@ def run_fix_loop(
     each stage boundary (web/fix_job.py streams these to the browser). It
     only reports what already happened; it never changes what the loop does.
 
+    model: an already-built ChatProvider to use instead of get_provider()
+    (not exposed on the CLI) -- lets a credential-free scripted provider
+    (repoguard_engine/testing/scripted_provider.py) drive the real loop.
+
     Raises AIProviderError immediately if the selected provider's
     credentials aren't set -- checked before the (multi-minute) mutation
     baseline runs, not after, so a missing-credentials failure is instant
@@ -137,12 +171,17 @@ def run_fix_loop(
     anyway.
     """
     emit = on_event or (lambda _type, _data: None)
-    model = get_provider(provider=provider)
+    if model is None:
+        model = get_provider(provider=provider)
+    loop_started = time.perf_counter()
+    timings: list[dict] = []
 
     repo = str(Path(repo_path).resolve())
     emit("baseline_start", {})
+    started = time.perf_counter()
     baseline = run_pipeline(repo, include_mutation=True, include_endpoints=True, gate_threshold=gate_threshold)
-    result = FixResult(repo_path=repo, baseline=baseline.dashboard)
+    timings.append({"stage": "baseline", "wall_s": time.perf_counter() - started})
+    result = FixResult(repo_path=repo, baseline=baseline.dashboard, timings=timings)
     files = _priority_files(baseline.risk)
     emit("baseline_done", {"dashboard": baseline.dashboard, "files": files})
 
@@ -157,15 +196,19 @@ def run_fix_loop(
             "Read this file, then write one pytest test file under tests/ "
             "that kills as many of the surviving mutants as possible."
         )
-        _run_chat_stage(model, TEST_WRITER_PROMPT, writer_prompt, repo)
+        stage = _run_chat_stage(model, TEST_WRITER_PROMPT, writer_prompt, repo)
+        timings.append({"stage": "writer", "file": file_rel, "wall_s": stage.wall_s})
 
         emit("critic_start", {"file": file_rel})
         critic_prompt = f"Review whatever test file(s) were just written for {file_rel}."
-        notes = _run_chat_stage(model, CRITIC_PROMPT, critic_prompt, repo)
-        result.critic_notes.append(f"{file_rel}: {notes}")
+        stage = _run_chat_stage(model, CRITIC_PROMPT, critic_prompt, repo)
+        timings.append({"stage": "critic", "file": file_rel, "wall_s": stage.wall_s})
+        result.critic_notes.append(f"{file_rel}: {stage.content}")
 
     emit("remeasure_start", {})
+    started = time.perf_counter()
     after = run_pipeline(repo, include_mutation=True, include_endpoints=True, gate_threshold=gate_threshold)
+    timings.append({"stage": "remeasure", "wall_s": time.perf_counter() - started})
     result.after = after.dashboard
     emit("remeasure_done", {"dashboard": after.dashboard, "passed_gate": after.passed_gate})
 
@@ -173,6 +216,7 @@ def run_fix_loop(
         _publish(repo)
         result.published = True
 
+    result.wall_s = time.perf_counter() - loop_started
     result.evidence_path = _write_evidence(repo, result)
     return result
 
@@ -205,6 +249,10 @@ def _write_evidence(repo_path: str, result: FixResult) -> str:
         f"# AI fix loop -- {datetime.now(timezone.utc).isoformat()}\n\n"
         f"Repo: {result.repo_path}\n\n"
         f"Files attempted: {', '.join(result.files_attempted) or '(none)'}\n\n"
+        f"Wall time: {result.wall_s:.1f} s\n\n"
+        "## Stage timings\n" + "".join(
+            f"- {t['stage']}{' ' + t['file'] if 'file' in t else ''}: {t['wall_s']:.1f} s\n" for t in result.timings
+        ) + "\n"
         f"## Before\n```json\n{json.dumps(result.baseline, indent=2)}\n```\n\n"
         f"## After\n```json\n{json.dumps(result.after, indent=2)}\n```\n\n"
         "## Critic notes\n" + "\n\n".join(result.critic_notes),
