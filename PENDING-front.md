@@ -29,7 +29,7 @@ and the SSE stream are pure measurement and don't change either way; gaps
 | 3 | No `POST /api/fix` — the fix loop is CLI-only | Autofix button | ship v1 with it disabled; revisit once the fix loop *and* `docs/MULTICLOUD_AI.md`'s `ChatProvider` are both stable, so the endpoint isn't built twice |
 | 4 | ~~No summary endpoint~~ — fixed, `POST /api/summary` (body: `/api/analyze`'s dashboard; returns `{ok, text, error, provider}`, `provider` fixed to `"watsonx.ai"` until `ChatProvider` exists); CORS now allows `POST` | `SummaryPanel` | done |
 | 5 | ~~`/api/stream`'s gate check hardcodes 80%~~ — fixed, `gate_threshold` query param (default 80.0), same as `/api/analyze` | live-progress gate readout | done |
-| 6 | Nothing surfaces which AI provider ran (only watsonx.ai has ever existed) | `SummaryPanel` labeling, future Autofix result view | backend, once `ChatProvider` exists — add a `provider` field to gaps 3/4's future responses |
+| 6 | Partially fixed — `/api/summary` returns `provider`, fixed to `"watsonx.ai"` (the only provider that exists) | future Autofix result view; `provider` becomes dynamic | backend, once `ChatProvider` exists — source `provider` from it, and add the field to gap 3's future response |
 
 ## Deliverables
 
@@ -39,13 +39,17 @@ and the SSE stream are pure measurement and don't change either way; gaps
 | `RepoForm` + `ActionBar` | Repo path input, mutation/endpoints/threshold options, Analyze + Gate buttons (Autofix disabled — gap 3) | 🟢 |
 | `StreamLog` | Live progress from `/api/stream`, rendering only the event types it actually emits (coverage/gaps/risk) | 🟢 |
 | `StatCards` + `GapsList` + `RiskTable` | Coverage, mutation score, gaps, risk ranking — sourced verbatim from `AnalyzeResponse`, no new numbers invented | 🟢 |
-| `SummaryPanel` | AI prose, labeled advisory + which provider generated it — blocked on backend gaps 4 and 6 | 🔴 |
+| `SummaryPanel` | AI prose, labeled advisory + which provider generated it — calls `POST /api/summary` (PR #26 front, PR #27 back) | 🟢 |
 | Vercel deploy | Connect repo/subfolder to Vercel; no IaC, config lives in `vercel.json` / project settings; `NEXT_PUBLIC_REPOGUARD_API_BASE` env var per environment | 🔴 |
 | Docs | Fold this file and `docs/ARCHITECTURE-front.md` back into `PENDING.md`/`docs/ARCHITECTURE.md`, update `README.md`, once built | 🔴 |
 | CI split | `frontend-ci.yml` (lint+build, `web-next/**` paths only) separate from backend `ci.yml`/`cd.yml` (now `paths-ignore: web-next/**`) — monorepo stays one repo per hackathon rules, but front/back CI runs never trigger each other | 🟢 |
 
 **Verified so far:** `npm run lint` and `npm run build` both pass; `next dev`
-was run directly and served the real page (200, title "TestMind AI"). Not
-yet verified: an end-to-end fetch against a real running `repoguard serve`
-backend — blocked on gap 1 (`CORSMiddleware`), which lives on a separate,
-not-yet-merged branch (`fix/web-cors`).
+was run directly and served the real page (200, title "TestMind AI").
+Backend side of the summary contract verified against a real `repoguard
+serve`: `POST /api/summary` with a real `/api/analyze` dashboard returns
+`ok=false` + the credentials error when no `WATSONX_*` vars are set, and the
+CORS preflight from `localhost:3000` allows `POST` + `content-type`. Not yet
+verified: a browser run of `web-next` against a live `repoguard serve`
+(both servers up at once), or a real summary generated with IBM Cloud
+credentials.
