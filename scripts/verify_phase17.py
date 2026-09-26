@@ -14,6 +14,11 @@ Phase 17 checks for scripts/verify.py (measurement history store).
                         consumer of store.endpoint_results): 503 with no database, 404 for an
                         unknown project, 200 with the 7 demo-repo endpoints (1 tested) after a
                         stored run
+    phase17-api       — Phase 17 A3: GET /api/projects, /trend, /risk-heatmap against a real stored
+                        run; POST /api/runs (bearer token from the project's own hash, never the
+                        body) — 401/201/200-idempotent/422; `repoguard analyze --push URL` against
+                        a real `repoguard serve` subprocess, and REPOGUARD_TOKEN unset fails before
+                        measuring
 
 Each check runs its script in a fresh interpreter (sys.executable), same as verify.py.
 """
@@ -314,6 +319,151 @@ print('OK')
 """
 
 
+_API = _COMMON + r"""
+from fastapi.testclient import TestClient
+from repoguard_engine.web.server import app
+
+tmp = Path(tempfile.mkdtemp(prefix='verify17a-'))
+db_path = tmp / 'history.db'
+os.environ['REPOGUARD_DATABASE_URL'] = f'sqlite:///{db_path}'
+try:
+    client = TestClient(app)
+
+    # 1. Nothing stored yet
+    assert client.get('/api/projects').json() == []
+    assert client.get('/api/projects/nope/trend').status_code == 404
+    assert client.get('/api/projects/nope/risk-heatmap').status_code == 404
+    print('  no runs yet: /api/projects -> [], unknown project -> 404 on /trend and /risk-heatmap')
+
+    # 2. A real stored run, read back through the routes
+    from repoguard_engine.pipeline import run_pipeline
+    demo = run_pipeline(copy_demo(tmp), project='verify-api')
+    assert demo.run_id
+
+    projs = client.get('/api/projects').json()
+    assert [p['slug'] for p in projs] == ['verify-api'], projs
+
+    trend_rows = client.get('/api/projects/verify-api/trend').json()
+    assert len(trend_rows) == 1, trend_rows
+    row = trend_rows[0]
+    assert row['run_id'] == demo.run_id and row['coverage_pct'] == demo.coverage.percent
+    assert row['mutation_pct'] is None, 'mutation was not measured on this run'
+    assert row['passed_gate'] in (0, 1)
+
+    heat = client.get('/api/projects/verify-api/risk-heatmap').json()
+    assert [r['file_path'] for r in heat] == [Path(r.file).as_posix() for r in demo.risk], (heat, demo.risk)
+    print(f"  stored run: /api/projects 1 row, /trend 1 row (coverage {row['coverage_pct']!r}), /risk-heatmap {len(heat)} files")
+
+    # 3. Ingest: tokens identify the project, never the body
+    from repoguard_engine.store.db import get_engine
+    from repoguard_engine.store.repository import create_project, create_token
+    engine = get_engine(os.environ['REPOGUARD_DATABASE_URL'])
+    create_project(engine, 'verify-ingest')
+    _, token = create_token(engine, 'verify-ingest', label='ci')
+
+    from datetime import datetime, timezone
+    from repoguard_engine.store.context import collect_context
+    from repoguard_engine.store.record import build_run_record, new_run_id
+    ing_repo = copy_demo(tmp / 'ingest')
+    ing = run_pipeline(ing_repo, persist=False)
+    ctx = collect_context(ing_repo, 'irrelevant-to-ingest')  # the token decides the project, not this
+    now = datetime.now(timezone.utc)
+    rec = build_run_record(ctx, run_id=new_run_id(), started_at=now, finished_at=now,
+                            gate_threshold=ing.gate_threshold, coverage=ing.coverage,
+                            mutation=None, risk=ing.risk, endpoints=None)
+
+    assert client.post('/api/runs', json=rec).status_code == 401
+    assert client.post('/api/runs', json=rec, headers={'Authorization': 'Bearer wrong'}).status_code == 401
+    res = client.post('/api/runs', json=rec, headers={'Authorization': f'Bearer {token}'})
+    assert res.status_code == 201, (res.status_code, res.text)
+    body = res.json()
+    assert body == {'run_id': rec['run_id'], 'project': 'verify-ingest'}, body
+    res = client.post('/api/runs', json=rec, headers={'Authorization': f'Bearer {token}'})
+    assert res.status_code == 200 and res.json()['run_id'] == rec['run_id'], 'repeat post must be idempotent'
+    bad = dict(rec, mutation={'killed': 1, 'survived': 1, 'total': 3, 'score': 50.0})
+    assert client.post('/api/runs', json=bad, headers={'Authorization': f'Bearer {token}'}).status_code == 422
+
+    assert len(client.get('/api/projects/verify-ingest/trend').json()) == 1
+    assert len(client.get('/api/projects/verify-api/trend').json()) == 1, 'the ingested run leaked into another project'
+    print('  POST /api/runs: 401 no/wrong token, 201 new, 200 idempotent repeat, 422 malformed, isolated per project')
+finally:
+    shutil.rmtree(tmp, ignore_errors=True)
+print('OK')
+"""
+
+_PUSH = _COMMON + r"""
+import re
+import socket
+import subprocess
+import time
+import httpx
+
+os.environ.pop('REPOGUARD_TOKEN', None)
+tmp = Path(tempfile.mkdtemp(prefix='verify17push-'))
+url = f'sqlite:///{tmp / "history.db"}'
+cli = [sys.executable, '-c', 'from repoguard_engine.cli import main; main()']
+
+sock = socket.socket(); sock.bind(('127.0.0.1', 0)); port = sock.getsockname()[1]; sock.close()
+base = f'http://127.0.0.1:{port}'
+server_env = {**os.environ, 'REPOGUARD_DATABASE_URL': url, 'PYTHONIOENCODING': 'utf-8'}
+proc = subprocess.Popen([*cli, 'serve', '--host', '127.0.0.1', '--port', str(port)],
+                        env=server_env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                        text=True, encoding='utf-8')
+try:
+    deadline = time.monotonic() + 20
+    ready = False
+    while time.monotonic() < deadline:
+        try:
+            ready = httpx.get(base + '/api/projects', timeout=1).status_code == 200
+        except httpx.HTTPError:
+            ready = False
+        if ready:
+            break
+        time.sleep(0.3)
+    assert ready, 'repoguard serve never came up: ' + (proc.stdout.read() if proc.poll() is not None else '(still running)')
+
+    p = subprocess.run([*cli, 'db', 'create-project', 'verify-push'], env=server_env,
+                       capture_output=True, text=True, encoding='utf-8', timeout=30)
+    assert p.returncode == 0, p.stdout + p.stderr
+    p = subprocess.run([*cli, 'db', 'create-token', 'verify-push'], env=server_env,
+                       capture_output=True, text=True, encoding='utf-8', timeout=30)
+    assert p.returncode == 0, p.stdout + p.stderr
+    m = re.search(r'(\S{20,})\s*$', p.stdout)
+    assert m, f'no token in output: {p.stdout!r}'
+    token = m.group(1)
+
+    push_repo = copy_demo(tmp)
+    t0 = time.monotonic()
+    p = subprocess.run([*cli, 'analyze', str(push_repo), '--project', 'verify-push', '--push', base],
+                       env={**os.environ, 'REPOGUARD_TOKEN': token, 'PYTHONIOENCODING': 'utf-8'},
+                       capture_output=True, text=True, encoding='utf-8', timeout=60)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert 'Pushed' in p.stdout, p.stdout
+
+    res = httpx.get(base + '/api/projects/verify-push/trend', timeout=10)
+    assert res.status_code == 200
+    rows = res.json()
+    assert len(rows) == 1 and rows[0]['coverage_pct'] == 65.11627906976744, rows
+    print(f"  real repoguard serve + repoguard analyze --push: 1 stored run, coverage {rows[0]['coverage_pct']!r}")
+
+    t1 = time.monotonic()
+    p = subprocess.run([*cli, 'analyze', str(push_repo), '--push', base], capture_output=True, text=True, encoding='utf-8', timeout=10,
+                       env={**{k: v for k, v in os.environ.items() if k != 'REPOGUARD_TOKEN'}, 'PYTHONIOENCODING': 'utf-8'})
+    elapsed = time.monotonic() - t1
+    assert p.returncode == 1 and 'REPOGUARD_TOKEN' in p.stdout, p.stdout + p.stderr
+    assert elapsed < 5, f'no REPOGUARD_TOKEN took {elapsed:.1f}s -- did it measure first?'
+    print(f'  --push with no REPOGUARD_TOKEN: exit 1 in {elapsed:.2f}s, nothing measured')
+finally:
+    proc.terminate()
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+    shutil.rmtree(tmp, ignore_errors=True)
+print('OK')
+"""
+
+
 def _check(title: str, script: str, timeout: int) -> bool:
     print(f"=== {title} ===")
     rc, out = _run_script(script, timeout)
@@ -333,3 +483,9 @@ def check_phase17_pipeline() -> bool:
 
 def check_phase17_endpoints() -> bool:
     return _check("Phase 17 A1-gap: GET /api/projects/{slug}/endpoints", _ENDPOINTS, timeout=120)
+
+
+def check_phase17_api() -> bool:
+    ok1 = _check("Phase 17 A3.1/A3.2: read routes + POST /api/runs ingest", _API, timeout=180)
+    ok2 = _check("Phase 17 A3.3: repoguard analyze --push (real repoguard serve)", _PUSH, timeout=180)
+    return ok1 and ok2

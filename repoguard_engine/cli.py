@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -62,8 +63,15 @@ def _run_pipeline_or_exit(repo_path: str, **kwargs):
          "Overrides REPOGUARD_AI_PROVIDER for this call.",
 )
 @_project_option
+@click.option(
+    "--push", "push_url", default=None,
+    help="POST the measured run to a repoguard server's POST /api/runs "
+         "(token from REPOGUARD_TOKEN, checked before measuring). Works "
+         "without REPOGUARD_DATABASE_URL or the [db] extra.",
+)
 def analyze(
-    repo_path: str, mutation: bool, endpoints: bool, json_output: bool, workers: int, summarize: bool, provider: str | None, project: str | None
+    repo_path: str, mutation: bool, endpoints: bool, json_output: bool, workers: int, summarize: bool,
+    provider: str | None, project: str | None, push_url: str | None,
 ) -> None:
     """Measure test coverage and quality gaps in REPO_PATH.
 
@@ -71,6 +79,11 @@ def analyze(
     docs/DATA_PLATFORM.md); nothing measured changes either way.
     """
     from .mutation import NoMutantsError
+
+    push_token = os.environ.get("REPOGUARD_TOKEN", "").strip()
+    if push_url and not push_token:
+        console.print("[bold red]✗[/] --push requires REPOGUARD_TOKEN to be set.")
+        sys.exit(1)
 
     # With --json-output, stdout carries only the JSON (pipeable into jq)
     (err_console if json_output else console).print(f"[bold cyan]Analysing[/] {repo_path} …")
@@ -85,6 +98,9 @@ def analyze(
     except (NoMutantsError, RuntimeError) as exc:
         console.print(f"[bold red]✗ Mutation testing couldn't produce a score:[/] {exc}")
         sys.exit(1)
+
+    if push_url:
+        _push_run(push_url, push_token, result, project, endpoints)
 
     if json_output:
         # stdout stays the dashboard alone; the stored run id goes to stderr
@@ -187,9 +203,110 @@ def mcp() -> None:
     mcp_app.run()
 
 
+@main.group()
+def db() -> None:
+    """Manage the measurement-history database (REPOGUARD_DATABASE_URL)."""
+
+
+def _ready_engine():
+    """The store engine for a `db` subcommand, schema guaranteed to exist.
+    Exits 1 (no traceback) if the URL is unset or the database can't be reached."""
+    from .store import StoreError, database_url
+    from .store.db import get_engine, init_db
+
+    url = database_url()
+    if url is None:
+        err_console.print("[bold red]✗[/] REPOGUARD_DATABASE_URL is not set.")
+        sys.exit(1)
+    try:
+        engine = get_engine(url)
+        init_db(engine)
+    except StoreError as exc:
+        err_console.print(f"[bold red]✗[/] {escape(str(exc))}")
+        sys.exit(1)
+    return engine
+
+
+@db.command("init")
+def db_init() -> None:
+    """Create tables and views if they don't exist yet."""
+    _ready_engine()
+    console.print("[bold green]✓[/] Database ready.")
+
+
+@db.command("create-project")
+@click.argument("slug")
+def db_create_project(slug: str) -> None:
+    """Create PROJECT_SLUG (idempotent)."""
+    from .store import StoreError
+    from .store.repository import create_project
+
+    engine = _ready_engine()
+    try:
+        create_project(engine, slug)
+    except StoreError as exc:
+        err_console.print(f"[bold red]✗[/] {escape(str(exc))}")
+        sys.exit(1)
+    console.print(f"[bold green]✓[/] Project [bold]{slug}[/] ready.")
+
+
+@db.command("create-token")
+@click.argument("slug")
+@click.option("--label", default=None, help="Optional label to identify this token later.")
+def db_create_token(slug: str, label: str | None) -> None:
+    """A new POST /api/runs ingest token for SLUG (must already exist).
+    Printed once -- store it now, it is never shown again."""
+    from .store import StoreError
+    from .store.repository import create_token
+
+    engine = _ready_engine()
+    try:
+        _, token = create_token(engine, slug, label=label)
+    except StoreError as exc:
+        err_console.print(f"[bold red]✗[/] {escape(str(exc))}")
+        sys.exit(1)
+    console.print(f"[bold green]✓[/] Token for [bold]{slug}[/] (shown once):")
+    console.print(token)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _push_run(url: str, token: str, result, project: str | None, include_endpoints: bool) -> None:
+    """POST the just-measured run to another repoguard server's /api/runs.
+    Independent of REPOGUARD_DATABASE_URL / the [db] extra: builds the same
+    schema-1 record ingest expects, using only store/context.py and
+    store/record.py (no SQLAlchemy import)."""
+    import httpx
+
+    from .store.context import collect_context
+    from .store.record import build_run_record, new_run_id
+
+    ctx = collect_context(result.repo_path, project)
+    record = build_run_record(
+        ctx,
+        run_id=new_run_id(),
+        started_at=result.started_at,
+        finished_at=result.finished_at,
+        gate_threshold=result.gate_threshold,
+        coverage=result.coverage,
+        mutation=result.mutation,
+        risk=result.risk,
+        endpoints=result.endpoints if include_endpoints else None,
+    )
+    endpoint = url.rstrip("/") + "/api/runs"
+    try:
+        resp = httpx.post(endpoint, json=record, headers={"Authorization": f"Bearer {token}"}, timeout=30)
+    except httpx.HTTPError as exc:
+        console.print(f"[bold red]✗ Push to {endpoint} failed:[/] {exc}")
+        sys.exit(1)
+    if resp.status_code not in (200, 201):
+        console.print(f"[bold red]✗ Push to {endpoint} failed:[/] {resp.status_code} {resp.text}")
+        sys.exit(1)
+    body = resp.json()
+    console.print(f"[bold green]✓ Pushed[/] run {body.get('run_id')} to {endpoint} (project {body.get('project')})")
+
 
 def _print_stored(result) -> None:
     if result.run_id:

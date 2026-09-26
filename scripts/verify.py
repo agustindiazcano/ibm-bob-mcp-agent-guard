@@ -26,6 +26,9 @@ Phase checks implemented:
                         (both need the [db] extra; see scripts/verify_phase17.py)
     phase17-endpoints — GET /api/projects/{slug}/endpoints: 503/404/200, matches demo-repo's 7 endpoints
                         (needs the [db] extra; see scripts/verify_phase17.py)
+    phase17-api       — Phase 17 A3: read routes, POST /api/runs ingest tokens, a real
+                        `repoguard analyze --push` against a real `repoguard serve`
+                        (needs the [db] extra; see scripts/verify_phase17.py)
 """
 
 from __future__ import annotations
@@ -42,7 +45,7 @@ import urllib.request
 from pathlib import Path
 
 from verify_phase17 import (  # scripts/ is sys.path[0]
-    check_phase17_endpoints, check_phase17_pipeline, check_phase17_store,
+    check_phase17_api, check_phase17_endpoints, check_phase17_pipeline, check_phase17_store,
 )
 
 
@@ -783,6 +786,7 @@ CHECKS: dict[str, callable] = {
     "phase17-store": check_phase17_store,
     "phase17-pipeline": check_phase17_pipeline,
     "phase17-endpoints": check_phase17_endpoints,
+    "phase17-api": check_phase17_api,
     "phase18-s1": check_phase18_s1,
     "phase17-engine": check_phase17_engine,
     "phase18-s2": check_phase17_engine,
