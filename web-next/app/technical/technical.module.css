@@ -1,0 +1,147 @@
+.diagram {
+  display: flex;
+  flex-direction: column;
+}
+
+.tierWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.connector {
+  align-self: center;
+  width: 2px;
+  height: 22px;
+  background: var(--border);
+  position: relative;
+}
+
+.connector::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -1px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--border);
+  border-bottom: 2px solid var(--border);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.tier {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+@media (min-width: 820px) {
+  .tier {
+    grid-template-columns: 150px minmax(0, 1fr);
+    align-items: center;
+  }
+}
+
+.tierLabel {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.tierBoxes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.boxAi {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.boxName {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.boxDetail {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.legendSwatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+}
+
+.loop {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px 18px 40px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  font-size: 14.5px;
+}
+
+.loop li::marker {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.loop code {
+  font-size: 0.92em;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--surface-muted);
+}
+
+.method {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.plannedRow td {
+  color: var(--text-muted);
+}
+
+.note {
+  display: block;
+  margin-top: 4px;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--text-muted);
+}

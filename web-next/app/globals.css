@@ -51,8 +51,11 @@
   margin: 0;
 }
 
-html,
-body {
+/* overflow-x guards horizontal scroll on the root only: putting it on body
+   too makes body a scroll container (overflow-x: hidden computes
+   overflow-y to auto), which breaks position: sticky on the nav below,
+   since the browser scrolls the document element, not body. */
+html {
   max-width: 100vw;
   overflow-x: hidden;
 }

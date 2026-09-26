@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { StreamEvent } from "../lib/types";
 import { Card } from "./Card";
 import styles from "./StreamLog.module.css";
@@ -41,15 +42,42 @@ function describe(event: StreamEvent): string {
   }
 }
 
-export function StreamLog({ events }: { events: StreamEvent[] }) {
+// Mounted only while `pending` is set, so the clock starts when the wait does.
+// Reads the wall clock in the interval rather than counting ticks, since
+// background tabs throttle timers.
+function PendingLine({ text, className }: { text: string; className: string }) {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const start = Date.now();
+    const id = setInterval(() => setSeconds(Math.floor((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const clock = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  return (
+    <li className={className}>
+      <span className={styles.dot} aria-hidden />
+      {text} ({clock} elapsed)
+    </li>
+  );
+}
+
+type Props = {
+  events: StreamEvent[];
+  // Set while the dashboard is still being measured after the stream ended:
+  // /api/stream covers coverage/gaps/risk only, and /api/analyze may still be
+  // running mutation testing. Keeps the badge on "Running" meanwhile.
+  pending?: string;
+};
+
+export function StreamLog({ events, pending }: Props) {
   if (events.length === 0) {
     return null;
   }
   const last = events[events.length - 1].type;
-  const finished = last === "done" || last === "error";
-  const status = last === "error" ? (
+  const finished = (last === "done" || last === "error") && !pending;
+  const status = last === "error" && !pending ? (
     <span className={`${styles.status} ${styles.statusError}`}>Error</span>
-  ) : last === "done" ? (
+  ) : finished ? (
     <span className={`${styles.status} ${styles.statusDone}`}>Done</span>
   ) : (
     <span className={styles.status}>Running</span>
@@ -59,7 +87,7 @@ export function StreamLog({ events }: { events: StreamEvent[] }) {
     <Card title="Live progress" aside={status}>
       <ul className={styles.list} aria-live="polite">
         {events.map((event, i) => {
-          const active = !finished && i === events.length - 1;
+          const active = !finished && !pending && i === events.length - 1;
           const className = [
             styles.item,
             active ? styles.active : "",
@@ -72,6 +100,7 @@ export function StreamLog({ events }: { events: StreamEvent[] }) {
             </li>
           );
         })}
+        {pending && <PendingLine text={pending} className={`${styles.item} ${styles.active}`} />}
       </ul>
     </Card>
   );

@@ -1,0 +1,76 @@
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.mark {
+  width: 28px;
+  height: 28px;
+}
+
+.markBg {
+  fill: var(--accent);
+}
+
+.markCheck {
+  fill: none;
+  stroke: var(--accent-text);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.markDot {
+  fill: var(--accent-text);
+  opacity: 0.75;
+}
+
+.name {
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+}
+
+/* IBM Blue 60 / 40, so the edition label reads as IBM's color rather than
+   the app's accent. */
+.badge {
+  --bob: #0f62fe;
+  --bob-soft: #edf5ff;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 11px 4px 9px;
+  border: 1px solid var(--bob);
+  border-radius: 999px;
+  background: var(--bob-soft);
+  color: var(--bob);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.badgeSm {
+  padding: 2px 9px 2px 8px;
+  font-size: 12px;
+}
+
+.badgeDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bob);
+}
+
+@media (prefers-color-scheme: dark) {
+  .badge {
+    --bob: #78a9ff;
+    --bob-soft: #0f1d38;
+  }
+}

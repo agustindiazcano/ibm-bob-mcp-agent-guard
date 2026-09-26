@@ -3,7 +3,18 @@ export type AnalyzeResponse = {
   gaps: { uncovered_files: string[]; missing_lines_by_file: Record<string, number[]> };
   mutation: { score: number; killed: number; survived: number; total: number } | null;
   risk: { file: string; score: number; reasons: string[] }[];
+  // Every FastAPI route found (api_check.find_untested_endpoints); has_test is
+  // the engine's own verdict.
+  endpoints: Endpoint[];
   passed_gate: boolean;
+};
+
+export type Endpoint = {
+  file: string;
+  function: string;
+  method: string;
+  path: string;
+  has_test: boolean;
 };
 
 export type SummaryResponse = {
@@ -41,7 +52,9 @@ export type RepoFormValues = {
   gateThreshold: number;
 };
 
-export type Dashboard = Omit<AnalyzeResponse, "passed_gate">;
+// core.build_dashboard_data's dict: /api/analyze minus the fields the server
+// adds on top (endpoints, passed_gate). /api/fix's before/after use it.
+export type Dashboard = Omit<AnalyzeResponse, "endpoints" | "passed_gate">;
 
 export type FixFile = {
   path: string;

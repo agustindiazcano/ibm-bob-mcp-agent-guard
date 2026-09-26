@@ -49,11 +49,12 @@ belongs to Phase 17 (`docs/DATA_PLATFORM.md`), not this phase.
 | Component | Renders | Fed by |
 |---|---|---|
 | `RepoForm` | repo path input, mutation checkbox, gate threshold input, Autofix token (password field, kept in React state only) | user input only |
-| `ActionBar` | "Analyze", "Gate" and "Autofix" buttons (Autofix enabled once a token is entered) | triggers the calls below |
-| `StreamLog` | live progress lines as SSE events arrive | `/api/stream` |
+| `ActionBar` | "Analyze", "Gate" and "Autofix" buttons. Gate is a coverage-only check like `repoguard gate`: it sends `mutation=false` even with the mutation box ticked. Autofix is enabled once a token is entered | triggers the calls below |
+| `StreamLog` | live progress lines as SSE events arrive. The stream only covers coverage/gaps/risk, so while `/api/analyze` is still running (mutation testing) after the stream ends, a "still measuring" line with an elapsed clock stays active and the badge stays "Running" instead of "Done" | `/api/stream` |
 | `StatCards` | coverage % (covered/total lines), mutation score or "Not run", files with gaps, gate PASS/FAIL with the threshold that run used | `AnalyzeResponse` + the submitted threshold |
 | `GapsList` | uncovered files + missing lines | `AnalyzeResponse.gaps` |
 | `RiskTable` | file + reasons, score with a bar (the score is already a 0–1 uncovered-line ratio, so the bar width is the score itself) | `AnalyzeResponse.risk` |
+| `EndpointsList` | every FastAPI route found, method + path, "tested" / "no test", and "N / M tested" (a count of the engine's `has_test` flags). A footnote says what "tested" means: a test file mentions the path or function name, a static check | `AnalyzeResponse.endpoints` |
 | `SummaryPanel` | AI prose, labeled "advisory, not a measurement", plus which provider generated it; "Summary unavailable: …" when `ok=false` | `SummaryResponse`, passed in by `page.tsx` |
 | `FixResultPanel` | Autofix: engine-measured before → after (mutation, coverage), test files written (expandable), critic notes labeled advisory, provider | `/api/fix`'s `done` event |
 | `Card` | shared section frame (title, optional badge) | — |
@@ -64,7 +65,10 @@ dependency. Formatting is display-only (`toFixed`, same decimals everywhere);
 no component derives a new metric.
 
 `page.tsx` owns all fetching. One Analyze click opens the `/api/stream`
-`EventSource` and calls `/api/analyze` in parallel; once `/api/analyze`
+`EventSource` and calls `/api/analyze` in parallel, both with the same
+`gate_threshold` (the stream used to get only `repo_path`, so at a 60%
+threshold its `done` line said `passed_gate: false` while the gate card said
+PASS); once `/api/analyze`
 returns, it requests `/api/summary` once, not awaited, so the summary never
 delays or fails the dashboard. It is deliberately not fetched from a
 `SummaryPanel` effect: React StrictMode runs effects twice in dev, which made
@@ -85,9 +89,16 @@ type AnalyzeResponse = {
   gaps: { uncovered_files: string[]; missing_lines_by_file: Record<string, number[]> };
   mutation: { score: number; killed: number; survived: number; total: number } | null; // null unless mutation=true
   risk: { file: string; score: number; reasons: string[] }[];
+  endpoints: { file: string; function: string; method: string; path: string; has_test: boolean }[];
   passed_gate: boolean;
 };
 ```
+
+`endpoints` is `run_pipeline`'s own `find_untested_endpoints` result, which
+`/api/analyze` used to drop. `web/server.py` adds it next to `passed_gate`
+rather than in `core.build_dashboard_data`, so the dashboard dict that
+`/api/summary` and `/api/fix`'s `before`/`after` carry is unchanged (the
+frontend's `Dashboard` type omits both fields).
 
 `GET /api/stream?repo_path=&gate_threshold=` emits SSE frames
 `{"type": ..., "data": ...}` with types
@@ -171,10 +182,9 @@ server-side only; the frontend never holds or forwards one.
 On Cloud Run the chosen provider is Vertex (`REPOGUARD_AI_PROVIDER=vertex`,
 `VERTEX_PROJECT_ID` set on the service). Vertex needs no secret there — it
 authenticates as the service's runtime account, which has
-`roles/aiplatform.user`. The public demo's summary still shows
-"unavailable" until the image includes the `[vertex]` extra
-(`fix/vertex-import-error-detail`, `PENDING.md` Phase 14 gap 8). Nothing
-changes in the frontend once that ships.
+`roles/aiplatform.user`. The image includes the `[vertex]` extra (PR #52),
+and the public demo's summary returns `ok: true` with `provider: vertex`
+(gap 8).
 
 ## Backend gaps this phase depended on
 
@@ -188,6 +198,22 @@ changes in the frontend once that ships.
 | 6 | `provider` surfaced in responses | 🟢 on `/api/summary` and on `/api/fix`'s `done` event, from the provider actually used |
 | 7 | Nonexistent `repo_path` → raw 500 | 🟢 400 with a `detail` message (PR #47) |
 | 8 | AI summary on Cloud Run (Vertex SDK in the image; runtime-account role granted) | 🟢 PR #52, verified live (`ok: true`, `provider: vertex`) |
+
+## Verification
+
+`python scripts/verify.py phase14ui` builds `web-next` for production, starts
+it with a real backend (`uvicorn`) on `demo-repo`, and drives it in Chromium
+with Playwright (already a backend dependency, so no new npm package). Each
+rendered number is compared with `/api/analyze`'s own response and, separately,
+with the `AGENTS.md §7` baseline, so a page and an API that agree on a wrong
+number still fail. It covers: coverage 65.1% (112/172), 4 gap files, 1 / 7
+endpoints tested, the stream and the gate card agreeing at a 60% threshold,
+Gate sending `mutation=false`, a real mutation run (badge "Running" until the
+dashboard is in, then 20.25%, 16 / 79), a bad repo path's `detail`, and no
+console errors. It needs `npm ci` in `web-next/` first; `REPOGUARD_CHROMIUM`
+points it at a browser binary when Playwright's own isn't installed. Run
+against the frontend from before this change, it fails on the stream/gate
+mismatch and the missing endpoints card.
 
 ## Local dev & deployment config
 
