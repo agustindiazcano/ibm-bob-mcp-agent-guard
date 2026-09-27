@@ -1,5 +1,6 @@
 // Site links and slide configuration.
 // Order follows the demo story:
+// 0. Intro (logo + one-line pitch, the deck's cover)
 // 1. Analyze (live measurement & fix loop)
 // 2. Results (empirical metrics & history)
 // 3. Features (what it does today, no more)
@@ -38,6 +39,14 @@ export const ABOUT_LINKS: SiteLink[] = [
 ];
 
 export const DEMO_SLIDES: SlideInfo[] = [
+  {
+    slideNumber: 0,
+    href: "/intro",
+    label: "00",
+    slideTitle: "TestMind AI",
+    category: "Product",
+    description: "Multi-Agent QA Swarm powered by Vertex AI — orchestrates Unit, API, and UI testing via MCP.",
+  },
   {
     slideNumber: 1,
     href: "/",
@@ -121,11 +130,8 @@ export const DEMO_SLIDES: SlideInfo[] = [
 ];
 
 export function getSlideByPath(pathname: string): SlideInfo | undefined {
-  if (pathname === "/") {
-    return DEMO_SLIDES[0];
-  }
   return DEMO_SLIDES.find(
-    (slide) => slide.href !== "/" && (pathname === slide.href || pathname.startsWith(`${slide.href}/`))
+    (slide) => pathname === slide.href || (slide.href !== "/" && pathname.startsWith(`${slide.href}/`))
   );
 }
 
