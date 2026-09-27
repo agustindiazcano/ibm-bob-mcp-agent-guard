@@ -43,3 +43,31 @@ variable "workload_identity_provider_id" {
   type    = string
   default = "github-provider"
 }
+
+variable "db_instance_name" {
+  description = "Cloud SQL instance name for measurement history (Phase 17 Block B1)."
+  type        = string
+  default     = "repoguard-history"
+}
+
+variable "db_name" {
+  type    = string
+  default = "repoguard"
+}
+
+variable "db_user" {
+  type    = string
+  default = "repoguard"
+}
+
+variable "db_tier" {
+  description = "Cloud SQL machine tier. Confirm current pricing/availability in the GCP console before apply -- tier names and shared-core availability change over time (docs/DATA_PLATFORM.md §8)."
+  type        = string
+  default     = "db-f1-micro"
+}
+
+variable "runtime_service_account_email" {
+  description = "Cloud Run runtime service account that needs Cloud SQL + Secret Manager access -- the default compute SA, already granted roles/aiplatform.user by hand for Vertex (PENDING.md Phase 14 gap 8)."
+  type        = string
+  default     = "993240087609-compute@developer.gserviceaccount.com"
+}
