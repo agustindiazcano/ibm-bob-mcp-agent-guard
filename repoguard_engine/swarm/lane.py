@@ -135,6 +135,8 @@ def run_lane(
             timeline.event(lane_id, "writer", "stage_start", round=round_n)
             schemas, registry = writer_toolset(sandbox, owned)
             stage = _run_chat_stage(
+                "writer",
+                module,
                 provider,
                 TEST_WRITER_PROMPT,
                 _writer_prompt(lane_plan, best),
