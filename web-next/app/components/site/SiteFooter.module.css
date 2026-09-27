@@ -84,14 +84,14 @@
 
 .authorLink {
   color: #ffffff;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration: none;
   font-weight: 600;
   transition: opacity 0.15s ease;
 }
 
 .authorLink:hover {
   opacity: 0.85;
+  text-decoration: none;
 }
 
 .edition {

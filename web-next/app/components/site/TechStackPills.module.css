@@ -1,9 +1,11 @@
 .stackSection {
   display: flex;
   align-items: center;
+  justify-content: center;
+  text-align: center;
   gap: 12px;
   flex-wrap: wrap;
-  flex: 1 1 auto;
+  width: 100%;
 }
 
 .stackTitle {
