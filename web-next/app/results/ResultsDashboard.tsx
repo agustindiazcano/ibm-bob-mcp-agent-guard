@@ -299,12 +299,6 @@ export function ResultsDashboard() {
           </Link>
         </div>
       )}
-      {demoMode && (
-        <div className={styles.banner} role="status">
-          <strong>Demo Mode — sample data</strong>
-          <span>These charts show canned data illustrating this project&rsquo;s real, measured before/after story, not a live query. Turn off Demo Mode for the real API.</span>
-        </div>
-      )}
 
       <div className={styles.filters}>
         <label className={styles.filter}>
