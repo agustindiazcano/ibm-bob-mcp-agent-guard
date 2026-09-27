@@ -9,6 +9,8 @@ import { apiBase, failure, request } from "../lib/api";
 
 export type Project = { slug: string; repo_url: string | null; created_at: string };
 
+export type EndpointRow = { file: string; function: string; method: string; path: string; has_test: boolean };
+
 // v_run_trend. passed_gate is 0/1 because the view derives it with CASE.
 export type TrendRow = {
   run_id: string;
@@ -47,10 +49,10 @@ export type SurvivorRow = {
 // v_flaky_tests.
 export type FlakyRow = { commit_sha: string; test_id: string; distinct_outcomes: number; runs: number };
 
-// risk-heatmap has no view in §4.4 (it reads risk_scores per run), so its
-// row shape is whatever the backend defines; typed as generic rows until then.
+// risk-heatmap has no view in §4.4 (it reads risk_scores per run)
+export type RiskHeatmapRow = { file_path: string; score: number; rank: number; reasons: string[] };
 
-export type HistoryView = "trend" | "operators" | "risk-heatmap" | "fix-effect" | "survivors" | "flaky";
+export type HistoryView = "trend" | "operators" | "risk-heatmap" | "fix-effect" | "survivors" | "flaky" | "endpoints";
 
 export type Row = Record<string, unknown>;
 

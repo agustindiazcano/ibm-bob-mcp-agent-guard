@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { EndpointsList } from "../components/EndpointsList";
+import { RiskTable } from "../components/RiskTable";
 import { ChartSlot } from "./ChartSlot";
-import { fetchProjects, fetchView, type HistoryView, type Loaded, type Project, type Row, type TrendRow } from "./history";
+import { fetchProjects, fetchView, type HistoryView, type Loaded, type Project, type Row, type TrendRow, type RiskHeatmapRow, type EndpointRow } from "./history";
 import styles from "./results.module.css";
 
 type SlotSpec = {
@@ -41,6 +43,12 @@ const SLOTS: SlotSpec[] = [
     question: "Where is risk concentrating?",
     form: "Heatmap, file × run",
     wide: true,
+  },
+  {
+    view: "endpoints",
+    title: "Untested Endpoints",
+    question: "Which API routes lack test coverage?",
+    form: "List",
   },
   {
     view: "survivors",
@@ -188,7 +196,9 @@ export function ResultsDashboard() {
       <Kpis trend={views.trend} />
 
       <div className={styles.grid}>
-        {SLOTS.map((s, i) => (
+        {SLOTS.map((s, i) => {
+          const state = views[s.view];
+          return (
           <ChartSlot
             key={s.view}
             index={i + 1}
@@ -196,10 +206,23 @@ export function ResultsDashboard() {
             question={s.question}
             form={s.form}
             source={`/${s.view}`}
-            state={views[s.view]}
+            state={state}
             wide={s.wide}
-          />
-        ))}
+          >
+            {s.view === "risk-heatmap" && state.status === "ok" && state.data.length > 0 && (
+              <RiskTable
+                risk={(state.data as RiskHeatmapRow[]).map((r) => ({
+                  file: r.file_path,
+                  score: r.score,
+                  reasons: r.reasons,
+                }))}
+              />
+            )}
+            {s.view === "endpoints" && state.status === "ok" && state.data.length > 0 && (
+              <EndpointsList endpoints={state.data as EndpointRow[]} />
+            )}
+          </ChartSlot>
+        )})}
       </div>
     </>
   );
