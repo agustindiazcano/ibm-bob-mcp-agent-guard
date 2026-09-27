@@ -27,7 +27,18 @@ COPY demo-repo ./demo-repo
 # vertex is this deployment's configured provider, and Application Default
 # Credentials (the runtime service account) are what watsonx has no
 # equivalent to -- it needs a separate WATSONX_APIKEY nobody has set here.
-RUN pip install --no-cache-dir -e ".[vertex]"
+#
+# [db] extra included now that Phase 17 B1's Cloud SQL instance is real
+# (infra/terraform/db.tf) and REPOGUARD_DATABASE_URL is wired onto this
+# service. Without it, repoguard_engine/store/queries.py's module-level
+# `import sqlalchemy` crashes every GET /api/projects* route with a raw,
+# CORS-header-less 500 the instant the route is called -- regardless of
+# whether a database is even configured, since the import happens before
+# _history_engine()'s graceful "no database" check ever runs. Found live on
+# this deployment via a ModuleNotFoundError in Cloud Logging (Session log,
+# 2026-09-27), not caught locally because [db] is installed in every local
+# dev environment and CI job that exercises these routes.
+RUN pip install --no-cache-dir -e ".[vertex,db]"
 
 EXPOSE 8080
 
