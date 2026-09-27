@@ -29,6 +29,10 @@ Phase checks implemented:
     phase17-api       — Phase 17 A3: read routes, POST /api/runs ingest tokens, a real
                         `repoguard analyze --push` against a real `repoguard serve`
                         (needs the [db] extra; see scripts/verify_phase17.py)
+    phase17-mutants-tests — Phase 17 A2-gap: per-mutant/per-test records loaded into the store
+                        (mutants/test_results tables), schema_version 2, exact round trip,
+                        v_survival_by_operator/v_persistent_survivors/v_flaky_tests
+                        (needs the [db] extra; see scripts/verify_phase17.py)
     phase18-s3        — lane sandbox + owned-path write guard (see scripts/verify_phase18.py)
 """
 
@@ -46,7 +50,11 @@ import urllib.request
 from pathlib import Path
 
 from verify_phase17 import (  # scripts/ is sys.path[0]
-    check_phase17_api, check_phase17_endpoints, check_phase17_pipeline, check_phase17_store,
+    check_phase17_api,
+    check_phase17_endpoints,
+    check_phase17_mutants_tests,
+    check_phase17_pipeline,
+    check_phase17_store,
 )
 from verify_phase18 import check_phase18_s3
 from verify_phase19 import check_phase19
@@ -790,6 +798,7 @@ CHECKS: dict[str, callable] = {
     "phase17-pipeline": check_phase17_pipeline,
     "phase17-endpoints": check_phase17_endpoints,
     "phase17-api": check_phase17_api,
+    "phase17-mutants-tests": check_phase17_mutants_tests,
     "phase18-s1": check_phase18_s1,
     "phase17-engine": check_phase17_engine,
     "phase18-s2": check_phase17_engine,

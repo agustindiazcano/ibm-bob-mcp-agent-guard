@@ -21,8 +21,14 @@ if TYPE_CHECKING:
     from ..core import CoverageResult, MutationResult, RiskScore
     from .context import RunContext
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 MAX_ITEMS = 50_000  # per list/dict in a record; bounds what an ingest body can make the server store
+
+# Mirrors mutation.py's OUTCOMES and core.py's CaseOutcome.outcome -- kept as
+# plain tuples here so record.py stays importable without the engine's own
+# dataclass modules.
+_MUTANT_OUTCOMES = ("killed", "survived", "timeout", "error")
+_TEST_OUTCOMES = ("passed", "failed", "error", "skipped")
 
 _CONTEXT_KEYS = (
     "repo_url", "commit_sha", "branch", "dirty",
@@ -74,18 +80,37 @@ def build_run_record(
             [{**asdict(e), "file": _posix(e.file)} for e in endpoints]
             if endpoints is not None else None
         ),
+        # Per-mutant records (§4.1); None iff mutation was not measured, same
+        # convention as "mutation" above. Same 7 columns as the mutants table
+        # (§4.2) plus "index" -- excludes original_line (not in the schema)
+        # and never a "killed" bool.
+        "mutants": (
+            [
+                {"index": m.index, "fingerprint": m.fingerprint, "file": _posix(m.file),
+                 "function": m.function, "lineno": m.lineno, "operator": m.operator,
+                 "description": m.description, "outcome": m.outcome}
+                for m in mutation.mutants
+            ] if mutation is not None else None
+        ),
+        # Per-test outcomes: always a list, never None -- coverage always
+        # measures tests (§4.1).
+        "tests": [
+            {"test_id": t.test_id, "outcome": t.outcome, "duration_s": t.duration_s}
+            for t in coverage.tests
+        ],
     }
     validate_run_record(record)
     return record
 
 
 def validate_run_record(record: Any) -> None:
-    """Raise ValueError unless *record* is a well-formed schema-1 run record.
+    """Raise ValueError unless *record* is a well-formed schema-2 run record.
     Checks shape and internal consistency only; it never recomputes a metric."""
     _require(isinstance(record, dict), "record must be an object")
     _require(record.get("schema_version") == SCHEMA_VERSION, f"schema_version must be {SCHEMA_VERSION}")
     known = {"schema_version", "run_id", "started_at", "finished_at", "status", "error",
-             "gate_threshold", "context", "coverage", "mutation", "risk", "endpoints"}
+             "gate_threshold", "context", "coverage", "mutation", "risk", "endpoints",
+             "mutants", "tests"}
     unknown = set(record) - known
     _require(not unknown, f"unknown fields: {sorted(unknown)}")
 
@@ -142,6 +167,32 @@ def validate_run_record(record: Any) -> None:
             _require(isinstance(e, dict) and set(e) == {"file", "function", "method", "path", "has_test"}, "malformed endpoint entry")
             _require(all(isinstance(e[k], str) for k in ("file", "function", "method", "path")), "endpoint fields must be strings")
             _require(isinstance(e["has_test"], bool), "endpoint has_test must be a boolean")
+
+    mutants = record.get("mutants")
+    _require((mutants is None) == (mut is None), "mutants must be present iff mutation was measured")
+    if mutants is not None:
+        _require(isinstance(mutants, list) and len(mutants) <= MAX_ITEMS, "mutants must be a list or null")
+        _mutant_keys = {"index", "fingerprint", "file", "function", "lineno", "operator", "description", "outcome"}
+        for m in mutants:
+            _require(isinstance(m, dict) and set(m) == _mutant_keys, "malformed mutant entry")
+            _require(_is_count(m.get("index")), "mutant index must be a non-negative integer")
+            fp = m.get("fingerprint")
+            _require(isinstance(fp, str) and len(fp) == 40 and all(c in "0123456789abcdef" for c in fp),
+                     "mutant fingerprint must be a 40-character sha1 hex digest")
+            _require(all(isinstance(m[k], str) and m[k] for k in ("file", "function", "operator", "description")),
+                     "mutant file/function/operator/description must be non-empty strings")
+            _require(_is_count(m.get("lineno")) and m["lineno"] > 0, "mutant lineno must be a positive integer")
+            _require(m.get("outcome") in _MUTANT_OUTCOMES, f"mutant outcome must be one of {_MUTANT_OUTCOMES}")
+        _require(len({m["index"] for m in mutants}) == len(mutants), "mutants has duplicate indexes")
+
+    tests = record.get("tests")
+    _require(isinstance(tests, list) and len(tests) <= MAX_ITEMS, "tests must be a list")
+    for t in tests:
+        _require(isinstance(t, dict) and set(t) == {"test_id", "outcome", "duration_s"}, "malformed test entry")
+        _require(isinstance(t.get("test_id"), str) and t["test_id"], "test_id must be a non-empty string")
+        _require(t.get("outcome") in _TEST_OUTCOMES, f"test outcome must be one of {_TEST_OUTCOMES}")
+        _require(_is_number(t.get("duration_s")) and t["duration_s"] >= 0, "duration_s must be a non-negative number")
+    _require(len({t["test_id"] for t in tests}) == len(tests), "tests has duplicate test_ids")
 
 
 def new_run_id() -> str:

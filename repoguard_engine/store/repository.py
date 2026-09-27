@@ -14,8 +14,16 @@ from sqlalchemy.exc import SQLAlchemyError
 from . import StoreError
 from .db import _short, describe
 from .models import (
-    api_tokens, coverage_results, endpoint_results, file_coverage,
-    mutation_results, projects, risk_scores, runs,
+    api_tokens,
+    coverage_results,
+    endpoint_results,
+    file_coverage,
+    mutants,
+    mutation_results,
+    projects,
+    risk_scores,
+    runs,
+    test_results,
 )
 from .record import validate_run_record
 
@@ -129,7 +137,7 @@ def _insert_run(conn: Connection, project_id: str, run_id: str, record: dict[str
         python_version=ctx["python_version"],
         gate_threshold=record["gate_threshold"],
         endpoints_measured=record["endpoints"] is not None,
-        tests_measured=False,  # per-test outcomes arrive with Phase 17 A2.2
+        tests_measured=True,  # coverage.tests is always measured (§4.1)
         status=record["status"],
         error=record["error"],
     ))
@@ -168,6 +176,22 @@ def _insert_measurements(conn: Connection, run_id: str, record: dict[str, Any]) 
     ]
     if rows:
         conn.execute(endpoint_results.insert(), rows)
+
+    rows = [
+        {"run_id": run_id, "mutant_index": m["index"], "fingerprint": m["fingerprint"],
+         "file_path": m["file"], "function_name": m["function"], "lineno": m["lineno"],
+         "operator": m["operator"], "description": m["description"], "outcome": m["outcome"]}
+        for m in (record["mutants"] or [])
+    ]
+    if rows:
+        conn.execute(mutants.insert(), rows)
+
+    rows = [
+        {"run_id": run_id, "test_id": t["test_id"], "outcome": t["outcome"], "duration_s": t["duration_s"]}
+        for t in record["tests"]
+    ]
+    if rows:
+        conn.execute(test_results.insert(), rows)
 
 
 def _get_or_create_project(conn: Connection, slug: str, repo_url: str | None) -> str:
