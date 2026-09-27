@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useDemoMode } from "../context/DemoModeContext";
 import { EndpointsList } from "../components/EndpointsList";
 import { RiskTable } from "../components/RiskTable";
 import { ChartSlot } from "./ChartSlot";
@@ -20,10 +21,32 @@ import {
   type SurvivorRow,
   type TrendRow,
 } from "./history";
+import {
+  MOCK_ENDPOINTS,
+  MOCK_FLAKY,
+  MOCK_OPERATORS,
+  MOCK_PROJECTS,
+  MOCK_RISK_HEATMAP,
+  MOCK_SURVIVORS,
+  MOCK_TREND,
+} from "./mockData";
 import { OperatorsChart } from "./OperatorsChart";
 import { SurvivorsTable } from "./SurvivorsTable";
 import { TrendChart } from "./TrendChart";
 import styles from "./results.module.css";
+
+// Demo Mode's canned response per view -- fix-effect has no mock yet (no
+// real fix_sessions table exists either way, see PENDING.md), so it stays
+// empty like the real backend's honest "nothing recorded" response.
+const MOCK_VIEWS: Record<HistoryView, Row[]> = {
+  trend: MOCK_TREND,
+  operators: MOCK_OPERATORS,
+  "risk-heatmap": MOCK_RISK_HEATMAP,
+  "fix-effect": [],
+  endpoints: MOCK_ENDPOINTS,
+  survivors: MOCK_SURVIVORS,
+  flaky: MOCK_FLAKY,
+};
 
 type SlotSpec = {
   view: HistoryView;
@@ -133,6 +156,7 @@ function Kpis({ trend }: { trend: Loaded<Row[]> }) {
 }
 
 export function ResultsDashboard() {
+  const { demoMode } = useDemoMode();
   const [projects, setProjects] = useState<Loaded<Project[]>>({ status: "loading" });
   const [selected, setSelected] = useState("");
   const [views, setViews] = useState<Views>(() => allViews({ status: "loading" }));
@@ -153,6 +177,18 @@ export function ResultsDashboard() {
   }
 
   useEffect(() => {
+    if (demoMode) {
+      // Canned, clearly-labeled sample data -- never the real API. Every
+      // number in it was measured for real at some point (mockData.ts's own
+      // header), just not necessarily by *this* session's backend.
+      ++selectRef.current;
+      setProjects({ status: "ok", data: MOCK_PROJECTS });
+      setSelected(MOCK_PROJECTS[0].slug);
+      setViews(
+        Object.fromEntries(SLOTS.map((s) => [s.view, { status: "ok", data: MOCK_VIEWS[s.view] }])) as Views,
+      );
+      return;
+    }
     void fetchProjects().then((state) => {
       setProjects(state);
       if (state.status === "ok" && state.data.length > 0) {
@@ -163,8 +199,8 @@ export function ResultsDashboard() {
         setViews(allViews(state));
       }
     });
-    // Runs once on mount; selectProject only touches state setters and a ref.
-  }, []);
+    // selectProject only touches state setters and a ref, safe to omit.
+  }, [demoMode]);
 
   const bannerKey =
     projects.status === "unavailable"
@@ -189,6 +225,12 @@ export function ResultsDashboard() {
           <Link href="/" className={styles.bannerLink}>
             Run an analysis →
           </Link>
+        </div>
+      )}
+      {demoMode && (
+        <div className={styles.banner} role="status">
+          <strong>Demo Mode — sample data</strong>
+          <span>These charts show canned data illustrating this project&rsquo;s real, measured before/after story, not a live query. Turn off Demo Mode for the real API.</span>
         </div>
       )}
 
