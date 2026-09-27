@@ -8,6 +8,31 @@ export function PageShell({ children }: { children: ReactNode }) {
   return <main className={styles.shell}>{children}</main>;
 }
 
+// A single-viewport, no-scroll slide -- for Demo Mode's content pages
+// (everything that isn't Analyze/Results, which stay interactive). Content
+// must be kept short by whoever writes the page; this only supplies the
+// compact spacing and vertical centering, it can't shrink arbitrary content
+// to fit.
+export function SlideShell({ children }: { children: ReactNode }) {
+  return <main className={styles.slideShell}>{children}</main>;
+}
+
+type SlideHeaderProps = {
+  eyebrow: string;
+  title: ReactNode;
+  lead?: ReactNode;
+};
+
+export function SlideHeader({ eyebrow, title, lead }: SlideHeaderProps) {
+  return (
+    <header className={styles.slideHeader}>
+      <span className={styles.eyebrow}>{eyebrow}</span>
+      <h1 className={styles.slideTitle}>{title}</h1>
+      {lead && <p className={styles.slideLead}>{lead}</p>}
+    </header>
+  );
+}
+
 type HeaderProps = {
   eyebrow: string;
   title: ReactNode;

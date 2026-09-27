@@ -7,6 +7,41 @@
   gap: 56px;
 }
 
+/* Demo Mode content slides: one viewport, no scroll. 60px nav (fixed) +
+   ~72px clearance for the fixed StickyDemoFooter. Content must stay short --
+   this only supplies compact spacing, it can't shrink arbitrary content. */
+.slideShell {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 28px 16px 80px;
+  min-height: calc(100vh - 60px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 24px;
+}
+
+.slideHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 820px;
+}
+
+.slideTitle {
+  font-size: clamp(22px, 3.4vw, 32px);
+  font-weight: 680;
+  line-height: 1.15;
+  letter-spacing: -0.024em;
+  text-wrap: balance;
+}
+
+.slideLead {
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
 .header {
   display: flex;
   flex-direction: column;
