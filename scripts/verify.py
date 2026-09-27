@@ -49,6 +49,7 @@ from verify_phase17 import (  # scripts/ is sys.path[0]
     check_phase17_api, check_phase17_endpoints, check_phase17_pipeline, check_phase17_store,
 )
 from verify_phase18 import check_phase18_s3
+from verify_phase19 import check_phase19
 
 
 def run(cmd: list[str], timeout: int = 30) -> tuple[int, str]:
@@ -793,6 +794,7 @@ CHECKS: dict[str, callable] = {
     "phase17-engine": check_phase17_engine,
     "phase18-s2": check_phase17_engine,
     "phase18-s3": check_phase18_s3,
+    "phase19": check_phase19,
 }
 
 
