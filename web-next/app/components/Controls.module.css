@@ -55,12 +55,16 @@
 
 @media (min-width: 860px) {
   .controlsRow {
-    grid-template-columns: 135px minmax(260px, 1fr) auto;
+    grid-template-columns: 135px 320px auto;
     align-items: flex-start;
   }
   .check {
     margin-top: 24px;
   }
+}
+
+.providerField {
+  max-width: 320px;
 }
 
 .field {

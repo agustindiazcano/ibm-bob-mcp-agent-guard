@@ -76,7 +76,7 @@ export function RepoForm({ values, onChange, disabled }: Props) {
           <span className={styles.fieldNote}>Target coverage for PASS/FAIL</span>
         </label>
 
-        <div className={styles.field}>
+        <div className={`${styles.field} ${styles.providerField}`}>
           <span>
             Multicloud AI Provider & Model
             <Tooltip
