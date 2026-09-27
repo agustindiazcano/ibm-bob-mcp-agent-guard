@@ -17,12 +17,12 @@
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
-  max-width: 460px;
+  max-width: 500px;
   width: 100%;
   padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
   animation: modalIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -31,6 +31,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 14px;
 }
 
 .titleArea {
@@ -46,8 +48,9 @@
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  color: var(--text);
 }
 
 .title {
@@ -60,7 +63,7 @@
 .closeBtn {
   background: none;
   border: none;
-  font-size: 18px;
+  font-size: 20px;
   color: var(--text-muted);
   cursor: pointer;
   padding: 4px;
@@ -76,33 +79,35 @@
   color: var(--text);
 }
 
-.description {
-  font-size: 13.5px;
-  color: var(--text-muted);
-  line-height: 1.5;
-  margin: 0;
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.inputGroup {
+.field {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
 .label {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .input {
-  height: 42px;
-  padding: 0 14px;
+  height: 40px;
+  padding: 0 12px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--surface-muted);
   color: var(--text);
-  font-size: 14px;
+  font-size: 13.5px;
   font-family: var(--font-geist-mono), monospace;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -113,57 +118,60 @@
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-.error {
-  font-size: 12px;
-  color: var(--fail);
-}
-
-.actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 8px;
-}
-
-.cancelBtn {
-  height: 38px;
-  padding: 0 16px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface);
+.hint {
+  font-size: 11.5px;
   color: var(--text-muted);
-  font-weight: 550;
-  font-size: 13.5px;
-  cursor: pointer;
-  transition: all 0.15s ease;
+  line-height: 1.4;
 }
 
-.cancelBtn:hover {
+.infoBox {
   background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.infoBox strong {
   color: var(--text);
 }
 
-.confirmBtn {
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.savedMsg {
+  font-size: 12px;
+  color: var(--pass);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.saveBtn {
+  margin-left: auto;
   height: 38px;
-  padding: 0 18px;
+  padding: 0 20px;
   border-radius: 8px;
-  border: 1px solid var(--pass);
-  background: var(--pass);
+  border: 1px solid var(--accent);
+  background: var(--accent);
   color: #ffffff;
   font-weight: 600;
   font-size: 13.5px;
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
   transition: all 0.15s ease;
-  box-shadow: 0 0 12px rgba(34, 197, 94, 0.35);
 }
 
-.confirmBtn:hover {
-  filter: brightness(1.08);
-  box-shadow: 0 0 18px rgba(34, 197, 94, 0.55);
+.saveBtn:hover {
+  background: var(--accent-hover);
 }
 
 @keyframes fadeIn {
@@ -174,7 +182,7 @@
 @keyframes modalIn {
   from {
     opacity: 0;
-    transform: scale(0.95) translateY(8px);
+    transform: scale(0.96) translateY(6px);
   }
   to {
     opacity: 1;

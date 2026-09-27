@@ -7,9 +7,6 @@ import styles from "./Controls.module.css";
 type Props = {
   values: RepoFormValues;
   onChange: (values: RepoFormValues) => void;
-  // Kept out of RepoFormValues so it never lands in /api/analyze's query string.
-  token: string;
-  onTokenChange: (token: string) => void;
   disabled: boolean;
 };
 
@@ -18,7 +15,7 @@ const DEMO_REPOS = [
   { label: "Ledger Demo", path: "./eval-fixtures/ledger", desc: "Accounting ledger fixture (core ledger + transactions)" },
 ];
 
-export function RepoForm({ values, onChange, token, onTokenChange, disabled }: Props) {
+export function RepoForm({ values, onChange, disabled }: Props) {
   return (
     <fieldset className={styles.form} disabled={disabled}>
       <div className={styles.repoRow}>
@@ -73,25 +70,6 @@ export function RepoForm({ values, onChange, token, onTokenChange, disabled }: P
             onChange={(e) => onChange({ ...values, gateThreshold: Number(e.target.value) })}
           />
           <span className={styles.fieldNote}>Target coverage for PASS/FAIL</span>
-        </label>
-
-        <label className={styles.field}>
-          <span>
-            Autofix token
-            <Tooltip
-              content="Requires backend REPOGUARD_FIX_TOKEN + AI provider (watsonx or Vertex AI). Tests are written in an isolated sandbox, never in source code."
-              ariaLabel="About Autofix token"
-            />
-          </span>
-          <input
-            className={styles.input}
-            type="password"
-            value={token}
-            onChange={(e) => onTokenChange(e.target.value)}
-            placeholder="Set on server: REPOGUARD_FIX_TOKEN"
-            autoComplete="off"
-          />
-          <span className={styles.fieldNote}>Enables AI self-healing test generation</span>
         </label>
 
         <label className={styles.check}>

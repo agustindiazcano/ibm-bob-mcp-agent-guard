@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { BobBadge, Brand } from "./Brand";
 import { DemoSwitch } from "./DemoSwitch";
 import { ABOUT_LINKS, PRODUCT_LINKS, REPO_URL, type SiteLink } from "./links";
+import { useConfig } from "../../context/ConfigContext";
 import styles from "./SiteNav.module.css";
 
 const ALL_NAV_LINKS: SiteLink[] = [...PRODUCT_LINKS, ...ABOUT_LINKS];
@@ -23,7 +24,10 @@ function NavLinks({ links, pathname, onNavigate }: { links: SiteLink[]; pathname
         href={href}
         className={`${styles.link} ${active ? styles.active : ""}`}
         aria-current={active ? "page" : undefined}
-        onClick={onNavigate}
+        onClick={(e) => {
+          (e.currentTarget as HTMLElement).blur();
+          onNavigate?.();
+        }}
       >
         {label}
       </Link>
@@ -34,6 +38,7 @@ function NavLinks({ links, pathname, onNavigate }: { links: SiteLink[]; pathname
 export function SiteNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const { openConfig } = useConfig();
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
 
@@ -56,15 +61,18 @@ export function SiteNav() {
         const idx = ALL_NAV_LINKS.findIndex((link) => isActive(pathname, link.href));
         if (idx >= 0 && idx < ALL_NAV_LINKS.length - 1) {
           e.preventDefault();
+          (document.activeElement as HTMLElement)?.blur();
           router.push(ALL_NAV_LINKS[idx + 1].href);
         } else if (idx === -1) {
           e.preventDefault();
+          (document.activeElement as HTMLElement)?.blur();
           router.push(ALL_NAV_LINKS[0].href);
         }
       } else if (e.key === "ArrowLeft") {
         const idx = ALL_NAV_LINKS.findIndex((link) => isActive(pathname, link.href));
         if (idx > 0) {
           e.preventDefault();
+          (document.activeElement as HTMLElement)?.blur();
           router.push(ALL_NAV_LINKS[idx - 1].href);
         }
       }
@@ -84,12 +92,20 @@ export function SiteNav() {
           <NavLinks links={PRODUCT_LINKS} pathname={pathname} />
           <span className={styles.divider} aria-hidden="true" />
           <NavLinks links={ABOUT_LINKS} pathname={pathname} />
-          <span className={styles.kbdHint} title="Use Arrow Left & Arrow Right keys to navigate pages">
-            <kbd className={styles.kbd}>&larr;</kbd>
-            <kbd className={styles.kbd}>&rarr;</kbd>
-          </span>
         </div>
         <div className={styles.end}>
+          <button
+            type="button"
+            className={styles.configBtn}
+            onClick={openConfig}
+            title="Configure Server & Autofix Tokens"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            <span>Config</span>
+          </button>
           <BobBadge />
           <a className={styles.iconLink} href={REPO_URL} target="_blank" rel="noreferrer" aria-label="Source on GitHub">
             <svg viewBox="0 0 16 16" aria-hidden="true">

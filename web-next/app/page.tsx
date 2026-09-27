@@ -11,7 +11,7 @@ import { SummaryPanel } from "./components/SummaryPanel";
 import { FixResultPanel } from "./components/FixResultPanel";
 import { EndpointsList } from "./components/EndpointsList";
 import { Card } from "./components/Card";
-import { TokenModal } from "./components/TokenModal";
+import { useConfig } from "./context/ConfigContext";
 import styles from "./page.module.css";
 import { fetchAnalyze, fetchSummary, streamFix, streamUrl } from "./lib/api";
 import type { AnalyzeResponse, FixDone, RepoFormValues, StreamEvent, SummaryResponse } from "./lib/types";
@@ -24,16 +24,14 @@ const DEFAULT_VALUES: RepoFormValues = {
 };
 
 export default function Home() {
+  const { autofixToken, openConfig } = useConfig();
   const [values, setValues] = useState<RepoFormValues>(DEFAULT_VALUES);
   const [busy, setBusy] = useState(false);
   const [autofixing, setAutofixing] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
   const [events, setEvents] = useState<StreamEvent[]>([]);
   const [result, setResult] = useState<AnalyzeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
-  // Held in memory only: never persisted, never sent anywhere but /api/fix.
-  const [token, setToken] = useState("");
   const [fix, setFix] = useState<FixDone | null>(null);
   // The threshold the shown result was measured against, so editing the
   // input afterwards doesn't relabel an old PASS/FAIL.
@@ -97,7 +95,11 @@ export default function Home() {
   }
 
   async function runAutofix(explicitToken?: string) {
-    const activeToken = explicitToken ?? token;
+    const activeToken = explicitToken ?? autofixToken;
+    if (!activeToken.trim()) {
+      openConfig();
+      return;
+    }
     ++runRef.current;
     setBusy(true);
     setAutofixing(true);
@@ -128,22 +130,17 @@ export default function Home() {
   }
 
   function handleAutofixClick() {
-    if (!token.trim()) {
-      setModalOpen(true);
+    if (!autofixToken.trim()) {
+      openConfig();
       return;
     }
     void runAutofix();
   }
 
-  function handleTokenSubmit(enteredToken: string) {
-    setToken(enteredToken);
-    setModalOpen(false);
-    void runAutofix(enteredToken);
-  }
-
   const streamEnded = events.some((e) => e.type === "done" || e.type === "error");
-  const pending =
-    analyzing && streamEnded
+  const pending = autofixing
+    ? "Running self-healing AI loop (measuring baseline + generating tests + verification)..."
+    : analyzing && streamEnded
       ? analyzing.mutation
         ? "Running mutation testing — this can take several minutes"
         : "Finishing the analysis"
@@ -158,7 +155,7 @@ export default function Home() {
         </p>
       </header>
       <Card title="Analyze a repository">
-        <RepoForm values={values} onChange={setValues} token={token} onTokenChange={setToken} disabled={busy} />
+        <RepoForm values={values} onChange={setValues} disabled={busy} />
         <ActionBar
           busy={busy}
           isAnalyzing={analyzing !== null}
@@ -182,7 +179,7 @@ export default function Home() {
           )}
           {error.toLowerCase().includes("401") && (
             <p style={{ marginTop: "6px", fontSize: "12px", opacity: 0.9 }}>
-              Tip: HTTP 401 indicates the provided Autofix token does not match the server&rsquo;s <code>REPOGUARD_FIX_TOKEN</code>.
+              Tip: HTTP 401 indicates the provided Autofix token does not match the server&rsquo;s <code>REPOGUARD_FIX_TOKEN</code>. Click <strong>⚙️ Config</strong> in the top navigation to update your token.
             </p>
           )}
         </div>
@@ -205,12 +202,6 @@ export default function Home() {
           <SummaryPanel summary={summary} />
         </div>
       )}
-
-      <TokenModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSubmit={handleTokenSubmit}
-      />
     </main>
   );
 }
