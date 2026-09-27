@@ -150,6 +150,12 @@ jobs:
       - name: Verify phase17-api (history read routes, ingest tokens, analyze --push)
         run: python scripts/verify.py phase17-api
 
+      - name: Verify phase17-mutants-tests (per-mutant/test records in store)
+        run: python scripts/verify.py phase17-mutants-tests
+
+      - name: Verify phase17-history-routes (operators, survivors, flaky routes)
+        run: python scripts/verify.py phase17-history-routes
+
   guardrails-phase19:
     runs-on: ubuntu-latest
     # Phase 19 fix-loop guardrails: G1 env allow-list, G2 static AST policy,
@@ -172,3 +178,21 @@ jobs:
 
       - name: Verify phase19-accept (G3 per-file acceptance gate)
         run: python scripts/verify.py phase19-accept
+
+  swarm-phase18:
+    runs-on: ubuntu-latest
+    # Phase 18 S4: multi-agent swarm lane state machine, thread pool,
+    # blackboard files, timeline, and error handling.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install repoguard
+        run: pip install -e .
+
+      - name: Verify phase18-s4 (swarm lane state machine + runner)
+        run: python scripts/verify.py phase18-s4
+

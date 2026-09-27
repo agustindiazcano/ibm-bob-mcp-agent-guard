@@ -267,7 +267,7 @@ check) in its new §13. Build from §13, not the original design sketch.
 | C1 | Backend: `/operators`, `/survivors`, `/flaky` read routes. Frontend: web-next charts (trend, survival by operator, fix effect, survivors, flaky) | 🟡 Session 28, PR #71 — backend routes done (`store/queries.py`, `web/server.py`), `verify.py phase17-history-routes` PASS (404 unknown project, real per-operator/per-mutant data over HTTP). **Frontend charts themselves still 🔴** — `web-next/app/results/` isn't wired to any of these routes yet. `/fix-effect` still needs a `fix_sessions` table (separate task, not started) |
 | C2 | Risk heatmap (below the cut line) | 🔴 |
 | D | User accounts (below the cut line — optional) | 🔴 |
-| — | `verify.py phase17` (round-trip, determinism, after-reference delta 69.62 pp, Postgres service container) | 🟡 `phase17-store`, `phase17-pipeline` (A1), `phase17-engine` (A2), `phase17-endpoints` (A1-gap), `phase17-api` (A3), `phase17-mutants-tests` (A2-gap) and `phase17-history-routes` (C1 backend) all exist and PASS individually; only A1's are wired into `ci.yml` (job `store`) — **the rest run nowhere in CI yet.** No single aggregate `phase17` check either |
+| — | `verify.py phase17` (round-trip, determinism, after-reference delta 69.62 pp, Postgres service container) | 🟢 all Phase 17 checks (`phase17-store`, `phase17-pipeline`, `phase17-endpoints`, `phase17-api`, `phase17-mutants-tests`, `phase17-history-routes`, `phase17-engine`) are now wired and running in CI |
 
 A real GCP billing account was confirmed available (trial, Session 28) —
 `terraform apply` for `db.tf` is done; a bare-instance Cloud SQL bills
