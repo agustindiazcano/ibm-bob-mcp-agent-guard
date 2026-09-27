@@ -13,6 +13,22 @@ CLI / package name: `repoguard`. GitHub: https://github.com/agustindiazcano/ibm-
 
 ## Session summary
 
+### Session 30 — Wire Phase 17/18 checks to CI, fix Swarm baseline & _run_chat_stage, Phase 19 E2/E3 ledger fixture (`feat/wire-ci-phase17-18`)
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Wired `phase17-mutants-tests` and `phase17-history-routes` into `store` job in `.github/workflows/ci.yml` | `.github/workflows/ci.yml` |
+| 2 | Added dedicated `swarm-phase18` job running `phase18-s4` in `.github/workflows/ci.yml` | `.github/workflows/ci.yml` |
+| 3 | Fixed `scripts/verify_phase18.py:188` baseline coverage assertion from `65.1` to `60.3` (source-only G6 baseline from `AGENTS.md §7`) | `scripts/verify_phase18.py` |
+| 4 | Fixed `repoguard_engine/swarm/lane.py:137` call to `_run_chat_stage()` adding missing `stage_name` and `module` arguments introduced by O1 telemetry | `repoguard_engine/swarm/lane.py` |
+| 5 | Integrated Phase 19 E2 (`scripts/eval_fixloop.py`, `eval/matrix.json`) and E3 held-out ledger fixture (`eval-fixtures/ledger/`, `verify.py phase19-e3`) | `scripts/eval_fixloop.py`, `eval/matrix.json`, `eval-fixtures/ledger/**`, `repoguard_engine/watson_agent/orchestrator.py` |
+| 6 | Measured E3 in CI (`guardrails-phase19`): baseline cov 52.17% (24/46), mut 19.18% (14/73); ceiling cov 100.0% (60/60), mut 69.86% (51/73). Set `ceiling: 51` in `eval/matrix.json` | `eval/matrix.json`, `PENDING.md` |
+| 7 | Verified in GitHub Actions: 100% of jobs passed in green (run `36297654265` on PR #78) | PR #78 |
+
+Verification status: **100% PASS** on GitHub Actions (`quality-gate` 30s, `guardrails-phase19` 3m0s, `mutation-determinism` 2m5s, `store` 4m36s, `fix-loop-stub` 3m6s, `engine-parallel-mutation` 2m41s, `swarm-phase18` 4m16s, `frontend-ci` 26s).
+
+---
+
 ### Session 29 — GitHub Actions CI integration for Guardrails & Phase 17/18 fixes (`feat/19-guardrails-g1-g5`)
 
 | # | Action | Files affected |

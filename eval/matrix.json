@@ -6,6 +6,6 @@
   ],
   "fixtures": [
     {"name": "demo-repo", "path": "demo-repo", "ceiling": 71},
-    {"name": "ledger", "path": "eval-fixtures/ledger", "ceiling": null}
+    {"name": "ledger", "path": "eval-fixtures/ledger", "ceiling": 51}
   ]
 }

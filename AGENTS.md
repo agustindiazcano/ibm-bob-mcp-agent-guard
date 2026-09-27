@@ -122,6 +122,10 @@ ibm-bob-mcp-agent-guard/
 │   │   └── test_pricing.py   Weak baseline
 │   └── web/index.html        Shop UI for visual checks
 │
+├── eval-fixtures/        Phase 19 E3 held-out fixtures (ledger: accounting domain) for benchmark without overfitting
+│
+├── eval/                 eval/matrix.json: provider/model × fixture benchmark matrix (Phase 19 E2)
+│
 ├── web-next/             Next.js dashboard (Phase 14) — calls the existing FastAPI backend, doesn't replace it
 │   ├── app/
 │   │   ├── components/       RepoForm · ActionBar · StreamLog · StatCards · GapsList · RiskTable · EndpointsList · SummaryPanel · FixResultPanel
@@ -144,6 +148,9 @@ ibm-bob-mcp-agent-guard/
 │
 ├── bob-evidence/         RETIRED — old Bob session-report template, never actually populated
 ├── AGENTS.md             This file — agent context and coding rules (kept byte-identical to CLAUDE.md)
+├── CLAUDE.md             Symlink-like duplicate of AGENTS.md (kept byte-identical)
+├── LASTCONTEXT.md        Snapshot of the current working session, read at start of every session
+├── PENDING.md            Build plan, backlog and phase status tracker
 ├── RUNBOOK.md            Operational runbook (install, run, troubleshoot)
 ├── README.md             User-facing overview
 ├── Dockerfile            Cloud Run image — `pip install -e ".[vertex,db]"` (Known Pitfalls §9: [db] was missing until Session 28)
