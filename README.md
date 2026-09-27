@@ -520,7 +520,7 @@ is in [`bob-evidence/README.md`](bob-evidence/README.md).
 </tr>
 <tr>
 <td><img src="bob-evidence/bob-images/b/11-bob-ide-2026-09-25_16-35-phase8-test-writer-subagent-mode-setup.png" width="220" alt="IBM Bob setting up the Phase 8 Test Writer subagent mode"><br/><sub>Phase 8: Test Writer subagent mode</sub></td>
-<td align="center"><sub>Bobalytics ranking screenshots removed — they showed other teams' names in the same leaderboard table. Numbers only (see the KPI table above).</sub></td>
+<td><img src="bob-evidence/bob-images/c/21-bob-ide-2026-09-25_17-49-project-testmind-ai-phase-status-table.png" width="220" alt="IBM Bob's phase-status table for this project"><br/><sub>Bob tracking this project's phase status</sub></td>
 <td align="center"><a href="bob-evidence/bob-images/"><sub>26 screenshots total →<br/>bob-evidence/bob-images/</sub></a></td>
 </tr>
 </table>
