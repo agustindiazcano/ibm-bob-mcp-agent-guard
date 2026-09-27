@@ -159,7 +159,6 @@ export function TechStackPills() {
       </span>
 
       <span className={styles.pill} title="IBM watsonx.ai Provider">
-        <IbmLogo />
         <span>IBM watsonx.ai</span>
       </span>
 
@@ -169,7 +168,7 @@ export function TechStackPills() {
       </span>
 
       <span className={styles.pill} title="Google Antigravity">
-        <AntigravityIcon />
+        <VertexAiIcon />
         <span>Antigravity</span>
       </span>
 
