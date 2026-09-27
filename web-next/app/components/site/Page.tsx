@@ -1,9 +1,9 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { SlideIndicator } from "./SlideIndicator";
 import styles from "./Page.module.css";
 
-// Layout primitives for the explainer pages (/project, /technical,
-// /ai-development) and the /results shell. Presentation only.
+// Layout primitives for the explainer pages and slide showcases.
 
 export function PageShell({ children }: { children: ReactNode }) {
   return <main className={styles.shell}>{children}</main>;
@@ -19,7 +19,10 @@ type HeaderProps = {
 export function PageHeader({ eyebrow, title, lead, actions }: HeaderProps) {
   return (
     <header className={styles.header}>
-      <span className={styles.eyebrow}>{eyebrow}</span>
+      <div className={styles.eyebrowRow}>
+        <span className={styles.eyebrow}>{eyebrow}</span>
+        <SlideIndicator />
+      </div>
       <h1 className={styles.title}>{title}</h1>
       <p className={styles.lead}>{lead}</p>
       {actions && <div className={styles.actions}>{actions}</div>}

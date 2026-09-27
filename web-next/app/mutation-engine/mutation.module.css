@@ -1,0 +1,83 @@
+.operatorGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.opCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.opHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.opName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.codeDiff {
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--border);
+}
+
+.codeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.diffMinus {
+  color: #ef4444;
+  font-weight: 700;
+  width: 12px;
+}
+
+.diffPlus {
+  color: #22c55e;
+  font-weight: 700;
+  width: 12px;
+}
+
+.codeRow code {
+  color: #ffffff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.opFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  padding-top: 6px;
+}
+
+.killLabel {
+  color: var(--text-muted);
+}
+
+.killValue {
+  font-weight: 700;
+  color: #22c55e;
+  font-family: var(--font-geist-mono), monospace;
+}

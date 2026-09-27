@@ -11,6 +11,7 @@ import { SummaryPanel } from "./components/SummaryPanel";
 import { FixResultPanel } from "./components/FixResultPanel";
 import { EndpointsList } from "./components/EndpointsList";
 import { Card } from "./components/Card";
+import { SlideIndicator } from "./components/site/SlideIndicator";
 import { useConfig } from "./context/ConfigContext";
 import styles from "./page.module.css";
 import { fetchAnalyze, fetchSummary, streamFix, streamUrl } from "./lib/api";
@@ -149,7 +150,10 @@ export default function Home() {
   return (
     <main className={styles.main}>
       <header className={styles.header}>
-        <h1 className={styles.title}>TestMind AI</h1>
+        <div className={styles.headerRow}>
+          <h1 className={styles.title}>TestMind AI</h1>
+          <SlideIndicator />
+        </div>
         <p className={styles.subtitle}>
           Self-Healing Test Suites & Quality Gate for Python · Measures real test effectiveness with AST mutation testing & closes coverage gaps with AI.
         </p>
