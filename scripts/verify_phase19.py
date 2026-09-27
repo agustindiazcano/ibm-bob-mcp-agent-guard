@@ -326,3 +326,56 @@ sys.exit(0)
     ok = rc == 0
     print(out.rstrip() if ok else out[-3000:])
     return ok
+
+
+def check_phase19_e3() -> bool:
+    """Phase 19 E3: eval-fixtures/ledger -- a held-out fixture the fix loop's
+    prompts/guardrails were never tuned on. Credential-free: measures the
+    weak tests/ baseline and the reference-tests/ ceiling with the real
+    engine (no AI call), twice each, and asserts each pair is deterministic.
+    Establishes the ground-truth numbers eval_fixloop.py's gap-closure
+    metric needs -- see docs/EVAL_GUARDRAILS_IMPLEMENTATION.md Step 10."""
+    print("=== Phase 19 E3: held-out fixture eval-fixtures/ledger ===")
+    script = """
+import shutil, tempfile
+from pathlib import Path
+from repoguard_engine.core import measure_coverage
+from repoguard_engine.mutation import run_mutation
+
+FIXTURE = Path('eval-fixtures/ledger')
+
+def measure(tests_source):
+    tmp = Path(tempfile.mkdtemp(prefix='ledger-e3-'))
+    repo = tmp / 'ledger'
+    shutil.copytree(FIXTURE, repo, ignore=shutil.ignore_patterns('reference-tests'))
+    if tests_source != 'tests':
+        for f in (repo / 'tests').glob('*.py'):
+            if f.name != '__init__.py':
+                f.unlink()
+        for f in (FIXTURE / tests_source).glob('*.py'):
+            (repo / 'tests' / f.name).write_text(f.read_text(encoding='utf-8'), encoding='utf-8')
+    cov = measure_coverage(repo)
+    mut = run_mutation(repo)
+    shutil.rmtree(tmp, ignore_errors=True)
+    return (cov.percent, cov.covered_lines, cov.total_lines, mut.score, mut.killed, mut.total)
+
+baseline_1 = measure('tests')
+baseline_2 = measure('tests')
+assert baseline_1 == baseline_2, f'baseline not deterministic: {baseline_1} != {baseline_2}'
+print(f'  baseline (weak tests/): coverage {baseline_1[0]}% ({baseline_1[1]}/{baseline_1[2]}), '
+      f'mutation {baseline_1[3]}% ({baseline_1[4]}/{baseline_1[5]})')
+
+ceiling_1 = measure('reference-tests')
+ceiling_2 = measure('reference-tests')
+assert ceiling_1 == ceiling_2, f'ceiling not deterministic: {ceiling_1} != {ceiling_2}'
+print(f'  ceiling  (reference-tests/): coverage {ceiling_1[0]}% ({ceiling_1[1]}/{ceiling_1[2]}), '
+      f'mutation {ceiling_1[3]}% ({ceiling_1[4]}/{ceiling_1[5]})')
+
+assert ceiling_1[3] > baseline_1[3], 'reference suite must kill more mutants than the weak baseline'
+print('OK: both deterministic across 2 runs, ceiling > baseline')
+"""
+    rc, out = _run_script(script, timeout=300)
+    ok = rc == 0
+    print(out.rstrip() if ok else out[-3000:])
+    print(f"  E3 held-out fixture -> {'PASS' if ok else 'FAIL'}")
+    return ok

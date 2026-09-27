@@ -189,17 +189,20 @@ TestMind AI está estrictamente configurado con guardrails de integridad para ne
 | **G5: Integrity & Status** | Falsos positivos de reporte; publicación de PR sin incremento real de mutación. | `FixResult.status` (`accepted`, `partial`, `rejected`), registro de integridad y evidencia persistida obligatoriamente. | ✅ **PASS** (`fix-loop-stub` en CI) |
 | **G6: Source-only Coverage** | Inflación artificial de coverage contabilizando las líneas de los propios tests (`tests/`). | Medición estricta sobre código de producción (`shop/`): 60.2649% real (91/151 líneas), descartando `tests/`. | ✅ **PASS** (`quality-gate` en CI, 30s) |
 | **O1: Structured Run Record** | Pérdida de trazabilidad o alucinación de reportes de ejecución. | Generación atómica de `repoguard-out/fix_run.json` con registro detallado de cada tool call y decisión. | ✅ **PASS** (`fix-loop-stub` en CI) |
+| **E2: Fix-Loop Evaluation** | Falta de reproducibilidad y sesgos en evaluación de modelos de IA. | Benchmark repetido (`scripts/eval_fixloop.py`, K=3) con métricas de ΔMS, cierre de brechas, validez y violaciones min/med/max. | 🟡 Listo para corridas con credenciales |
+| **E3: Held-out Fixture** | Sobreajuste al dominio de demo-repo (e-commerce). | Fixture independiente `eval-fixtures/ledger/` (ledger bancario). Baseline: 52.17% cov, 19.18% mut (14/73); Techo: 100% cov, 69.86% mut (51/73). | ✅ **PASS** (`phase19-e3` en CI) |
 
 ### Resumen de la Suite de Tests en CI (GitHub Actions)
 
 | Job de CI | Chequeos que ejecuta | Resultado | Tiempo |
 |---|---|---|---|
-| **`guardrails-phase19`** | G1 (`phase19-env`), G2 (`phase19-policy`), G3 (`phase19-accept`) | ✅ **PASS** | 40s |
 | **`quality-gate`** | Phase 0 skeleton, Phase 7 compact MCP, `demo-repo` pytest, 60.0% coverage gate | ✅ **PASS** | 30s |
-| **`mutation-determinism`** | Phase 3 AST mutation determinism (dos pasadas idénticas sobre 79 mutantes) | ✅ **PASS** | 2m 17s |
-| **`store`** | Phase 17: Persistencia SQLite + PostgreSQL 16 real, endpoints, rutas de historial | ✅ **PASS** | 3m 23s |
-| **`fix-loop-stub`** | Phase 18 S0: Loop secuencial con `ScriptedProvider`, herramientas y evidencia | ✅ **PASS** | 3m 33s |
-| **`engine-parallel-mutation`** | Phase 18 S1 parallel workers, single-file scope, Phase 17/18 per-mutant records | ✅ **PASS** | 3m 35s |
+| **`guardrails-phase19`** | G1 (`phase19-env`), G2 (`phase19-policy`), G3 (`phase19-accept`), E3 (`phase19-e3` ledger) | ✅ **PASS** | 3m 0s |
+| **`mutation-determinism`** | Phase 3 AST mutation determinism (dos pasadas idénticas sobre 79 mutantes) | ✅ **PASS** | 2m 5s |
+| **`store`** | Phase 17: SQLite + PostgreSQL 16 real, endpoints, mutants/tests tables, rutas de historial | ✅ **PASS** | 4m 36s |
+| **`fix-loop-stub`** | Phase 18 S0: Loop secuencial con `ScriptedProvider`, herramientas y evidencia | ✅ **PASS** | 3m 6s |
+| **`engine-parallel-mutation`** | Phase 18 S1 parallel workers, single-file scope, Phase 17/18 per-mutant records | ✅ **PASS** | 2m 41s |
+| **`swarm-phase18`** | Phase 18 S4: Swarm lane state machine, thread pool, blackboard, runner multi-agente | ✅ **PASS** | 4m 16s |
 | **`frontend-ci`** | Linting y build de producción de Next.js (`web-next`) | ✅ **PASS** | 26s |
 
 ## Quick start

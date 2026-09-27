@@ -194,6 +194,7 @@ def run_fix_loop(
     gate_threshold: float = 80.0,
     publish: bool = False,
     provider: str | None = None,
+    model_id: str | None = None,
     on_event: Callable[[str, dict], None] | None = None,
     model: ChatProvider | None = None,
 ) -> FixResult:
@@ -211,6 +212,9 @@ def run_fix_loop(
 
     provider: forwarded to ai_providers.get_provider() (None reads
     REPOGUARD_AI_PROVIDER, defaulting to "vertex").
+
+    model_id: forwarded to ai_providers.get_provider() alongside provider
+    (None uses that provider module's own default). Ignored when model is set.
 
     on_event: optional progress callback, called as on_event(type, data) at
     each stage boundary (web/fix_job.py streams these to the browser). It
@@ -230,7 +234,7 @@ def run_fix_loop(
     started = time.perf_counter()
     emit = on_event or (lambda _type, _data: None)
     if model is None:
-        model = get_provider(provider=provider)
+        model = get_provider(provider=provider, model_id=model_id)
 
     repo = str(Path(repo_path).resolve())
     emit("baseline_start", {})
