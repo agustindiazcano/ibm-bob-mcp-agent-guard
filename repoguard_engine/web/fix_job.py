@@ -41,7 +41,7 @@ _COPY_IGNORE = shutil.ignore_patterns(
 def check_token(authorization: str | None) -> None:
     """Raise 503 if Autofix is disabled on this server, 401 if the bearer
     token is missing or wrong."""
-    expected = os.environ.get("REPOGUARD_FIX_TOKEN", "")
+    expected = os.environ.get("REPOGUARD_FIX_TOKEN", "").strip()
     if not expected:
         raise HTTPException(status_code=503, detail="Autofix is disabled on this server (REPOGUARD_FIX_TOKEN is not set).")
     scheme, _, supplied = (authorization or "").partition(" ")
