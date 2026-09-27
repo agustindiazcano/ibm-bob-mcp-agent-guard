@@ -678,6 +678,94 @@ def check_autofix_rate_limit() -> bool:
     return ok1 and ok2
 
 
+_ACTIVE_RUN_MEMORY = r"""
+import os
+os.environ.pop('REPOGUARD_DATABASE_URL', None)
+from fastapi import HTTPException
+from repoguard_engine.web.rate_limit import try_claim_run, release_run
+
+try_claim_run('1.1.1.1')
+try:
+    try_claim_run('1.1.1.1')
+    raise AssertionError('a 2nd claim for the same IP, not yet released, should 409')
+except HTTPException as exc:
+    assert exc.status_code == 409, exc.detail
+
+try_claim_run('2.2.2.2')  # a different IP is never blocked by 1.1.1.1's claim
+release_run('1.1.1.1')
+try_claim_run('1.1.1.1')  # released -> claimable again
+release_run('1.1.1.1')
+release_run('2.2.2.2')
+release_run('nobody-ever-claimed-this')  # release on an unclaimed IP is a no-op, not an error
+print('OK')
+"""
+
+_ACTIVE_RUN_DB = r"""
+import os, tempfile
+from pathlib import Path
+tmp = tempfile.mkdtemp(prefix='activerun-db-')
+os.environ['REPOGUARD_DATABASE_URL'] = f'sqlite:///{Path(tmp) / "history.db"}'
+os.environ['REPOGUARD_FIX_MAX_RUN_MINUTES'] = '20'
+from fastapi import HTTPException
+from repoguard_engine.web.rate_limit import try_claim_run, release_run
+from repoguard_engine.store.db import get_engine, init_db
+from repoguard_engine.store.models import fix_active_runs
+from sqlalchemy import select, func
+
+try_claim_run('3.3.3.3')
+try:
+    try_claim_run('3.3.3.3')
+    raise AssertionError('a 2nd claim for the same IP, not yet released, should 409')
+except HTTPException as exc:
+    assert exc.status_code == 409, exc.detail
+
+engine = get_engine(os.environ['REPOGUARD_DATABASE_URL'])
+init_db(engine)
+with engine.begin() as conn:
+    n = conn.execute(select(func.count()).select_from(fix_active_runs)).scalar_one()
+assert n == 1, f'expected exactly 1 active-run row, got {n}'
+
+release_run('3.3.3.3')
+with engine.begin() as conn:
+    n = conn.execute(select(func.count()).select_from(fix_active_runs)).scalar_one()
+assert n == 0, f'release_run must delete the row, {n} left'
+
+try_claim_run('3.3.3.3')  # claimable again after release
+print('OK')
+"""
+
+_ACTIVE_RUN_STALE = r"""
+import os, tempfile
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+tmp = tempfile.mkdtemp(prefix='activerun-stale-')
+os.environ['REPOGUARD_DATABASE_URL'] = f'sqlite:///{Path(tmp) / "history.db"}'
+os.environ['REPOGUARD_FIX_MAX_RUN_MINUTES'] = '20'
+from fastapi import HTTPException
+from repoguard_engine.web.rate_limit import try_claim_run
+from repoguard_engine.store.db import get_engine, init_db
+from repoguard_engine.store.models import fix_active_runs
+from sqlalchemy import insert
+
+engine = get_engine(os.environ['REPOGUARD_DATABASE_URL'])
+init_db(engine)
+# Simulate a worker that crashed without releasing: a claim well past the timeout.
+stale = datetime.now(timezone.utc) - timedelta(minutes=999)
+with engine.begin() as conn:
+    conn.execute(insert(fix_active_runs).values(ip='4.4.4.4', started_at=stale))
+
+try_claim_run('4.4.4.4')  # must reclaim a stale row instead of 409ing forever
+print('OK')
+"""
+
+
+def check_autofix_active_run() -> bool:
+    ok1 = _check("Autofix per-IP lock: in-memory fallback + expiry", _ACTIVE_RUN_MEMORY, timeout=30)
+    ok2 = _check("Autofix per-IP lock: durable via SQLite (claim/409/release)", _ACTIVE_RUN_DB, timeout=60)
+    ok3 = _check("Autofix per-IP lock: a stale claim (crashed worker) is reclaimed", _ACTIVE_RUN_STALE, timeout=30)
+    return ok1 and ok2 and ok3
+
+
 def _check(title: str, script: str, timeout: int) -> bool:
     print(f"=== {title} ===")
     rc, out = _run_script(script, timeout)

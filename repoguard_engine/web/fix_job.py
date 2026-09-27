@@ -6,7 +6,9 @@ doesn't need but an HTTP endpoint does:
 
 - Rate-limited, not token-gated (see rate_limit.py) -- each run spends
   AI-provider quota for minutes on a public, unauthenticated service.
-- One run at a time per process (409 otherwise).
+- One run at a time *per IP*, not one for the whole server (see
+  rate_limit.py's try_claim_run/release_run) -- 409 if that same IP already
+  has a run going; a different visitor is never blocked by it.
 - Never touches the target repo. The loop runs on a temp copy, never
   publishes (no git/gh), and the copy is deleted afterwards; the tests it
   wrote come back in the final `done` event instead.
@@ -25,9 +27,8 @@ import threading
 from pathlib import Path
 from typing import Iterator
 
-from fastapi import HTTPException
+from .rate_limit import release_run, try_claim_run
 
-_run_lock = threading.Lock()
 _HEARTBEAT_SECONDS = 15
 _COPY_IGNORE = shutil.ignore_patterns(
     ".git", "repoguard-out", "watson-evidence", "__pycache__", ".pytest_cache",
@@ -35,24 +36,25 @@ _COPY_IGNORE = shutil.ignore_patterns(
 )
 
 
-def start_fix_stream(repo_path: str, gate_threshold: float, provider: str | None, model_id: str | None = None) -> Iterator[str]:
-    """Claim the single run slot, start the fix loop on a sandbox copy in a
+def start_fix_stream(
+    repo_path: str, gate_threshold: float, provider: str | None, model_id: str | None, ip: str,
+) -> Iterator[str]:
+    """Claim this IP's run slot, start the fix loop on a sandbox copy in a
     worker thread, and return an NDJSON line iterator over its events.
 
-    Raises 409 if a run is already in progress. The worker (not the
-    iterator) owns the slot, so it is released even if the client
-    disconnects before reading anything.
+    Raises 409 if this IP already has a run in progress (try_claim_run).
+    The worker (not the iterator) owns the slot, so it is released even if
+    the client disconnects before reading anything.
     """
-    if not _run_lock.acquire(blocking=False):
-        raise HTTPException(status_code=409, detail="An Autofix run is already in progress on this server; try again when it finishes.")
+    try_claim_run(ip)  # raises 409 if this IP already has one going
     events: queue.Queue[dict | None] = queue.Queue()
     try:
         worker = threading.Thread(
-            target=_run, args=(repo_path, gate_threshold, provider, model_id, events), daemon=True, name="repoguard-fix"
+            target=_run, args=(repo_path, gate_threshold, provider, model_id, ip, events), daemon=True, name="repoguard-fix"
         )
         worker.start()
     except BaseException:
-        _run_lock.release()
+        release_run(ip)
         raise
     return _drain(events)
 
@@ -72,7 +74,7 @@ def _drain(events: "queue.Queue[dict | None]") -> Iterator[str]:
 
 
 def _run(
-    repo_path: str, gate_threshold: float, provider: str | None, model_id: str | None,
+    repo_path: str, gate_threshold: float, provider: str | None, model_id: str | None, ip: str,
     events: "queue.Queue[dict | None]",
 ) -> None:
     """Worker body: copy, run the loop, report the tests it wrote, clean up."""
@@ -114,7 +116,7 @@ def _run(
     finally:
         if sandbox is not None:
             shutil.rmtree(sandbox, ignore_errors=True)
-        _run_lock.release()
+        release_run(ip)
         events.put(None)
 
 

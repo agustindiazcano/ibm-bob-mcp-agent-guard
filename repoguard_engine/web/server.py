@@ -227,10 +227,9 @@ class FixRequest(BaseModel):
 def api_fix(body: FixRequest, request: Request) -> StreamingResponse:
     """Run the AI fix loop on a sandbox copy of repo_path, streaming NDJSON
     progress events and a final `done` (or `error`) event. Rate-limited per
-    IP and globally (see web/rate_limit.py) instead of token-gated -- each
-    call spends real AI-provider quota, but a public demo shouldn't need a
-    shared secret to try it. One run at a time, never modifies repo_path --
-    see web/fix_job.py."""
+    IP and globally, and one run at a time *per IP* -- not a shared secret,
+    not a single server-wide slot every visitor queues behind (see
+    web/rate_limit.py). Never modifies repo_path -- see web/fix_job.py."""
     from .fix_job import start_fix_stream
     from .rate_limit import check_rate_limit, client_ip
 
@@ -239,7 +238,7 @@ def api_fix(body: FixRequest, request: Request) -> StreamingResponse:
     if not Path(body.repo_path).is_dir():
         raise HTTPException(status_code=400, detail=f"repo_path does not exist or is not a directory: {body.repo_path}")
     return StreamingResponse(
-        start_fix_stream(body.repo_path, body.gate_threshold, body.provider, body.model_id),
+        start_fix_stream(body.repo_path, body.gate_threshold, body.provider, body.model_id, ip),
         media_type="application/x-ndjson",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
