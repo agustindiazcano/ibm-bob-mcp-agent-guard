@@ -65,6 +65,11 @@
   text-underline-offset: 3px;
 }
 
+.techSection {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
 .bottom {
   display: flex;
   flex-wrap: wrap;
@@ -75,6 +80,18 @@
   border-top: 1px solid var(--border);
   color: var(--text-muted);
   font-size: 13px;
+}
+
+.authorLink {
+  color: #ffffff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 600;
+  transition: opacity 0.15s ease;
+}
+
+.authorLink:hover {
+  opacity: 0.85;
 }
 
 .edition {

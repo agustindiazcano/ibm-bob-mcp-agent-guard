@@ -53,9 +53,13 @@
   align-items: flex-start;
 }
 
-@media (min-width: 720px) {
+@media (min-width: 860px) {
   .controlsRow {
-    grid-template-columns: 140px minmax(0, 1fr) auto;
+    grid-template-columns: 135px minmax(260px, 1fr) auto;
+    align-items: flex-start;
+  }
+  .check {
+    margin-top: 24px;
   }
 }
 

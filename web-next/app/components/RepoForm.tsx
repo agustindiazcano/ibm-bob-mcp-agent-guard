@@ -26,6 +26,10 @@ export function RepoForm({ values, onChange, disabled }: Props) {
               content="Absolute or relative path to a Python project on the server machine containing pytest tests."
               ariaLabel="About repo path"
             />
+            <Tooltip
+              content="Target Environment & Scope: Supports Python ≥ 3.10 with pytest and optional FastAPI endpoint inspection. Best suited for focused microservices, packages, or modules. For large codebases, run Gate or keep mutation testing unchecked to avoid long execution times."
+              ariaLabel="About environment and scope"
+            />
           </span>
           <input
             className={styles.input}
@@ -72,6 +76,26 @@ export function RepoForm({ values, onChange, disabled }: Props) {
           <span className={styles.fieldNote}>Target coverage for PASS/FAIL</span>
         </label>
 
+        <div className={styles.field}>
+          <span>
+            Multicloud AI Provider & Model
+            <Tooltip
+              content="Choose which cloud AI provider and LLM powers narrative summaries and the self-healing fix loop. Google Vertex AI runs Gemini Flash 3.8 / 3.5 (global endpoint). IBM watsonx runs Mistral/Llama."
+              ariaLabel="About AI providers"
+            />
+          </span>
+          <select
+            className={styles.select}
+            value={values.provider ?? "vertex"}
+            onChange={(e) => onChange({ ...values, provider: e.target.value as "vertex" | "watsonx" })}
+          >
+            <option value="vertex">Google Vertex AI · Gemini 3.8 Flash (Default)</option>
+            <option value="vertex">Google Vertex AI · Gemini 3.5 Flash</option>
+            <option value="watsonx">IBM watsonx.ai · Mistral Small 24B / Llama 3.3</option>
+          </select>
+          <span className={styles.fieldNote}>Gemini 3.8 Flash active as default.</span>
+        </div>
+
         <label className={styles.check}>
           <input
             type="checkbox"
@@ -87,32 +111,6 @@ export function RepoForm({ values, onChange, disabled }: Props) {
           </span>
         </label>
       </div>
-
-      <div className={styles.field}>
-        <span>
-          Multicloud AI Provider & Model
-          <Tooltip
-            content="Choose which cloud AI provider and LLM powers narrative summaries and the self-healing fix loop. Google Vertex AI runs Gemini Flash 3.8 / 3.5 (global endpoint). IBM watsonx runs Mistral/Llama."
-            ariaLabel="About AI providers"
-          />
-        </span>
-        <select
-          className={styles.select}
-          value={values.provider ?? "vertex"}
-          onChange={(e) => onChange({ ...values, provider: e.target.value as "vertex" | "watsonx" })}
-        >
-          <option value="vertex">Google Vertex AI · Gemini 3.8 Flash (Default)</option>
-          <option value="vertex">Google Vertex AI · Gemini 3.5 Flash</option>
-          <option value="watsonx">IBM watsonx.ai · Mistral Small 24B / Llama 3.3</option>
-        </select>
-        <span className={styles.fieldNote}>Gemini 3.8 Flash active as default provider.</span>
-      </div>
-
-      <div className={styles.infoBanner}>
-        <strong>Target Environment & Scope:</strong> Supports Python ≥ 3.10 with <code>pytest</code> and optional FastAPI endpoint inspection. Best suited for focused microservices, packages, or modules. For large codebases, run <strong>Gate (Fast)</strong> or keep mutation testing unchecked to avoid long execution times.
-      </div>
-
     </fieldset>
   );
 }
-
