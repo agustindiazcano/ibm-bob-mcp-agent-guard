@@ -126,7 +126,6 @@ export function CriticReviewCard({ note }: Props) {
     <div className={styles.card}>
       <div className={styles.header}>
         <div className={styles.targetFile}>
-          <span className={styles.fileIcon}>🎯</span>
           <span>Target Module: {review.targetFile}</span>
         </div>
         <div>
@@ -142,7 +141,7 @@ export function CriticReviewCard({ note }: Props) {
           )}
           {review.verdict === "REVIEW" && (
             <span className={styles.badgeReview}>
-              <span>ℹ️</span> ADVISORY
+              ADVISORY
             </span>
           )}
         </div>
@@ -162,7 +161,6 @@ export function CriticReviewCard({ note }: Props) {
         {review.sections.map((section, idx) => (
           <div key={idx} className={styles.section}>
             <div className={styles.sectionTitle}>
-              <span>📋</span>
               <span>{section.title}</span>
             </div>
             <ul className={styles.list}>
@@ -213,7 +211,6 @@ export function CriticReviewCard({ note }: Props) {
         {review.verdict === "APPROVED" && (
           <div className={styles.verdictBannerApproved}>
             <div className={styles.verdictText}>
-              <span>🛡️</span>
               <span>CRITIC VERDICT: APPROVED</span>
             </div>
             <span className={styles.verdictSub}>

@@ -146,7 +146,6 @@ export function CodeViewer({ files, initialActiveIndex = 0 }: Props) {
                   className={`${styles.tab} ${isActive ? styles.tabActive : ""}`}
                   onClick={() => setActiveIndex(idx)}
                 >
-                  <span className={styles.fileIcon}>🐍</span>
                   <span>{fileName}</span>
                   <span
                     className={`${styles.statusPill} ${
@@ -177,10 +176,7 @@ export function CodeViewer({ files, initialActiveIndex = 0 }: Props) {
                 <span>Copied!</span>
               </>
             ) : (
-              <>
-                <span>📋</span>
-                <span>Copy Code</span>
-              </>
+              <span>Copy Code</span>
             )}
           </button>
         </div>

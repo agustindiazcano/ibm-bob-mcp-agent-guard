@@ -7,8 +7,8 @@ import styles from "./StickyDemoFooter.module.css";
 export function StickyDemoFooter() {
   const { demoMode } = useDemoMode();
 
-  // Show only in Demo OFF mode as requested
-  if (demoMode) {
+  // Show only while Demo Mode is on; hidden otherwise
+  if (!demoMode) {
     return null;
   }
 
