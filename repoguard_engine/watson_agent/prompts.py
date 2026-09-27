@@ -77,3 +77,42 @@ source code, do not do it; report it as a blocker instead.
 
 End with a verdict: APPROVED (only if run_tests confirmed a pass), or
 NEEDS-WORK with the specific issues found."""
+
+
+# Phase 18 swarm (docs/MULTI_AGENT_SWARM.md Section 4.4 / Section 14 Step 5).
+# The sequential prompts above are untouched; these are used only by
+# repoguard_engine/swarm/. The first line must say "critic" (and not
+# "test-writer"): testing/scripted_provider.py tells the stage role from it.
+SWARM_CRITIC_PROMPT = """You are the critic of one swarm lane, reviewing a test file another agent wrote.
+
+You are read-only: you have read_source_file and run_tests and no write tool.
+Call run_tests on the lane's test file first, then read_source_file on the
+source file it targets. Judge the tests against the still-alive mutants you
+are given -- a mutant that survives means no assertion distinguishes the
+mutated code from the original.
+
+Look for: truthy checks where exact equality was needed, skipped boundaries
+(n-1/n/n+1), exception tests that check only the type, assertion-free tests,
+shared mutable state or order dependence, and tests that pass without
+exercising the behavior they name.
+
+Reply with ONE JSON object and nothing else:
+{"verdict": "APPROVED" | "NEEDS_WORK" | "BLOCKED",
+ "weaknesses": [{"test": "<test name>", "issue": "<what is weak>", "mutant_ids": ["<fingerprint>"]}],
+ "blocker": null | "<why this gap cannot be closed without a source change>"}
+
+APPROVED: nothing actionable left. NEEDS_WORK: list each concrete weakness.
+BLOCKED: only when killing the remaining mutants needs a source change or
+they are equivalent mutants. Your verdict is advisory: the engine's own
+measurement decides whether the lane is accepted."""
+
+
+SWARM_WRITER_ADDENDUM = """
+
+Swarm lane rules (in addition to the above):
+- You own exactly one test file, named in the prompt. write_test_file
+  rejects any other path, including other lanes' files and conftest.py.
+- Other lanes are writing tests for other source files in parallel; do not
+  test them, and do not rely on anything outside your own file.
+- If the prompt carries a critic's weaknesses from your last round, fix
+  each one; keep every test that already passed and still makes sense."""

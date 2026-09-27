@@ -122,6 +122,29 @@ def approving_critic(_role: str, messages: list[dict]) -> dict:
     return _text(f"NEEDS-WORK: run_tests failed (exit_code={result.get('exit_code')}).")
 
 
+def json_critic(*verdicts: str, weakness: str = "scripted weakness") -> Script:
+    """Swarm critic script (swarm/critic.py's JSON contract): run_tests on the
+    lane's file, then answer the next verdict in `verdicts` (the last one
+    repeats), with one weakness naming `weakness` on NEEDS_WORK. Anything that
+    isn't a verdict name is sent back verbatim, to exercise the parser."""
+    answers = list(verdicts) or ["APPROVED"]
+    state = {"stage": 0}
+    lock = threading.Lock()
+
+    def script(_role: str, messages: list[dict]) -> dict:
+        if _assistant_turns(messages) == 0:
+            return _tool_call("run_tests")
+        with lock:
+            answer = answers[min(state["stage"], len(answers) - 1)]
+            state["stage"] += 1
+        if answer not in ("APPROVED", "NEEDS_WORK", "BLOCKED"):
+            return _text(answer)
+        weaknesses = [{"test": "test_scripted", "issue": weakness, "mutant_ids": []}] if answer == "NEEDS_WORK" else []
+        return _text(json.dumps({"verdict": answer, "weaknesses": weaknesses, "blocker": None}))
+
+    return script
+
+
 def _role_of(system_prompt: str) -> str:
     first_line = system_prompt.splitlines()[0] if system_prompt else ""
     if "test-writer" in first_line:

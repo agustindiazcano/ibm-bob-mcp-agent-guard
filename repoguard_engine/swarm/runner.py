@@ -33,18 +33,21 @@ class RunResult:
 def run_lanes(
     repo: str | Path,
     plan: Plan,
-    provider_factory: Callable[[], ChatProvider],
+    provider_factory: Callable[[str], ChatProvider],
     *,
     run_id: str,
     workers: int = 4,
     rounds: int = 2,
     mutation_workers: int | None = None,
+    on_event: Callable[[dict], None] | None = None,
 ) -> RunResult:
+    """Run every lane of `plan` to a final outcome. on_event receives each
+    timeline.jsonl record as it's written (web/fix_job.py streams them)."""
     repo = Path(repo).resolve()
     mutation_workers = mutation_workers or os.cpu_count() or 1
     rd = blackboard.run_dir(repo, run_id)
     blackboard.write_plan(rd, {"lanes": [lane.module for lane in plan.lanes], "tests_manifest": plan.tests_manifest})
-    timeline = blackboard.Timeline(rd)
+    timeline = blackboard.Timeline(rd, listener=on_event)
 
     outcomes: dict[str, LaneOutcome] = {}
     with ExitStack() as stack:
