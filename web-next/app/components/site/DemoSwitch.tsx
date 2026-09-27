@@ -8,7 +8,6 @@ export function DemoSwitch() {
 
   return (
     <div className={styles.container} title={`Demo Mode: ${demoMode ? "ON" : "OFF"}`}>
-      <span className={styles.label}>Demo</span>
       <button
         type="button"
         role="switch"
