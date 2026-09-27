@@ -1,53 +1,25 @@
 :root {
-  --bg: #f6f7f9;
-  --surface: #ffffff;
-  --surface-muted: #f1f3f6;
-  --border: #e2e5ea;
-  --text: #16181d;
-  --text-muted: #5b6270;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --accent-soft: #e8efff;
+  --bg: #0d0f13;
+  --surface: #15181e;
+  --surface-muted: #1b1f26;
+  --border: #2a2f38;
+  --text: #e8eaee;
+  --text-muted: #9aa2b1;
+  --accent: #5b8cff;
+  --accent-hover: #7aa2ff;
+  --accent-soft: #1b2640;
   --accent-text: #ffffff;
-  /* Second chart series (mutation, vs. --accent for coverage). Validated as
-     a categorical pair against --accent with dataviz's palette validator:
-     CVD ΔE 29.9, normal-vision ΔE 38.5, both well clear of the 8/15 floors. */
-  --series-2: #eb6834;
-  --pass: #15803d;
-  --pass-soft: #e7f6ec;
-  --fail: #b91c1c;
-  --fail-soft: #fdecec;
-  --warn: #a16207;
-  --warn-soft: #fdf5e1;
-  --bar-track: #e9ecf1;
+  --series-2: #d95926;
+  --pass: #4ade80;
+  --pass-soft: #12281b;
+  --fail: #f87171;
+  --fail-soft: #2d1515;
+  --warn: #facc15;
+  --warn-soft: #2a2410;
+  --bar-track: #262b33;
   --radius: 10px;
-  --shadow: 0 1px 2px rgb(16 24 40 / 0.05);
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0d0f13;
-    --surface: #15181e;
-    --surface-muted: #1b1f26;
-    --border: #2a2f38;
-    --text: #e8eaee;
-    --text-muted: #9aa2b1;
-    --accent: #5b8cff;
-    --accent-hover: #7aa2ff;
-    --accent-soft: #1b2640;
-    --accent-text: #0d0f13;
-    --series-2: #d95926;
-    --pass: #4ade80;
-    --pass-soft: #12281b;
-    --fail: #f87171;
-    --fail-soft: #2d1515;
-    --warn: #facc15;
-    --warn-soft: #2a2410;
-    --bar-track: #262b33;
-    --shadow: none;
-    color-scheme: dark;
-  }
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
 }
 
 * {

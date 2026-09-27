@@ -248,15 +248,9 @@
 .autofixGlow {
   position: relative;
   border-color: #22c55e !important;
-  color: #15803d !important;
+  color: #4ade80 !important;
   background: var(--pass-soft) !important;
   animation: auraGreen 1.8s ease-in-out infinite !important;
-}
-
-@media (prefers-color-scheme: dark) {
-  .autofixGlow {
-    color: #4ade80 !important;
-  }
 }
 
 @keyframes spin {
