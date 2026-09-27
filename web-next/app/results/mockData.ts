@@ -23,7 +23,14 @@ export const MOCK_PROJECT: Project = {
   created_at: "2026-09-20T14:00:00Z",
 };
 
-export const MOCK_PROJECTS: Project[] = [MOCK_PROJECT];
+// Two placeholder projects with no runs yet -- picking them shows the same
+// honest "no runs yet" state the real backend gives an empty project, not
+// fabricated data. Only the last, MOCK_PROJECT, has a real measured story.
+export const MOCK_PROJECTS: Project[] = [
+  { slug: "acme-checkout", repo_url: "https://github.com/example/acme-checkout", created_at: "2026-09-25T10:00:00Z" },
+  { slug: "fintech-core", repo_url: "https://github.com/example/fintech-core", created_at: "2026-09-26T10:00:00Z" },
+  MOCK_PROJECT,
+];
 
 // The real before -> after story: 20.25% (16/79) -> 89.87% (71/79) mutation,
 // 60.3% -> 100% coverage (AGENTS.md §7), spread across a few commits so the

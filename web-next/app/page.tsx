@@ -184,10 +184,10 @@ export default function Home() {
 
   // The summary is fetched here rather than in a SummaryPanel effect because
   // StrictMode runs effects twice in dev, which doubled the paid watsonx.ai call.
-  async function loadSummary(data: AnalyzeResponse, run: number, provider?: string) {
+  async function loadSummary(data: AnalyzeResponse, run: number, provider?: string, modelId?: string) {
     let next: SummaryResponse;
     try {
-      next = await fetchSummary(data, provider);
+      next = await fetchSummary(data, provider, modelId);
     } catch (err) {
       next = {
         ok: false,
@@ -226,7 +226,7 @@ export default function Home() {
       const data = await fetchAnalyze({ ...values, gateThreshold, mutation });
       setResult(data);
       // Not awaited: the summary must never hold up or fail the dashboard.
-      void loadSummary(data, run, values.provider);
+      void loadSummary(data, run, values.provider, values.modelId);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

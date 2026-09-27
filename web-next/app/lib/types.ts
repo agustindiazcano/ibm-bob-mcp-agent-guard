@@ -48,11 +48,17 @@ export type StreamEvent = {
 
 export type AIProvider = "vertex" | "watsonx";
 
+// Both live-verified against real GCP projects (docs/VERTEX_SETUP.md) --
+// gemini-3.8-flash is the provider's own default, gemini-3.5-flash the
+// other real, tested option. Only meaningful when provider is "vertex".
+export type VertexModel = "gemini-3.8-flash" | "gemini-3.5-flash";
+
 export type RepoFormValues = {
   repoPath: string;
   mutation: boolean;
   gateThreshold: number;
   provider?: AIProvider;
+  modelId?: VertexModel;
   swarm?: boolean;
 };
 

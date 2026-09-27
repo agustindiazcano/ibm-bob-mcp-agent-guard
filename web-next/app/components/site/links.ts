@@ -114,6 +114,14 @@ export const DEMO_SLIDES: SlideInfo[] = [
     category: "Platform",
     description: "SQLAlchemy 2 Core schema, portable view DDL for trends/flaky tests, and authenticated token ingest.",
   },
+  {
+    slideNumber: 11,
+    href: "/pipeline",
+    label: "11",
+    slideTitle: "Ship It: One-Command Install & CI/CD Integration",
+    category: "Product",
+    description: "Real pip-installable package, verified live, dropping straight into any pipeline's quality gate and self-healing step.",
+  },
 ];
 
 export function getSlideByPath(pathname: string): SlideInfo | undefined {

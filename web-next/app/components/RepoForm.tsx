@@ -92,14 +92,27 @@ export function RepoForm({ values, onChange, disabled }: Props) {
           </span>
           <select
             className={styles.select}
-            value={values.provider ?? "vertex"}
-            onChange={(e) => onChange({ ...values, provider: e.target.value as "vertex" | "watsonx" })}
+            value={values.provider === "watsonx" ? "watsonx" : (values.modelId ?? "gemini-3.8-flash")}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "watsonx") {
+                onChange({ ...values, provider: "watsonx", modelId: undefined });
+              } else {
+                onChange({ ...values, provider: "vertex", modelId: v as "gemini-3.8-flash" | "gemini-3.5-flash" });
+              }
+            }}
           >
-            <option value="vertex">Google Vertex AI · Gemini 3.8 Flash (Default)</option>
-            <option value="vertex">Google Vertex AI · Gemini 3.5 Flash</option>
+            <option value="gemini-3.8-flash">Google Vertex AI · Gemini 3.8 Flash (Default)</option>
+            <option value="gemini-3.5-flash">Google Vertex AI · Gemini 3.5 Flash</option>
             <option value="watsonx">IBM watsonx.ai · Mistral Small 24B / Llama 3.3</option>
           </select>
-          <span className={styles.fieldNote}>Gemini 3.8 Flash active as default.</span>
+          <span className={styles.fieldNote}>
+            {values.provider === "watsonx"
+              ? "Mistral Small 24B / Llama 3.3 (server default)."
+              : (values.modelId ?? "gemini-3.8-flash") === "gemini-3.5-flash"
+                ? "Gemini 3.5 Flash selected."
+                : "Gemini 3.8 Flash active as default."}
+          </span>
         </div>
 
         <label className={styles.check}>

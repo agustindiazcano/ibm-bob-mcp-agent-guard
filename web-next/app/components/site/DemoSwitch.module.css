@@ -8,6 +8,12 @@
   color: var(--text-muted);
 }
 
+.label {
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
 .switch {
   position: relative;
   width: 44px;

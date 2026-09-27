@@ -45,8 +45,12 @@ export async function fetchAnalyze(values: RepoFormValues): Promise<AnalyzeRespo
   return res.json() as Promise<AnalyzeResponse>;
 }
 
-export async function fetchSummary(result: AnalyzeResponse, provider?: string): Promise<SummaryResponse> {
-  const url = provider ? `${apiBase()}/api/summary?provider=${encodeURIComponent(provider)}` : `${apiBase()}/api/summary`;
+export async function fetchSummary(result: AnalyzeResponse, provider?: string, modelId?: string): Promise<SummaryResponse> {
+  const params = new URLSearchParams();
+  if (provider) params.set("provider", provider);
+  if (provider === "vertex" && modelId) params.set("model_id", modelId);
+  const query = params.toString();
+  const url = query ? `${apiBase()}/api/summary?${query}` : `${apiBase()}/api/summary`;
   const res = await request(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -68,7 +72,7 @@ export function streamUrl(repoPath: string, gateThreshold: number): string {
 // POST /api/fix streams NDJSON (one event per line) for several minutes, so
 // it's read incrementally here instead of awaited as one JSON body.
 export async function streamFix(
-  { repoPath, gateThreshold, provider }: RepoFormValues,
+  { repoPath, gateThreshold, provider, modelId }: RepoFormValues,
   onEvent: (event: StreamEvent) => void,
   token?: string,
 ): Promise<void> {
@@ -78,6 +82,9 @@ export async function streamFix(
   };
   if (provider) {
     payload.provider = provider;
+  }
+  if (provider === "vertex" && modelId) {
+    payload.model_id = modelId;
   }
 
   const headers: Record<string, string> = { "Content-Type": "application/json" };
