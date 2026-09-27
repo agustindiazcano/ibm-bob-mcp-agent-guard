@@ -567,7 +567,11 @@ def check_phase17_store() -> bool:
 
 
 def check_phase17_pipeline() -> bool:
-    return _check("Phase 17 A1.2: pipeline persistence can't change a measurement", _PIPELINE, timeout=900)
+    # Two full sequential mutation passes (79 mutants each) plus CLI/MCP checks.
+    # 900s was too tight on slower/contended hardware: a single such pass was
+    # measured at ~600s on a busy Windows dev machine, well within this
+    # engine's normal range but more than 900/2 once CLI/MCP overhead is added.
+    return _check("Phase 17 A1.2: pipeline persistence can't change a measurement", _PIPELINE, timeout=1800)
 
 
 def check_phase17_endpoints() -> bool:
