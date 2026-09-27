@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { BobBadge, Brand } from "./Brand";
+import { DemoSwitch } from "./DemoSwitch";
 import { ABOUT_LINKS, PRODUCT_LINKS, REPO_URL, type SiteLink } from "./links";
 import styles from "./SiteNav.module.css";
+
+const ALL_NAV_LINKS: SiteLink[] = [...PRODUCT_LINKS, ...ABOUT_LINKS];
 
 function isActive(pathname: string, href: string): boolean {
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
@@ -30,17 +33,61 @@ function NavLinks({ links, pathname, onNavigate }: { links: SiteLink[]; pathname
 
 export function SiteNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
+
+  // Keyboard navigation: ArrowLeft and ArrowRight to navigate across navbar tabs
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // Don't trigger if user is typing in form controls
+      const activeEl = document.activeElement;
+      const tag = activeEl?.tagName?.toLowerCase();
+      if (
+        tag === "input" ||
+        tag === "textarea" ||
+        tag === "select" ||
+        (activeEl as HTMLElement)?.isContentEditable
+      ) {
+        return;
+      }
+
+      if (e.key === "ArrowRight") {
+        const idx = ALL_NAV_LINKS.findIndex((link) => isActive(pathname, link.href));
+        if (idx >= 0 && idx < ALL_NAV_LINKS.length - 1) {
+          e.preventDefault();
+          router.push(ALL_NAV_LINKS[idx + 1].href);
+        } else if (idx === -1) {
+          e.preventDefault();
+          router.push(ALL_NAV_LINKS[0].href);
+        }
+      } else if (e.key === "ArrowLeft") {
+        const idx = ALL_NAV_LINKS.findIndex((link) => isActive(pathname, link.href));
+        if (idx > 0) {
+          e.preventDefault();
+          router.push(ALL_NAV_LINKS[idx - 1].href);
+        }
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [pathname, router]);
 
   return (
     <header className={styles.bar}>
       <nav className={styles.inner} aria-label="Main">
+        <DemoSwitch />
+        <span className={styles.divider} aria-hidden="true" />
         <Brand />
         <div className={styles.links}>
           <NavLinks links={PRODUCT_LINKS} pathname={pathname} />
           <span className={styles.divider} aria-hidden="true" />
           <NavLinks links={ABOUT_LINKS} pathname={pathname} />
+          <span className={styles.kbdHint} title="Use Arrow Left & Arrow Right keys to navigate pages">
+            <kbd className={styles.kbd}>&larr;</kbd>
+            <kbd className={styles.kbd}>&rarr;</kbd>
+          </span>
         </div>
         <div className={styles.end}>
           <BobBadge />
@@ -74,3 +121,4 @@ export function SiteNav() {
     </header>
   );
 }
+
