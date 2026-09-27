@@ -13,6 +13,23 @@ CLI / package name: `repoguard`. GitHub: https://github.com/agustindiazcano/ibm-
 
 ## Session summary
 
+### Session 27 — Phase 19 G1-G6 + O1, on `feat/19-guardrails-g1-g5`
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Implemented G1 (`pytest_env` allow-list), G2 (`policy.py` static test checks, D1 approved), G3 (`acceptance.py` per-file gate: repetition/canary/preservation/whole-suite), G4 (harness-`error` outcome class), G5 (`FixResult.status`/`integrity`, evidence always written), G6 (source-only coverage, D9 approved, `ci.yml` threshold → 60.0) | `repoguard_engine/core.py`, `mutation.py`, `watson_agent/{acceptance,policy,orchestrator,tools}.py`, `.github/workflows/ci.yml` |
+| 2 | Fixed a regression in `ScriptedProvider.chat()` (rewritten to expect a turn format `scripts/phase19_scripts.py` never produces — `KeyError: 'name'` on 7/8 attack scripts, with the 8th "passing" only because it hit the same exception) | `repoguard_engine/ai_providers/scripted.py` |
+| 3 | Implemented O1 (`repoguard-out/fix_run.json`) and fixed two crash bugs found validating it: `_write_fix_run` called in `run_fix_loop`'s `finally` but never defined (`NameError` on every run); `_timing_section` joined `tool_calls` as strings after this same change made them dicts (`TypeError`) | `repoguard_engine/watson_agent/orchestrator.py` |
+| 4 | Committed 1-3 as `5a49404` | — |
+| 5 | Found the `verify.py phase19` 1800s timeout is too short for a real Windows box (measured baseline 290s + after-with-71-tests 362s + G3 subprocess overhead) — raised to 3600s | `scripts/verify_phase19.py` |
+| 6 | Live-verified Vertex AI works from this checkout (`--summarize`, real coverage 60.3%, coherent AI prose referencing the real numbers) | — |
+| 7 | Found and fixed a real environment bug: the `repoguard` console script's editable install pointed at a sibling worktree (`-phase17-18`), silently measuring *that* branch's code under a bare `repoguard` invocation — repointed with `pip install -e ".[ai,vertex,db,docs]"` from this checkout; documented in `AGENTS.md`/`CLAUDE.md`/`GEMINI.md` §9 | `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` |
+| 8 | Found `CLAUDE.md` had drifted from `AGENTS.md`/`GEMINI.md` (still had the pre-G6 65.1% coverage numbers) — synced | `CLAUDE.md` |
+| 9 | Found (not yet resolved) a direct `run_mutation` timing measurement with the 4 reference tests scored 88.61% (70/79), not the documented 89.87% (71/79) that E1's `honest` check asserts exactly — judged non-blocking/likely flakiness per user decision (core `AGENTS.md §7` baseline re-measured unaffected: 20.25%, 16/79) | `PENDING.md` |
+
+Verification status: `verify.py phase19` rerunning with the 3600s timeout at session end (not yet confirmed PASS — see PENDING.md's "Known issue"). 11 (merge) and 12 (Vertex benchmark, E2) approved by user this session; not yet executed.
+
+---
 
 ### Session 26 — Phase 19 E1: Scripted Provider (`feat/19-eval-scripted-provider`)
 
@@ -35,5 +52,5 @@ Verified: `verify.py phase19` passed (using stubs for mutation speed, pending G1
 5. Autofix: attach `REPOGUARD_FIX_TOKEN` (`docs/DEPLOY.md` §5), then run it from the Vercel demo against `demo-repo` and record the measured before/after. If you change a Vercel env var, Redeploy the **newest `main`** deployment, never an older row (`docs/ARCHITECTURE-front.md`, Session 21-front item 5).
 6. If tightening `repoguard-deployer`'s IAM roles, or moving the new `aiplatform.user` grant into Terraform: read `infra/terraform/README.md`'s "Known gap" section first — real permissions change against a live project, own PR.
 7. The repo-rename decision is open and low-urgency — decide whenever, it's cosmetic.
-8. Phase 19: build from `docs/EVAL_GUARDRAILS_IMPLEMENTATION.md` in step order. Steps 1, 3, 4, 5, 7 and 8 need no approval; step 2 needs D1, step 6 needs D9. Step 4 (sham mutant + outcome classes) overlaps what Phase 18 S1/S2 already built (Session 24) — check `mutation.py`'s `MutationEnvironmentError` before rebuilding it.
+8. Phase 19 G1-G6 + O1 are done (Session 27, commit `5a49404` on `feat/19-guardrails-g1-g5`) — check `verify.py phase19`'s result first (was rerunning with a 3600s timeout at session end; read its output before trusting either the timeout fix or the 88.61%/89.87% discrepancy noted in `PENDING.md`'s "Known issue"). If it PASSes (or the known issue is still judged non-blocking), open the PR, then move to step 9 (E2 `scripts/eval_fixloop.py`, credentialed — approved) and step 11 (merge — approved); Vertex AI credentials are confirmed working from this checkout (`VERTEX_PROJECT_ID=project-e0ad10c9-0b2f-4dc0-ac6` in `.env`, ADC already present). Before running anything through the bare `repoguard` command, `pip show repoguard`'s "Editable project location" must say this checkout, not a sibling worktree (Session 27 pitfall, `AGENTS.md §9`).
 9. `claude/eager-gauss-ifyd8w` is superseded (Session 24) — delete it whenever convenient, nothing in it is unmerged real work. If a new session gets assigned that branch name again by the harness, don't assume its history is relevant; diff it against `main` first.

@@ -1,7 +1,9 @@
 import subprocess
 import sys
-from phase19_scripts import SCRIPTS, get_honest_turns
 from pathlib import Path
+
+from phase19_scripts import SCRIPTS, get_honest_turns
+
 
 def _run_script(script: str, timeout: int) -> tuple[int, str]:
     proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=timeout)
@@ -313,8 +315,14 @@ print("  E1 script check -> PASS")
 sys.exit(0)
 """
     script = script_template.replace("{honest_turns!r}", repr(honest_turns)).replace("{scripts!r}", repr(SCRIPTS))
-    
-    rc, out = _run_script(script, timeout=1800)
+
+    # 1800s wasn't enough on a real Windows dev box: the honest script alone
+    # runs two real mutation passes (measured 290s baseline + 362s after-fix,
+    # 79 mutants each) plus G3's per-file/whole-suite acceptance gate (each
+    # spawns its own pytest subprocess), and A1_fingerprint pays for a third
+    # real baseline pass -- process-spawn overhead this session measured
+    # directly, not a hang.
+    rc, out = _run_script(script, timeout=3600)
     ok = rc == 0
     print(out.rstrip() if ok else out[-3000:])
     return ok
