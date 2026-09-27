@@ -97,7 +97,7 @@ const ENDPOINTS: { method: string; path: string; what: string; tag?: string }[] 
   { method: "GET", path: "/api/analyze", what: "Runs the pipeline: coverage, gaps, risk, optional mutation and gate" },
   { method: "GET", path: "/api/stream", what: "Server-sent events with live progress for the same run" },
   { method: "POST", path: "/api/summary", what: "Advisory AI prose over an already-measured result, plus the provider used" },
-  { method: "POST", path: "/api/fix", what: "Autofix: bearer token, one run at a time, NDJSON progress and engine before/after" },
+  { method: "POST", path: "/api/fix", what: "Autofix: rate-limited (per-IP + global), one run at a time, NDJSON progress and engine before/after" },
   { method: "GET", path: "/api/projects/{slug}/…", what: "Run history for the Results charts: trend, operators, risk, fix effect, survivors, flaky", tag: "Phase 17" },
 ];
 

@@ -155,12 +155,17 @@ export default function Home() {
           </div>
           {error.toLowerCase().includes("503") && (
             <p style={{ marginTop: "6px", fontSize: "12px", opacity: 0.9 }}>
-              Tip: HTTP 503 from Autofix means <code>REPOGUARD_FIX_TOKEN</code> is not enabled on this server or AI provider credentials (watsonx.ai or Vertex AI) are missing.
+              Tip: HTTP 503 from Autofix means AI provider credentials (watsonx.ai or Vertex AI) are missing on this server.
             </p>
           )}
-          {error.toLowerCase().includes("401") && (
+          {error.toLowerCase().includes("429") && (
             <p style={{ marginTop: "6px", fontSize: "12px", opacity: 0.9 }}>
-              Tip: HTTP 401 indicates the provided Autofix token does not match the server&rsquo;s <code>REPOGUARD_FIX_TOKEN</code>.
+              Tip: HTTP 429 means Autofix has hit its rate limit (per-IP or global — each run spends real AI-provider quota). Try again later.
+            </p>
+          )}
+          {error.toLowerCase().includes("409") && (
+            <p style={{ marginTop: "6px", fontSize: "12px", opacity: 0.9 }}>
+              Tip: HTTP 409 means another Autofix run is already in progress on this server. Wait for it to finish and try again.
             </p>
           )}
         </div>
