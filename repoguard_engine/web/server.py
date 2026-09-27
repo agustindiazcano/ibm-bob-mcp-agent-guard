@@ -134,6 +134,44 @@ def api_project_risk_heatmap(slug: str) -> list[dict]:
     return result
 
 
+@app.get("/api/projects/{slug}/operators")
+def api_project_operators(slug: str) -> list[dict]:
+    """v_survival_by_operator for *slug*'s latest run (Phase 17 C1, chart 2):
+    which kinds of mutants the suite misses most. First real consumer of
+    the per-mutant records loaded in the A2-gap PR."""
+    from ..store.queries import survival_by_operator
+
+    result = survival_by_operator(_history_engine(), slug)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"no project {slug!r}")
+    return result
+
+
+@app.get("/api/projects/{slug}/survivors")
+def api_project_survivors(slug: str) -> list[dict]:
+    """v_persistent_survivors for *slug* (Phase 17 C1, chart 5): mutants
+    that have never been killed across every non-dirty run."""
+    from ..store.queries import persistent_survivors
+
+    result = persistent_survivors(_history_engine(), slug)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"no project {slug!r}")
+    return result
+
+
+@app.get("/api/projects/{slug}/flaky")
+def api_project_flaky(slug: str) -> list[dict]:
+    """v_flaky_tests for *slug* (Phase 17 C1, chart 6): tests whose outcome
+    varied across non-dirty runs of the same commit. Usually empty -- it
+    needs 2+ runs on the same commit_sha to show anything."""
+    from ..store.queries import flaky_tests
+
+    result = flaky_tests(_history_engine(), slug)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"no project {slug!r}")
+    return result
+
+
 @app.post("/api/runs")
 def api_ingest_run(record: dict, response: Response, authorization: str | None = Header(default=None)) -> dict:
     """Ingest a run record from a trusted CI caller (Phase 17 A3.2). The

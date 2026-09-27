@@ -25,6 +25,10 @@ Phase 17 checks for scripts/verify.py (measurement history store).
                         test_results tables; runs.tests_measured is True; v_survival_by_operator,
                         v_persistent_survivors and v_flaky_tests all return without error, the first
                         two with real rows
+    phase17-history-routes — Phase 17 C1: GET /api/projects/{slug}/operators, /survivors, /flaky.
+                        404 for an unknown project; 200 with real per-operator/per-mutant data over
+                        HTTP (not just direct SQL) from a small real mutation run; /flaky is empty
+                        (correct on a single run) without erroring
 
 Each check runs its script in a fresh interpreter (sys.executable), same as verify.py.
 """
@@ -553,6 +557,61 @@ print('OK')
 """
 
 
+_HISTORY_ROUTES = _COMMON + r"""
+import subprocess
+from fastapi.testclient import TestClient
+from repoguard_engine.pipeline import run_pipeline
+from repoguard_engine.web.server import app
+
+tmp = Path(tempfile.mkdtemp(prefix='verify17hr-'))
+db_path = tmp / 'history.db'
+os.environ['REPOGUARD_DATABASE_URL'] = f'sqlite:///{db_path}'
+try:
+    client = TestClient(app)
+
+    # 1. No project at all -> 404 on all three, not an empty list or a crash
+    for path in ('operators', 'survivors', 'flaky'):
+        res = client.get(f'/api/projects/verify-hr/{path}')
+        assert res.status_code == 404, (path, res.status_code)
+    print('  unknown project -> 404 on /operators, /survivors, /flaky')
+
+    # 2. A small, fast real mutation run (git-backed so dirty=False, same
+    # requirement as v_persistent_survivors/v_flaky_tests -- see
+    # phase17-mutants-tests) -- proves the routes serialize real view rows
+    # over HTTP, not just direct SQL.
+    small = tmp / 'small'; (small / 'tests').mkdir(parents=True)
+    (small / 'calc.py').write_text('def add(a, b):\n    return a + b\n\ndef double(x):\n    return x * 2\n')
+    (small / 'tests' / 'test_calc.py').write_text(
+        'from calc import add, double\n\ndef test_add():\n    assert add(2, 3) == 5\n\n'
+        'def test_double():\n    assert double(0) == 0\n')
+    (small / 'pytest.ini').write_text('[pytest]\npythonpath = .\n')
+    git = lambda *a: subprocess.run(['git', '-c', 'user.email=v@x', '-c', 'user.name=v', *a],
+                                    cwd=small, check=True, capture_output=True, timeout=30)
+    git('init', '-q'); git('add', '.'); git('commit', '-qm', 'init')
+
+    r = run_pipeline(small, include_mutation=True, include_endpoints=False, project='verify-hr')
+    assert r.run_id and r.mutation.total > 0 and r.mutation.survived > 0, r.mutation
+
+    ops = client.get('/api/projects/verify-hr/operators').json()
+    assert len(ops) >= 1 and sum(o['total'] for o in ops) == r.mutation.total, ops
+    assert {'operator', 'total', 'survived', 'survival_pct'} == set(ops[0])
+    print(f'  /operators: {len(ops)} operator rows, totals sum to {r.mutation.total}')
+
+    survivors = client.get('/api/projects/verify-hr/survivors').json()
+    assert len(survivors) == r.mutation.survived, (len(survivors), r.mutation.survived)
+    assert {'fingerprint', 'file_path', 'function_name', 'description', 'runs_seen', 'first_seen'} == set(survivors[0])
+    assert all(s['runs_seen'] == 1 for s in survivors)
+    print(f'  /survivors: {len(survivors)} rows, matches mutation.survived ({r.mutation.survived})')
+
+    flaky = client.get('/api/projects/verify-hr/flaky').json()
+    assert flaky == [], 'a single run must never look flaky'
+    print('  /flaky: [] on a single run (correct -- needs 2+ runs on the same commit to show anything)')
+finally:
+    shutil.rmtree(tmp, ignore_errors=True)
+print('OK')
+"""
+
+
 def _check(title: str, script: str, timeout: int) -> bool:
     print(f"=== {title} ===")
     rc, out = _run_script(script, timeout)
@@ -587,3 +646,8 @@ def check_phase17_api() -> bool:
 def check_phase17_mutants_tests() -> bool:
     return _check("Phase 17 A2-gap: per-mutant/per-test records loaded into the store",
                   _MUTANTS_TESTS, timeout=900)
+
+
+def check_phase17_history_routes() -> bool:
+    return _check("Phase 17 C1: GET /api/projects/{slug}/operators, /survivors, /flaky",
+                  _HISTORY_ROUTES, timeout=120)
