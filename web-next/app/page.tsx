@@ -11,6 +11,7 @@ import { SummaryPanel } from "./components/SummaryPanel";
 import { FixResultPanel } from "./components/FixResultPanel";
 import { EndpointsList } from "./components/EndpointsList";
 import { Card } from "./components/Card";
+import { TokenModal } from "./components/TokenModal";
 import styles from "./page.module.css";
 import { fetchAnalyze, fetchSummary, streamFix, streamUrl } from "./lib/api";
 import type { AnalyzeResponse, FixDone, RepoFormValues, StreamEvent, SummaryResponse } from "./lib/types";
@@ -19,11 +20,14 @@ const DEFAULT_VALUES: RepoFormValues = {
   repoPath: "./demo-repo",
   mutation: false,
   gateThreshold: 80,
+  provider: "vertex",
 };
 
 export default function Home() {
   const [values, setValues] = useState<RepoFormValues>(DEFAULT_VALUES);
   const [busy, setBusy] = useState(false);
+  const [autofixing, setAutofixing] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const [events, setEvents] = useState<StreamEvent[]>([]);
   const [result, setResult] = useState<AnalyzeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -41,10 +45,10 @@ export default function Home() {
 
   // The summary is fetched here rather than in a SummaryPanel effect because
   // StrictMode runs effects twice in dev, which doubled the paid watsonx.ai call.
-  async function loadSummary(data: AnalyzeResponse, run: number) {
+  async function loadSummary(data: AnalyzeResponse, run: number, provider?: string) {
     let next: SummaryResponse;
     try {
-      next = await fetchSummary(data);
+      next = await fetchSummary(data, provider);
     } catch (err) {
       next = {
         ok: false,
@@ -83,7 +87,7 @@ export default function Home() {
       const data = await fetchAnalyze({ ...values, gateThreshold, mutation });
       setResult(data);
       // Not awaited: the summary must never hold up or fail the dashboard.
-      void loadSummary(data, run);
+      void loadSummary(data, run, values.provider);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -92,9 +96,11 @@ export default function Home() {
     }
   }
 
-  async function runAutofix() {
+  async function runAutofix(explicitToken?: string) {
+    const activeToken = explicitToken ?? token;
     ++runRef.current;
     setBusy(true);
+    setAutofixing(true);
     setError(null);
     setEvents([]);
     setResult(null);
@@ -102,7 +108,7 @@ export default function Home() {
     setFix(null);
 
     try {
-      await streamFix(values, token, (event) => {
+      await streamFix(values, activeToken, (event) => {
         if (event.type === "heartbeat") {
           return;
         }
@@ -116,8 +122,23 @@ export default function Home() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
+      setAutofixing(false);
       setBusy(false);
     }
+  }
+
+  function handleAutofixClick() {
+    if (!token.trim()) {
+      setModalOpen(true);
+      return;
+    }
+    void runAutofix();
+  }
+
+  function handleTokenSubmit(enteredToken: string) {
+    setToken(enteredToken);
+    setModalOpen(false);
+    void runAutofix(enteredToken);
   }
 
   const streamEnded = events.some((e) => e.type === "done" || e.type === "error");
@@ -140,11 +161,12 @@ export default function Home() {
         <RepoForm values={values} onChange={setValues} token={token} onTokenChange={setToken} disabled={busy} />
         <ActionBar
           busy={busy}
+          isAnalyzing={analyzing !== null}
+          isAutofixing={autofixing}
           onAnalyze={() => runAnalyze(values.gateThreshold, values.mutation)}
           // Like `repoguard gate`: a coverage-only check, never mutation.
           onGate={() => runAnalyze(values.gateThreshold, false)}
-          onAutofix={runAutofix}
-          canAutofix={token.trim() !== ""}
+          onAutofix={handleAutofixClick}
         />
       </Card>
       {error && (
@@ -173,7 +195,7 @@ export default function Home() {
         </p>
       )}
       {result && (
-        <>
+        <div className={styles.resultSection}>
           <StatCards result={result} gateThreshold={ranThreshold} />
           <div className={styles.columns}>
             <GapsList gaps={result.gaps} />
@@ -181,8 +203,15 @@ export default function Home() {
           </div>
           <EndpointsList endpoints={result.endpoints} />
           <SummaryPanel summary={summary} />
-        </>
+        </div>
       )}
+
+      <TokenModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSubmit={handleTokenSubmit}
+      />
     </main>
   );
 }
+
