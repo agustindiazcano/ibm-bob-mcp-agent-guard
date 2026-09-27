@@ -4,9 +4,8 @@ stream its progress as NDJSON.
 Backs POST /api/fix (web/server.py). Three rules the CLI's `repoguard fix`
 doesn't need but an HTTP endpoint does:
 
-- Token-gated. REPOGUARD_FIX_TOKEN unset -> the endpoint is off (503); a
-  missing or wrong `Authorization: Bearer <token>` -> 401. Each run spends
-  AI-provider quota for minutes, and the deployed service is public.
+- Rate-limited, not token-gated (see rate_limit.py) -- each run spends
+  AI-provider quota for minutes on a public, unauthenticated service.
 - One run at a time per process (409 otherwise).
 - Never touches the target repo. The loop runs on a temp copy, never
   publishes (no git/gh), and the copy is deleted afterwards; the tests it
@@ -18,9 +17,7 @@ via run_fix_loop); nothing here computes or estimates a metric.
 
 from __future__ import annotations
 
-import hmac
 import json
-import os
 import queue
 import shutil
 import tempfile
@@ -36,17 +33,6 @@ _COPY_IGNORE = shutil.ignore_patterns(
     ".git", "repoguard-out", "watson-evidence", "__pycache__", ".pytest_cache",
     ".venv", "node_modules", ".coverage", "coverage.json",
 )
-
-
-def check_token(authorization: str | None) -> None:
-    """Raise 503 if Autofix is disabled on this server, 401 if the bearer
-    token is missing or wrong."""
-    expected = os.environ.get("REPOGUARD_FIX_TOKEN", "").strip()
-    if not expected:
-        raise HTTPException(status_code=503, detail="Autofix is disabled on this server (REPOGUARD_FIX_TOKEN is not set).")
-    scheme, _, supplied = (authorization or "").partition(" ")
-    if scheme.lower() != "bearer" or not hmac.compare_digest(supplied.strip().encode(), expected.encode()):
-        raise HTTPException(status_code=401, detail="Missing or invalid Autofix token.")
 
 
 def start_fix_stream(repo_path: str, gate_threshold: float, provider: str | None) -> Iterator[str]:

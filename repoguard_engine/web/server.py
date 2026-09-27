@@ -9,7 +9,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, Header, HTTPException, Query, Response
+from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -219,13 +219,18 @@ class FixRequest(BaseModel):
 
 
 @app.post("/api/fix")
-def api_fix(body: FixRequest, authorization: str | None = Header(default=None)) -> StreamingResponse:
+def api_fix(body: FixRequest, request: Request) -> StreamingResponse:
     """Run the AI fix loop on a sandbox copy of repo_path, streaming NDJSON
-    progress events and a final `done` (or `error`) event. Token-gated, one
-    run at a time, never modifies repo_path -- see web/fix_job.py."""
-    from .fix_job import check_token, start_fix_stream
+    progress events and a final `done` (or `error`) event. Rate-limited per
+    IP and globally (see web/rate_limit.py) instead of token-gated -- each
+    call spends real AI-provider quota, but a public demo shouldn't need a
+    shared secret to try it. One run at a time, never modifies repo_path --
+    see web/fix_job.py."""
+    from .fix_job import start_fix_stream
+    from .rate_limit import check_rate_limit, client_ip
 
-    check_token(authorization)
+    ip = client_ip(request.headers.get("x-forwarded-for"), request.client.host if request.client else None)
+    check_rate_limit(ip)
     if not Path(body.repo_path).is_dir():
         raise HTTPException(status_code=400, detail=f"repo_path does not exist or is not a directory: {body.repo_path}")
     return StreamingResponse(
