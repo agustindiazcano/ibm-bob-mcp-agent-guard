@@ -93,10 +93,10 @@
 
 .slideLinkActive,
 .slideLinkActive:hover {
-  color: #3b82f6;
-  background: rgba(59, 130, 246, 0.15);
-  border-color: rgba(59, 130, 246, 0.35);
-  box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
+  color: var(--accent-2);
+  background: rgba(255, 111, 94, 0.15);
+  border-color: rgba(255, 111, 94, 0.35);
+  box-shadow: 0 0 12px rgba(255, 111, 94, 0.2);
 }
 
 .end {

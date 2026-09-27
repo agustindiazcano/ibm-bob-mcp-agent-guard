@@ -15,26 +15,36 @@ const DEMO_REPOS = [
   { label: "Ledger Demo", path: "./eval-fixtures/ledger", desc: "Accounting ledger fixture (core ledger + transactions)" },
 ];
 
+const DEMO_PATHS = new Set(DEMO_REPOS.map((d) => d.path));
+const URL_PATTERN = /^https?:\/\/\S+$/i;
+
 export function RepoForm({ values, onChange, disabled }: Props) {
+  const trimmedPath = values.repoPath.trim();
+  // The presets above send a server-side filesystem path, not a URL -- they
+  // never go through this check. Free-typed input does: this form only
+  // validates shape client-side, the backend still just reads a local path.
+  const showUrlError = trimmedPath !== "" && !DEMO_PATHS.has(trimmedPath) && !URL_PATTERN.test(trimmedPath);
+
   return (
     <fieldset className={styles.form} disabled={disabled}>
       <div className={styles.repoRow}>
         <label className={styles.field}>
-          <span>
-            Repo path on server
-            <Tooltip
-              content="Path to a Python project on the server machine containing pytest tests (Python ≥ 3.10, FastAPI endpoint inspection supported)."
-              ariaLabel="About repo path"
-            />
-          </span>
+          <span>Repository URL</span>
           <input
-            className={styles.input}
+            className={`${styles.input} ${showUrlError ? styles.inputError : ""}`}
             type="text"
             value={values.repoPath}
             onChange={(e) => onChange({ ...values, repoPath: e.target.value })}
-            placeholder="./demo-repo"
+            placeholder="https://github.com/usuario/repo"
             spellCheck={false}
+            aria-invalid={showUrlError}
           />
+          <span className={styles.fieldNote}>El repositorio debe ser un proyecto Python (pytest, Python ≥ 3.10).</span>
+          {showUrlError && (
+            <span className={styles.fieldError} role="alert">
+              Formato incorrecto — debe ser una URL. Ejemplo: https://github.com/usuario/repo
+            </span>
+          )}
         </label>
         <div className={styles.presetsBar}>
           <span>Quick select demo:</span>

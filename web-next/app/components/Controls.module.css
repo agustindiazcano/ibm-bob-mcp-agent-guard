@@ -92,7 +92,21 @@
 .input:focus,
 .select:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(91, 140, 255, 0.25);
+  box-shadow: 0 0 0 3px rgba(255, 111, 94, 0.25);
+}
+
+.inputError {
+  border-color: var(--fail) !important;
+}
+
+.inputError:focus {
+  box-shadow: 0 0 0 3px rgba(251, 113, 133, 0.25) !important;
+}
+
+.fieldError {
+  font-size: 11px;
+  color: var(--fail);
+  line-height: 1.4;
 }
 
 .select option {
@@ -194,9 +208,9 @@
   height: 40px;
   padding: 0 14px;
   border-radius: 10px;
-  border: 1px solid rgba(217, 119, 6, 0.45);
-  background: rgba(217, 119, 6, 0.08);
-  color: #fde68a;
+  border: 1px solid rgba(255, 159, 108, 0.45);
+  background: rgba(255, 159, 108, 0.08);
+  color: #ffd3b8;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -205,13 +219,13 @@
   gap: 10px;
   user-select: none;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.12);
+  box-shadow: 0 2px 8px rgba(255, 159, 108, 0.12);
   position: relative;
 }
 
 .swarmControl:hover {
-  border-color: #f59e0b;
-  background: rgba(217, 119, 6, 0.14);
+  border-color: #ff9f6c;
+  background: rgba(255, 159, 108, 0.14);
   color: #ffffff;
   transform: translateY(-1px);
   animation: goldenAura 1.8s ease-in-out infinite;
@@ -249,7 +263,7 @@
 }
 
 .swarmOn .swarmSlider {
-  background: #d97706;
+  background: #ff8f5e;
 }
 
 .swarmOn .swarmSlider::after {
@@ -264,12 +278,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #f59e0b;
+  color: #ff9f6c;
   transition: transform 0.2s ease, color 0.2s ease;
 }
 
 .swarmControl:hover .cloudBadge {
-  color: #fbbf24;
+  color: #ffc19a;
   transform: scale(1.15);
 }
 
@@ -409,10 +423,10 @@
 
 @keyframes goldenAura {
   0%, 100% {
-    box-shadow: 0 0 14px rgba(245, 158, 11, 0.65), 0 0 28px rgba(251, 191, 36, 0.35);
+    box-shadow: 0 0 14px rgba(255, 159, 108, 0.65), 0 0 28px rgba(255, 179, 138, 0.35);
   }
   50% {
-    box-shadow: 0 0 24px rgba(245, 158, 11, 0.95), 0 0 45px rgba(251, 191, 36, 0.65);
+    box-shadow: 0 0 24px rgba(255, 159, 108, 0.95), 0 0 45px rgba(255, 179, 138, 0.65);
   }
 }
 
