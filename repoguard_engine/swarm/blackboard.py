@@ -43,8 +43,10 @@ _RESULT_STATUSES = {"ACCEPTED", "NO_GAIN", "BLOCKED", "FAILED", "REJECTED_AT_FAN
 def _safe_module_name(module: str) -> str:
     """A source file's posix path (e.g. "shop/cart.py") turned into a single
     directory-name-safe component, matching swarm/lane.py's owned-test-path
-    naming so the two stay visually associated."""
-    return module.replace("/", "_").replace("\\", "_")
+    naming so the two stay visually associated. The ".py" suffix is dropped:
+    a directory named "shop_api.py" matches every rglob("*.py") the engine
+    runs over the repo (api_check.py's endpoint scan read it as a file)."""
+    return Path(module.replace("\\", "/")).with_suffix("").as_posix().replace("/", "_")
 
 
 def _atomic_write_text(path: Path, content: str) -> None:
