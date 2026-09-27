@@ -116,6 +116,8 @@ def _run(repo_path: str, gate_threshold: float, provider: str | None, events: "q
                 "files": _changed_tests(original, work),
                 "critic_notes": result.critic_notes,
                 "evidence": evidence,
+                "status": result.status,
+                "integrity": result.integrity,
             },
         )
     except Exception as exc:

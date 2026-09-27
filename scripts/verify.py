@@ -61,7 +61,12 @@ from verify_phase17 import (  # scripts/ is sys.path[0]
     check_phase17_store,
 )
 from verify_phase18 import check_phase18_s3, check_phase18_s4
-from verify_phase19 import check_phase19
+from verify_phase19 import (
+    check_phase19,
+    check_phase19_accept,
+    check_phase19_env,
+    check_phase19_policy,
+)
 
 
 def run(cmd: list[str], timeout: int = 30) -> tuple[int, str]:
@@ -477,8 +482,8 @@ def check_phase14ui() -> bool:
         untested = [ep for ep in ref["endpoints"] if not ep["has_test"]]
 
         # The API itself against AGENTS.md §7, so the page can't agree with a wrong API.
-        expect(f"{cov['percent']:.1f}" == "65.1" and len(ref["gaps"]["uncovered_files"]) == 4,
-               f"API baseline: {cov['percent']:.1f}% coverage, {len(ref['gaps']['uncovered_files'])} gap files (§7: 65.1%, 4)")
+        expect(f"{cov['percent']:.1f}" == "60.3" and len(ref["gaps"]["uncovered_files"]) == 4,
+               f"API baseline: {cov['percent']:.1f}% coverage, {len(ref['gaps']['uncovered_files'])} gap files (§7: 60.3%, 4)")
         expect(len(ref["endpoints"]) == 7 and len(untested) == 6,
                f"API endpoints: {len(ref['endpoints']) - len(untested)} of {len(ref['endpoints'])} tested (demo-repo: 1 of 7)")
 
@@ -610,7 +615,7 @@ with tempfile.TemporaryDirectory(prefix='repoguard-seq-stub-') as tmp:
     print(f'  after suite: {passed} passed')
     print('  wall_s:', {k: round(v, 1) for k, v in r.wall_s.items()})
 
-    assert (round(b['coverage']['percent'], 1), b['mutation']['killed'], b['mutation']['total']) == (65.1, 16, 79), 'baseline drifted from AGENTS.md Section 7'
+    assert (round(b['coverage']['percent'], 1), b['mutation']['killed'], b['mutation']['total']) == (60.3, 16, 79), 'baseline drifted from AGENTS.md Section 7'
     # compute_risk picks the top 3 files by uncovered-line ratio, so the loop
     # writes 3 of the 4 reference files (shop/cart.py is left out); the
     # numbers below are what that measured on the first real run.
@@ -622,7 +627,8 @@ with tempfile.TemporaryDirectory(prefix='repoguard-seq-stub-') as tmp:
     assert [row['stage'] for row in r.stages] == ['writer', 'critic'] * len(r.files_attempted), r.stages
     for row in r.stages:
         want = ['write_test_file', 'run_tests'] if row['stage'] == 'writer' else ['run_tests']
-        assert row['tool_calls'] == want, row
+        tool_names = [t['tool'] if isinstance(t, dict) else t for t in row['tool_calls']]
+        assert tool_names == want, row
         assert row['wall_s'] >= 0 and row['llm_calls'] >= 2, row
     assert all(note.endswith('APPROVED') for note in r.critic_notes), r.critic_notes
     assert set(r.wall_s) == {'baseline', 'ai', 'remeasure', 'total'}, r.wall_s
@@ -645,7 +651,7 @@ print(f'OK: {len(r.files_attempted)} files, {len(provider.calls)} scripted chat 
 # Pinned from the first real run (Session 23), not derived. After numbers are
 # (covered lines, total lines, mutation %, killed, mutants, tests passed).
 _SEQ_STUB_FILES = ["shop/inventory.py", "shop/api.py", "shop/pricing.py"]
-_SEQ_STUB_AFTER = (362, 367, 86.08, 68, 79, 56)
+_SEQ_STUB_AFTER = (146, 151, 86.08, 68, 79, 56)
 
 
 _TEMP_DEMO_COPY = """
@@ -755,14 +761,14 @@ try:
     print(f'fingerprint stability: {len(before)} kept, {len(new)} new (all in the added function)')
 
     cov = measure_coverage(tmp)
-    assert round(cov.percent, 1) == 65.1 and len(cov.tests) == 5 and {t.outcome for t in cov.tests} == {'passed'}
+    assert round(cov.percent, 1) == 60.3 and len(cov.tests) == 5 and {t.outcome for t in cov.tests} == {'passed'}
     assert sorted(json.loads((tmp / 'repoguard-out' / 'coverage.json').read_text())) == ['covered_lines', 'missing_lines', 'percent', 'total_lines']
     for f in Path('docs/expected-after-tests').glob('test_*.py'):
         shutil.copy(f, tmp / 'tests' / f.name)
     cov = measure_coverage(tmp)
     passed = sum(t.outcome == 'passed' for t in cov.tests)
     assert passed == 71, passed
-    print(f'per-test outcomes: baseline 5 passed (65.1%), after-reference {passed} passed ({cov.percent:.1f}%)')
+    print(f'per-test outcomes: baseline 5 passed (60.3%), after-reference {passed} passed ({cov.percent:.1f}%)')
 
     mix = tmp.parent / 'mix'
     (mix / 'tests').mkdir(parents=True)
@@ -810,6 +816,9 @@ CHECKS: dict[str, callable] = {
     "phase18-s3": check_phase18_s3,
     "phase18-s4": check_phase18_s4,
     "phase19": check_phase19,
+    "phase19-env": check_phase19_env,
+    "phase19-policy": check_phase19_policy,
+    "phase19-accept": check_phase19_accept,
 }
 
 

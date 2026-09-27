@@ -339,20 +339,35 @@ go unnoticed; no benchmark beyond one live run on one fixture.
 | Step | ID | Deliverable | Status |
 |---|---|---|---|
 | 0 | — | `docs/EVAL_GUARDRAILS_PLAN.md` + `docs/EVAL_GUARDRAILS_IMPLEMENTATION.md`, README section | 🟢 |
-| 1 | G1 | `core.pytest_env()` allow-list, used by `measure_coverage`, `run_mutation`, `_run_mutant`, `tools.run_tests` | 🔴 |
-| 2 | G2 | `watson_agent/policy.py` static test-file policy inside `write_test_file` — **needs approval (D1, `AGENTS.md §8`)** | 🔴 |
-| 3 | G3 | `watson_agent/acceptance.py`: 3× repetition, no-op canary, test-ID preservation, quarantine | 🔴 |
-| 4 | G4 | Sham mutant + outcome classes (shared with Phase 18 S1/S2) + monotonic kill set | 🔴 |
-| 5 | G5 | `FixResult.status`/`integrity`, evidence always written, publish gate on mutation gain + integrity | 🔴 |
-| 6 | G6 | Source-only coverage — **needs approval (D9)**: moves 65.1% → 60.26%, and the `ci.yml` threshold of 60 needs a decision | 🔴 |
+| 1 | G1 | `core.pytest_env()` allow-list, used by `measure_coverage`, `run_mutation`, `_run_mutant`, `tools.run_tests` | 🟢 Session 27 — canary secrets (`REPOGUARD_FIX_TOKEN`, `WATSONX_APIKEY`) confirmed absent from `run_tests` subprocess output |
+| 2 | G2 | `watson_agent/policy.py` static test-file policy inside `write_test_file` — **needs approval (D1, `AGENTS.md §8`)** — approved | 🟢 Session 27 — 9 attack rules fire, 0 false positives on `docs/expected-after-tests/*.py` + `demo-repo/tests/*.py` |
+| 3 | G3 | `watson_agent/acceptance.py`: 3× repetition, no-op canary, test-ID preservation, quarantine | 🟢 Session 27 — policy bypass, canary, flaky-repetition, vandalism (missing-ID) and whole-suite state-bleed all caught; the 4 reference files pass acceptance unmodified |
+| 4 | G4 | Sham mutant + outcome classes (shared with Phase 18 S1/S2) + monotonic kill set | 🟢 Session 27 — harness `error` is its own outcome class, no longer silently counted as `killed`; `run_mutation` guards `total == 0` |
+| 5 | G5 | `FixResult.status`/`integrity`, evidence always written, publish gate on mutation gain + integrity | 🟢 Session 27 |
+| 6 | G6 | Source-only coverage — **needs approval (D9)**: moves 65.1% → 60.26%, and the `ci.yml` threshold of 60 needs a decision | 🟢 Session 27 — approved; `ci.yml` gate threshold moved to `60.0`; re-measured directly (not via the stale `repoguard` console script, see Session 27 pitfall below): 60.2649% (91/151) |
 | 7 | E1 | `ai_providers/scripted.py` + 8 attack scripts + `verify.py phase19` in CI (8/8 stopped, honest run 71/79) | 🟢 |
-| 8 | O1 | `repoguard-out/fix_run.json` structured run record | 🔴 |
-| 9 | E2 | `scripts/eval_fixloop.py` (K = 3 × provider/model × fixture) — credentialed | 🔴 |
+| 8 | O1 | `repoguard-out/fix_run.json` structured run record | 🟢 Session 27 — implemented per `docs/EVAL_GUARDRAILS_IMPLEMENTATION.md §9`; fixed two crash bugs found while validating it (`_write_fix_run` called but never defined — `NameError` on every `run_fix_loop` call; `_timing_section` joined `tool_calls` as strings after this same change made them dicts — `TypeError`). See "Known issue" below before assuming `verify.py phase19` is a clean PASS |
+| 9 | E2 | `scripts/eval_fixloop.py` (K = 3 × provider/model × fixture) — credentialed, approved | 🟡 not started this session |
 | 10 | E3 | Held-out fixture `eval-fixtures/<name>/` — **needs approval (D3)** | 🔴 |
 | 11 | E4 | Real-fault protocol on a BugsInPy subset — **needs approval (D4)** | 🔴 |
 | 12 | O2 | NDJSON `guard` events + integrity badge (below the cut line) | 🔴 |
 | 13 | E5 | Pynguin control / TestGenEval subset (below the cut line) | 🔴 |
-| — | — | `verify.py phase19` | 🔴 |
+| — | — | `verify.py phase19` | 🟡 timeout raised 1800s → 3600s (measured: baseline 290s + after-with-71-tests 362s, real mutation on a Windows dev box, plus G3's per-file/whole-suite pytest subprocess overhead) — rerun in flight, see Known issue |
+
+**Known issue (Session 27, not blocking):** a direct `run_mutation` timing measurement with the
+4 reference test files in place (no fix loop, no guardrails in the path) scored **88.61%
+(70/79)**, not the `AGENTS.md §7`-documented **89.87% (71/79)** that E1's `honest` check asserts
+exactly. Core numbers are unaffected — the `AGENTS.md §7` baseline (20.25%, 16/79, no guardrails
+in the path either) re-measured identical. Read as mutation-score flakiness on this Windows box
+(no repetition guard on `run_mutation` itself, only on G3's newly-written-test acceptance gate),
+not a functional regression in G1-G6, per user decision this session. Revisit if it recurs.
+
+**Session 27 pitfall (worth its own `AGENTS.md §9` entry):** the `repoguard` console script's
+editable install pointed at a sibling worktree (`ibm-bob-mcp-agent-guard-phase17-18`), not this
+checkout — running bare `repoguard analyze ...` here silently measured *that* branch's code
+(showed the old 65.1% coverage, not this session's 60.3%). Fixed with
+`pip install -e ".[ai,vertex,db,docs]"` from this checkout; anyone with parallel worktrees should
+check `pip show repoguard`'s "Editable project location" before trusting a bare CLI run.
 
 ---
 

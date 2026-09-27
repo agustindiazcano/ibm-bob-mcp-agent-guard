@@ -147,7 +147,7 @@ export default function ProjectPage() {
           ))}
         </div>
         <p className={styles.caption}>
-          Measured by the engine on <code>demo-repo</code>. Before: its 5 deliberately weak tests, 65.1% coverage but only
+          Measured by the engine on <code>demo-repo</code>. Before: its 5 deliberately weak tests, 60.3% coverage but only
           about 1 bug in 5 caught. After: the reference tests in{" "}
           <a href={repoDoc("docs/expected-after-tests")} target="_blank" rel="noreferrer">
             docs/expected-after-tests/

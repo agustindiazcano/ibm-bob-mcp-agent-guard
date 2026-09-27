@@ -37,18 +37,18 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/results-en-dark.png">
-  <img alt="Before numbers on demo-repo, measured with RepoGuard's own AST mutation engine: line coverage 65.1%, bugs caught 20.25%" src="docs/img/results-en-light.png">
+  <img alt="Before numbers on demo-repo, measured with RepoGuard's own AST mutation engine: line coverage 60.3%, bugs caught 20.25%" src="docs/img/results-en-light.png">
 </picture>
 
 | demo-repo | Before | After |
 |---|---|---|
 | Tests | 5 | 71 |
-| Line coverage | 65.1% | 100% |
+| Line coverage | 60.3% | 100% |
 | **Bugs caught (mutation score)** | **20.25%** (16/79) | **89.87%** (71/79) |
 | API endpoints with tests | 1 of 7 | 7 of 7 |
 | Visual regression | baseline saved | catches a button color change |
 
-The demo's tests covered 65.1% of the lines but caught roughly 1 in 5 injected bugs;
+The demo's tests covered 60.3% of the lines but caught roughly 1 in 5 injected bugs;
 the reference tests in [`docs/expected-after-tests/`](docs/expected-after-tests/) catch
 9 in 10. Both measured with RepoGuard's own AST mutation engine (see `AGENTS.md §7`);
 the earlier figures on this page came from an interim `mutmut`-based engine and are
@@ -60,7 +60,7 @@ that don't affect the tested inputs — see `AGENTS.md §9`.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/dashboard-dark.png">
-  <img alt="TestMind AI web dashboard after analyzing demo-repo with mutation testing: line coverage 65.1% (112/172 lines), mutation score 20.25% (16/79 mutants killed), 4 files with coverage gaps, quality gate FAIL at an 80% threshold, risk ranking led by shop/inventory.py at 0.54" src="docs/img/dashboard-light.png">
+  <img alt="TestMind AI web dashboard after analyzing demo-repo with mutation testing: line coverage 60.3% (91/151 lines), mutation score 20.25% (16/79 mutants killed), 4 files with coverage gaps, quality gate FAIL at an 80% threshold, risk ranking led by shop/inventory.py at 0.54" src="docs/img/dashboard-light.png">
 </picture>
 
 A real capture of the [`web-next/`](web-next/) dashboard (deployed at
@@ -172,7 +172,7 @@ The swarm has to earn its place with two measurements: it must be faster than th
 
 > Design only (`PENDING.md` Phase 19). Plan: [`docs/EVAL_GUARDRAILS_PLAN.md`](docs/EVAL_GUARDRAILS_PLAN.md) · build steps: [`docs/EVAL_GUARDRAILS_IMPLEMENTATION.md`](docs/EVAL_GUARDRAILS_IMPLEMENTATION.md).
 
-The fix loop is already guarded against **damage**: it can only write under `tests/`. It is not yet guarded against **gaming its own score**. Measured on a throwaway copy of `demo-repo`: a single test with no behavioral assertions, which only checks that the source files' hashes haven't changed, scores **100% (79/79)** on mutation. That's higher than the honest reference suite's 89.87%. The same probes showed that model-written tests can read server secrets from the environment, overwrite the repo's existing tests, and write a `conftest.py`, and that coverage counts the test files themselves (65.1% today, 60.26% source-only).
+The fix loop is already guarded against **damage**: it can only write under `tests/`. It is not yet guarded against **gaming its own score**. Measured on a throwaway copy of `demo-repo`: a single test with no behavioral assertions, which only checks that the source files' hashes haven't changed, scores **100% (79/79)** on mutation. That's higher than the honest reference suite's 89.87%. The same probes showed that model-written tests can read server secrets from the environment, overwrite the repo's existing tests, and write a `conftest.py`, and that coverage counts the test files themselves (65.1% before source-only guard, 60.3% source-only).
 
 Phase 19 adds a control to every measurement, the way an experiment has a blank run, and a benchmark that is binary and counted, never an LLM's opinion:
 
@@ -184,7 +184,7 @@ Phase 19 adds a control to every measurement, the way an experiment has a blank 
 | 19.3 · G3 | Per-file acceptance: 3 identical passing runs, a no-op source canary, existing tests preserved. Failures are quarantined | — |
 | 19.4 · G4 | Mutation integrity: sham mutant, killed/survived/timeout/error, no previously killed mutant may survive | Shared with Phase 18 |
 | 19.5 · G5 | Run status (`accepted`/`partial`/`rejected`), evidence always written, `--publish` gated on mutation gain + integrity, not only coverage | — |
-| 19.6 · G6 | Source-only coverage | Approval: moves the published 65.1% → 60.26% |
+| 19.6 · G6 | Source-only coverage | Approval: moves the published 65.1% → 60.3% |
 | 19.7 · E1 | Scripted provider + 8 attack scripts in CI: 8/8 stopped, honest run still 71/79 | — |
 | 19.8 · O1 | `repoguard-out/fix_run.json`: every tool call, guard event, token count when the provider reports it | — |
 | 19.9 · E2 | `scripts/eval_fixloop.py`: 3 repeats × provider/model × fixture, ΔMS, gap closure, validity, success *k of K* | Credentials |
@@ -391,7 +391,7 @@ never triggers the Python/mutation pipeline or a Cloud Run deploy:
 | [`infra-ci.yml`](.github/workflows/infra-ci.yml) | Changes under `infra/terraform/**` | `terraform fmt -check` + `terraform validate`, no GCP credentials needed |
 | [`cd.yml`](.github/workflows/cd.yml) | Push to `main` (ignores `web-next/**`), or manual | Builds the `Dockerfile`, pushes to Artifact Registry, deploys to Cloud Run |
 
-The coverage gate threshold (60%) sits just under the measured 65.1%
+The coverage gate threshold (60.0%) sits just under the measured 60.3%
 baseline, so it fails on a real regression instead of always or never.
 
 ## Deploy to Google Cloud
@@ -439,7 +439,7 @@ repoguard analyze ./demo-repo --mutation --project demo
 
 Rules carried over from `AGENTS.md §4`:
 
-- The engine measures; the database only stores. Values are stored exactly as measured (`Double`, no rounding: coverage is stored as `65.11627906976744`, not `65.1`); `passed_gate`, deltas and trends are SQL views, never stored numbers.
+- The engine measures; the database only stores. Values are stored exactly as measured (`Double`, no rounding: coverage is stored as `60.264900662251655`, not `60.3`); `passed_gate`, deltas and trends are SQL views, never stored numbers.
 - Persistence is off unless `REPOGUARD_DATABASE_URL` is set, and cannot change a measured number (`verify.py phase17-pipeline` checks that the `repoguard-out/*.json` files are byte-identical with and without it). A bad URL or a missing `[db]` extra fails before measuring, not after.
 - The public web API never writes: `/api/analyze` doesn't store runs, even with the variable set, until per-project tokens exist (A3).
 - Every run stores the mutation operator set's hash; trends are drawn only between runs that used the same operators.
@@ -607,7 +607,7 @@ https://ibm-bob-mcp-agent-guard.vercel.app/ — `RepoForm`/`ActionBar` drive
 `SummaryPanel` shows the advisory AI summary from `POST /api/summary`,
 labeled with the provider that wrote it. The public URL calls the real
 backend on Cloud Run; checked end to end in a real browser (Analyze on
-`./demo-repo`: 65.1% coverage, 4 gap files, gate FAIL). The current web UI (`repoguard serve`,
+`./demo-repo`: 60.3% coverage, 4 gap files, gate FAIL). The current web UI (`repoguard serve`,
 `web/static/index.html`) stays as the reference implementation — the new
 frontend consumes the same endpoints rather than replacing them.
 

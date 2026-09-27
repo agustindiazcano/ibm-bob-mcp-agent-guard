@@ -30,6 +30,21 @@ from .mutation import (
 )
 
 
+_PYTEST_ENV_ALLOW = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "TEMP", "TMP",
+                     "PYTHONPATH", "VIRTUAL_ENV", "SYSTEMROOT")  # SYSTEMROOT: Windows
+
+def pytest_env(extra: dict[str, str] | None = None) -> dict[str, str]:
+    """Environment for any pytest subprocess that runs model-written code:
+    only the allow-listed variables, plus PYTHONDONTWRITEBYTECODE=1. No
+    credentials, tokens or cloud config ever reach a test process."""
+    env = {k: v for k, v in os.environ.items() if k in _PYTEST_ENV_ALLOW}
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    if extra:
+        env.update(extra)
+    return env
+
+
+
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
@@ -75,8 +90,9 @@ class RiskScore:
 # Coverage
 # ---------------------------------------------------------------------------
 
-def measure_coverage(repo_path: str | Path) -> CoverageResult:
-    """Run pytest with coverage on *repo_path*, write repoguard-out/coverage.json, return CoverageResult."""
+def measure_coverage(repo_path: str | Path, tests_dir: str = "tests") -> CoverageResult:
+    """Run pytest with coverage on *repo_path*, write repoguard-out/coverage.json, return CoverageResult.
+    Totals exclude files inside tests_dir (source-only coverage)."""
     repo = _require_repo_dir(repo_path)
     # Per-run data/report paths: concurrent measurements of the same repo
     # (e.g. /api/analyze + /api/stream) would otherwise erase each other's
@@ -90,7 +106,7 @@ def measure_coverage(repo_path: str | Path) -> CoverageResult:
                 f"--junitxml={junit_xml}", "-q", "--tb=no",
             ],
             cwd=repo,
-            env={**os.environ, "COVERAGE_FILE": str(Path(tmp) / ".coverage"), "PYTHONDONTWRITEBYTECODE": "1"},
+            env=pytest_env({"COVERAGE_FILE": str(Path(tmp) / ".coverage")}),
             capture_output=True,
             text=True,
             timeout=120,
@@ -106,16 +122,27 @@ def measure_coverage(repo_path: str | Path) -> CoverageResult:
         data = json.loads(coverage_json.read_text(encoding="utf-8"))
         tests = _parse_junit(junit_xml)
 
-    totals = data.get("totals", {})
+    covered_lines = 0
+    total_lines = 0
     missing: dict[str, list[int]] = {}
+    
     for fname, fdata in data.get("files", {}).items():
+        if Path(fname).parts and Path(fname).parts[0] == tests_dir:
+            continue
+            
+        summary = fdata.get("summary", {})
+        covered_lines += summary.get("covered_lines", 0)
+        total_lines += summary.get("num_statements", 0)
+        
         if fdata.get("missing_lines"):
             missing[fname] = fdata["missing_lines"]
 
+    percent = (covered_lines / total_lines * 100) if total_lines > 0 else 0.0
+
     result = CoverageResult(
-        percent=totals.get("percent_covered", 0.0),
-        covered_lines=totals.get("covered_lines", 0),
-        total_lines=totals.get("num_statements", 0),
+        percent=percent,
+        covered_lines=covered_lines,
+        total_lines=total_lines,
         missing_lines=missing,
         tests=tests,
     )

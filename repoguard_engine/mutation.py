@@ -402,7 +402,8 @@ def _files_to_mutate(repo: Path, mutate_root: Path, tests_dir: str) -> list[Path
 # ---------------------------------------------------------------------------
 
 def _pytest_env() -> dict[str, str]:
-    return {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+    from .core import pytest_env
+    return pytest_env()
 
 
 def _run_copy(repo_path: Path, tests_dir: str, mutant: _Mutant | None = None) -> str:
@@ -528,13 +529,14 @@ def run_mutation(
         )
         for m, outcome in zip(all_mutants, outcomes)
     ]
+    error_ids = [r.index for r in records if r.outcome == "error"]
     surviving_ids = [r.index for r in records if r.outcome == "survived"]
-    total = len(records)
+    total = len(records) - len(error_ids)
     survived = len(surviving_ids)
-    killed = total - survived
+    killed = total - survived if total > 0 else 0
 
     result = MutationResult(
-        score=round(killed / total * 100, 2),
+        score=round(killed / total * 100, 2) if total > 0 else 0.0,
         killed=killed,
         survived=survived,
         total=total,
