@@ -35,7 +35,7 @@ _COPY_IGNORE = shutil.ignore_patterns(
 )
 
 
-def start_fix_stream(repo_path: str, gate_threshold: float, provider: str | None) -> Iterator[str]:
+def start_fix_stream(repo_path: str, gate_threshold: float, provider: str | None, model_id: str | None = None) -> Iterator[str]:
     """Claim the single run slot, start the fix loop on a sandbox copy in a
     worker thread, and return an NDJSON line iterator over its events.
 
@@ -48,7 +48,7 @@ def start_fix_stream(repo_path: str, gate_threshold: float, provider: str | None
     events: queue.Queue[dict | None] = queue.Queue()
     try:
         worker = threading.Thread(
-            target=_run, args=(repo_path, gate_threshold, provider, events), daemon=True, name="repoguard-fix"
+            target=_run, args=(repo_path, gate_threshold, provider, model_id, events), daemon=True, name="repoguard-fix"
         )
         worker.start()
     except BaseException:
@@ -71,7 +71,10 @@ def _drain(events: "queue.Queue[dict | None]") -> Iterator[str]:
         yield json.dumps(event, default=str) + "\n"
 
 
-def _run(repo_path: str, gate_threshold: float, provider: str | None, events: "queue.Queue[dict | None]") -> None:
+def _run(
+    repo_path: str, gate_threshold: float, provider: str | None, model_id: str | None,
+    events: "queue.Queue[dict | None]",
+) -> None:
     """Worker body: copy, run the loop, report the tests it wrote, clean up."""
     from ..ai_providers import resolve_provider_name
     from ..watson_agent import run_fix_loop
@@ -86,10 +89,10 @@ def _run(repo_path: str, gate_threshold: float, provider: str | None, events: "q
         work = sandbox / original.name
         shutil.copytree(original, work, ignore=_COPY_IGNORE)
         resolved_provider = resolve_provider_name(provider)
-        emit("start", {"repo_path": str(original), "provider": resolved_provider})
+        emit("start", {"repo_path": str(original), "provider": resolved_provider, "model_id": model_id})
 
         result = run_fix_loop(
-            str(work), gate_threshold=gate_threshold, publish=False, provider=provider, on_event=emit
+            str(work), gate_threshold=gate_threshold, publish=False, provider=provider, model_id=model_id, on_event=emit
         )
         evidence = Path(result.evidence_path).read_text(encoding="utf-8") if result.evidence_path else ""
         emit(
