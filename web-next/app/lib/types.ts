@@ -53,6 +53,7 @@ export type RepoFormValues = {
   mutation: boolean;
   gateThreshold: number;
   provider?: AIProvider;
+  swarm?: boolean;
 };
 
 // core.build_dashboard_data's dict: /api/analyze minus the fields the server

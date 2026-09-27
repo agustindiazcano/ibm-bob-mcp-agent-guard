@@ -10,9 +10,20 @@ type Props = {
   busy: boolean;
   isAnalyzing: boolean;
   isAutofixing: boolean;
+  swarm?: boolean;
+  onToggleSwarm?: () => void;
 };
 
-export function ActionBar({ onAnalyze, onGate, onAutofix, busy, isAnalyzing, isAutofixing }: Props) {
+export function ActionBar({
+  onAnalyze,
+  onGate,
+  onAutofix,
+  busy,
+  isAnalyzing,
+  isAutofixing,
+  swarm = true,
+  onToggleSwarm,
+}: Props) {
   return (
     <div className={styles.bar}>
       <button
@@ -51,14 +62,14 @@ export function ActionBar({ onAnalyze, onGate, onAutofix, busy, isAnalyzing, isA
         className={styles.button}
         onClick={onGate}
         disabled={busy}
-        title="Fast quality check (seconds): measures line coverage and checks against the gate threshold. Skips mutation testing."
+        title="Quality Gate rápido (segundos): mide cobertura de líneas y verifica si supera el umbral (PASS/FAIL). Omite las mutaciones AST para dar feedback inmediato en CI/CD."
       >
         <span>Gate</span>
       </button>
 
       <button
         type="button"
-        className={`${styles.button} ${isAutofixing ? styles.autofixGlow : ""}`}
+        className={`${styles.button} ${styles.autofixBtn} ${isAutofixing ? styles.autofixGlow : ""}`}
         onClick={onAutofix}
         disabled={busy && !isAutofixing}
         title="Autonomously writes missing tests with AI (watsonx or Vertex AI) on a sandbox copy."
@@ -86,6 +97,32 @@ export function ActionBar({ onAnalyze, onGate, onAutofix, busy, isAnalyzing, isA
         )}
       </button>
 
+      <div className={styles.swarmGroup}>
+        <label
+          className={`${styles.swarmControl} ${swarm ? styles.swarmOn : ""}`}
+          title="Multi-agent swarm: aumenta la velocidad del testing paralelizando tareas con multiples agentes a la vez"
+        >
+          <input
+            type="checkbox"
+            className={styles.swarmInput}
+            checked={swarm}
+            onChange={onToggleSwarm}
+            disabled={busy}
+          />
+          <span className={styles.swarmSlider} />
+          <span className={styles.swarmText}>Multi-agent swarm</span>
+          <span className={styles.cloudBadge} aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4C9.11 4 6.6 5.64 5.35 8.04C2.34 8.36 0 10.91 0 14C0 17.31 2.69 20 6 20H19C21.76 20 24 17.76 24 15C24 12.36 21.95 10.22 19.35 10.04Z" />
+            </svg>
+          </span>
+        </label>
+        <Tooltip
+          content="Aumenta la velocidad del testing paralelizando tareas con múltiples agentes a la vez."
+          ariaLabel="Información sobre Multi-agent swarm"
+        />
+      </div>
+
       <Tooltip
         content="Analyze runs the full inspection. Gate (Fast) is for fast CI/CD quality checks without the minutes needed for mutation testing. Autofix runs the AI loop to write tests for untested code."
         ariaLabel="Explain actions"
@@ -93,5 +130,3 @@ export function ActionBar({ onAnalyze, onGate, onAutofix, busy, isAnalyzing, isA
     </div>
   );
 }
-
-

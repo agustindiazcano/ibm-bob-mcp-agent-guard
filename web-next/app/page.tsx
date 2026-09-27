@@ -22,6 +22,7 @@ const DEFAULT_VALUES: RepoFormValues = {
   mutation: false,
   gateThreshold: 80,
   provider: "vertex",
+  swarm: true,
 };
 
 export default function Home() {
@@ -168,6 +169,8 @@ export default function Home() {
           // Like `repoguard gate`: a coverage-only check, never mutation.
           onGate={() => runAnalyze(values.gateThreshold, false)}
           onAutofix={handleAutofixClick}
+          swarm={values.swarm ?? true}
+          onToggleSwarm={() => setValues({ ...values, swarm: !(values.swarm ?? true) })}
         />
       </Card>
       {error && (
