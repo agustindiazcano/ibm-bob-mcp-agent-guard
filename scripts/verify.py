@@ -34,6 +34,7 @@ Phase checks implemented:
                         v_survival_by_operator/v_persistent_survivors/v_flaky_tests
                         (needs the [db] extra; see scripts/verify_phase17.py)
     phase18-s3        — lane sandbox + owned-path write guard (see scripts/verify_phase18.py)
+    phase18-s4        — lane state machine + thread pool + blackboard (see scripts/verify_phase18.py)
 """
 
 from __future__ import annotations
@@ -56,7 +57,7 @@ from verify_phase17 import (  # scripts/ is sys.path[0]
     check_phase17_pipeline,
     check_phase17_store,
 )
-from verify_phase18 import check_phase18_s3
+from verify_phase18 import check_phase18_s3, check_phase18_s4
 from verify_phase19 import check_phase19
 
 
@@ -803,6 +804,7 @@ CHECKS: dict[str, callable] = {
     "phase17-engine": check_phase17_engine,
     "phase18-s2": check_phase17_engine,
     "phase18-s3": check_phase18_s3,
+    "phase18-s4": check_phase18_s4,
     "phase19": check_phase19,
 }
 
