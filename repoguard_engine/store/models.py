@@ -178,3 +178,15 @@ fix_requests = Table(
     Index("ix_fix_requests_created", "created_at"),
     Index("ix_fix_requests_ip_created", "ip", "created_at"),
 )
+
+# One run in progress per IP (web/rate_limit.py's try_claim_run/release_run):
+# replaces a single global "one run at a time" lock, which blocked every
+# visitor behind whichever one happened to click first. The row is deleted
+# when the run finishes; started_at also lets a claim past
+# REPOGUARD_FIX_MAX_RUN_MINUTES be reclaimed if a worker died without
+# releasing it (a crash, an instance recycle).
+fix_active_runs = Table(
+    "fix_active_runs", metadata,
+    Column("ip", String(64), primary_key=True),
+    Column("started_at", DateTime(timezone=True), nullable=False),
+)

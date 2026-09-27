@@ -159,6 +159,9 @@ jobs:
       - name: Verify autofix-ratelimit (per-IP + global caps, in-memory and SQLite)
         run: python scripts/verify.py autofix-ratelimit
 
+      - name: Verify autofix-active-run (per-IP one-run-at-a-time lock, stale-claim recovery)
+        run: python scripts/verify.py autofix-active-run
+
   guardrails-phase19:
     runs-on: ubuntu-latest
     # Phase 19 fix-loop guardrails: G1 env allow-list, G2 static AST policy,
