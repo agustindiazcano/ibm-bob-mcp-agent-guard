@@ -19,6 +19,16 @@ Phase 17 checks for scripts/verify.py (measurement history store).
                         body) — 401/201/200-idempotent/422; `repoguard analyze --push URL` against
                         a real `repoguard serve` subprocess, and REPOGUARD_TOKEN unset fails before
                         measuring
+    phase17-mutants-tests — Phase 17 A2-gap: per-mutant/per-test records loaded into the store.
+                        schema_version 2; record["mutants"]/["tests"] match the engine's counts and
+                        have unique fingerprints/test_ids; exact round trip through the mutants and
+                        test_results tables; runs.tests_measured is True; v_survival_by_operator,
+                        v_persistent_survivors and v_flaky_tests all return without error, the first
+                        two with real rows
+    phase17-history-routes — Phase 17 C1: GET /api/projects/{slug}/operators, /survivors, /flaky.
+                        404 for an unknown project; 200 with real per-operator/per-mutant data over
+                        HTTP (not just direct SQL) from a small real mutation run; /flaky is empty
+                        (correct on a single run) without erroring
 
 Each check runs its script in a fresh interpreter (sys.executable), same as verify.py.
 """
@@ -118,7 +128,7 @@ try:
             m = c.execute(select(mutation_results).where(mutation_results.c.run_id == id_mut)).one()
             assert (m.score, m.killed, m.survived, m.total) == (mut.mutation.score, mut.mutation.killed, mut.mutation.survived, mut.mutation.total), f'{label}: mutation differs'
             r = c.execute(select(runs).where(runs.c.id == id_demo)).one()
-            assert r.endpoints_measured is True and r.tests_measured is False and r.source == 'cli'
+            assert r.endpoints_measured is True and r.tests_measured is True and r.source == 'cli'
             assert r.operators_hash == MUTATION_OPERATORS_HASH and r.status == 'ok'
             assert c.execute(select(runs.c.endpoints_measured).where(runs.c.id == id_mut)).scalar_one() is False
         init_db(engine)  # views are dropped and recreated; the data must survive
@@ -464,6 +474,144 @@ print('OK')
 """
 
 
+_MUTANTS_TESTS = _COMMON + r"""
+import subprocess
+from datetime import datetime, timezone
+from repoguard_engine.pipeline import run_pipeline
+
+tmp = Path(tempfile.mkdtemp(prefix='verify17mt-'))
+try:
+    demo_dir = copy_demo(tmp)
+    # A real git repo so collect_context reports dirty=False, not None --
+    # v_persistent_survivors/v_flaky_tests both filter on "NOT r.dirty",
+    # which excludes NULL (unknown) rows.
+    git = lambda *a: subprocess.run(['git', '-c', 'user.email=v@x', '-c', 'user.name=v', *a],
+                                    cwd=demo_dir, check=True, capture_output=True, timeout=30)
+    git('init', '-q'); git('add', '.'); git('commit', '-qm', 'init')
+
+    demo = run_pipeline(demo_dir, include_mutation=True, include_endpoints=False)
+    assert demo.mutation.total > 0, 'expected a real mutation run'
+
+    from repoguard_engine.store.context import collect_context
+    from repoguard_engine.store.db import get_engine, init_db
+    from repoguard_engine.store.record import SCHEMA_VERSION, build_run_record, new_run_id
+    from repoguard_engine.store.repository import save_record
+    from repoguard_engine.store.models import mutants, runs, test_results
+    from sqlalchemy import select, text
+
+    now = datetime.now(timezone.utc)
+    ctx = collect_context(demo.repo_path, 'verify-mt')
+    assert ctx.dirty is False, 'the throwaway demo-repo copy should be a clean git checkout'
+    rec = build_run_record(ctx, run_id=new_run_id(), started_at=now, finished_at=now,
+                           gate_threshold=demo.gate_threshold, coverage=demo.coverage,
+                           mutation=demo.mutation, risk=demo.risk, endpoints=None)
+    assert rec['schema_version'] == 2 == SCHEMA_VERSION
+
+    assert len(rec['mutants']) == demo.mutation.total, (len(rec['mutants']), demo.mutation.total)
+    assert len({m['fingerprint'] for m in rec['mutants']}) == demo.mutation.total, 'duplicate fingerprints'
+    assert len(rec['tests']) == len(demo.coverage.tests) == 5, len(rec['tests'])
+    print(f"  record: schema_version=2, {len(rec['mutants'])} mutants (unique fingerprints), {len(rec['tests'])} tests")
+
+    engine = get_engine(f'sqlite:///{tmp / "store.db"}')
+    init_db(engine)
+    run_id = save_record(engine, rec, project='verify-mt', source='cli')
+
+    with engine.connect() as c:
+        stored_mutants = c.execute(select(mutants).where(mutants.c.run_id == run_id)
+                                   .order_by(mutants.c.mutant_index)).all()
+        assert len(stored_mutants) == demo.mutation.total
+        by_index = {m['index']: m for m in rec['mutants']}
+        for row in stored_mutants:
+            src = by_index[row.mutant_index]
+            assert (row.fingerprint, row.file_path, row.function_name, row.lineno,
+                    row.operator, row.description, row.outcome) == \
+                   (src['fingerprint'], src['file'], src['function'], src['lineno'],
+                    src['operator'], src['description'], src['outcome']), row
+
+        stored_tests = c.execute(select(test_results).where(test_results.c.run_id == run_id)).all()
+        assert {(t.test_id, t.outcome, t.duration_s) for t in stored_tests} == \
+               {(t['test_id'], t['outcome'], t['duration_s']) for t in rec['tests']}
+
+        tests_measured = c.execute(select(runs.c.tests_measured).where(runs.c.id == run_id)).scalar_one()
+        assert tests_measured is True, 'runs.tests_measured must be True'
+    print(f'  round trip: {len(stored_mutants)} mutants, {len(stored_tests)} tests exact match, runs.tests_measured=True')
+
+    with engine.connect() as c:
+        survival = c.execute(text('SELECT operator, total, survived, survival_pct FROM v_survival_by_operator')).all()
+        assert len(survival) >= 1, 'v_survival_by_operator returned no rows'
+        assert sum(row.total for row in survival) == demo.mutation.total
+
+        # The views' own definition of "survivor": textually outcome != 'killed'
+        # (timeout/error included), not MutationResult.survived.
+        expected_survivor_fps = {m['fingerprint'] for m in rec['mutants'] if m['outcome'] != 'killed'}
+        survivors = c.execute(text('SELECT fingerprint FROM v_persistent_survivors')).all()
+        assert {row.fingerprint for row in survivors} == expected_survivor_fps, \
+            (len(survivors), len(expected_survivor_fps))
+
+        flaky = c.execute(text('SELECT * FROM v_flaky_tests')).all()  # one run: empty is correct, must not error
+    print(f'  views: v_survival_by_operator {len(survival)} operator rows, '
+          f'v_persistent_survivors {len(survivors)} survivors, v_flaky_tests {len(flaky)} rows (0 expected on one run)')
+finally:
+    shutil.rmtree(tmp, ignore_errors=True)
+print('OK')
+"""
+
+
+_HISTORY_ROUTES = _COMMON + r"""
+import subprocess
+from fastapi.testclient import TestClient
+from repoguard_engine.pipeline import run_pipeline
+from repoguard_engine.web.server import app
+
+tmp = Path(tempfile.mkdtemp(prefix='verify17hr-'))
+db_path = tmp / 'history.db'
+os.environ['REPOGUARD_DATABASE_URL'] = f'sqlite:///{db_path}'
+try:
+    client = TestClient(app)
+
+    # 1. No project at all -> 404 on all three, not an empty list or a crash
+    for path in ('operators', 'survivors', 'flaky'):
+        res = client.get(f'/api/projects/verify-hr/{path}')
+        assert res.status_code == 404, (path, res.status_code)
+    print('  unknown project -> 404 on /operators, /survivors, /flaky')
+
+    # 2. A small, fast real mutation run (git-backed so dirty=False, same
+    # requirement as v_persistent_survivors/v_flaky_tests -- see
+    # phase17-mutants-tests) -- proves the routes serialize real view rows
+    # over HTTP, not just direct SQL.
+    small = tmp / 'small'; (small / 'tests').mkdir(parents=True)
+    (small / 'calc.py').write_text('def add(a, b):\n    return a + b\n\ndef double(x):\n    return x * 2\n')
+    (small / 'tests' / 'test_calc.py').write_text(
+        'from calc import add, double\n\ndef test_add():\n    assert add(2, 3) == 5\n\n'
+        'def test_double():\n    assert double(0) == 0\n')
+    (small / 'pytest.ini').write_text('[pytest]\npythonpath = .\n')
+    git = lambda *a: subprocess.run(['git', '-c', 'user.email=v@x', '-c', 'user.name=v', *a],
+                                    cwd=small, check=True, capture_output=True, timeout=30)
+    git('init', '-q'); git('add', '.'); git('commit', '-qm', 'init')
+
+    r = run_pipeline(small, include_mutation=True, include_endpoints=False, project='verify-hr')
+    assert r.run_id and r.mutation.total > 0 and r.mutation.survived > 0, r.mutation
+
+    ops = client.get('/api/projects/verify-hr/operators').json()
+    assert len(ops) >= 1 and sum(o['total'] for o in ops) == r.mutation.total, ops
+    assert {'operator', 'total', 'survived', 'survival_pct'} == set(ops[0])
+    print(f'  /operators: {len(ops)} operator rows, totals sum to {r.mutation.total}')
+
+    survivors = client.get('/api/projects/verify-hr/survivors').json()
+    assert len(survivors) == r.mutation.survived, (len(survivors), r.mutation.survived)
+    assert {'fingerprint', 'file_path', 'function_name', 'description', 'runs_seen', 'first_seen'} == set(survivors[0])
+    assert all(s['runs_seen'] == 1 for s in survivors)
+    print(f'  /survivors: {len(survivors)} rows, matches mutation.survived ({r.mutation.survived})')
+
+    flaky = client.get('/api/projects/verify-hr/flaky').json()
+    assert flaky == [], 'a single run must never look flaky'
+    print('  /flaky: [] on a single run (correct -- needs 2+ runs on the same commit to show anything)')
+finally:
+    shutil.rmtree(tmp, ignore_errors=True)
+print('OK')
+"""
+
+
 def _check(title: str, script: str, timeout: int) -> bool:
     print(f"=== {title} ===")
     rc, out = _run_script(script, timeout)
@@ -478,7 +626,11 @@ def check_phase17_store() -> bool:
 
 
 def check_phase17_pipeline() -> bool:
-    return _check("Phase 17 A1.2: pipeline persistence can't change a measurement", _PIPELINE, timeout=900)
+    # Two full sequential mutation passes (79 mutants each) plus CLI/MCP checks.
+    # 900s was too tight on slower/contended hardware: a single such pass was
+    # measured at ~600s on a busy Windows dev machine, well within this
+    # engine's normal range but more than 900/2 once CLI/MCP overhead is added.
+    return _check("Phase 17 A1.2: pipeline persistence can't change a measurement", _PIPELINE, timeout=1800)
 
 
 def check_phase17_endpoints() -> bool:
@@ -489,3 +641,13 @@ def check_phase17_api() -> bool:
     ok1 = _check("Phase 17 A3.1/A3.2: read routes + POST /api/runs ingest", _API, timeout=180)
     ok2 = _check("Phase 17 A3.3: repoguard analyze --push (real repoguard serve)", _PUSH, timeout=180)
     return ok1 and ok2
+
+
+def check_phase17_mutants_tests() -> bool:
+    return _check("Phase 17 A2-gap: per-mutant/per-test records loaded into the store",
+                  _MUTANTS_TESTS, timeout=900)
+
+
+def check_phase17_history_routes() -> bool:
+    return _check("Phase 17 C1: GET /api/projects/{slug}/operators, /survivors, /flaky",
+                  _HISTORY_ROUTES, timeout=120)
