@@ -33,6 +33,8 @@ Phase checks implemented:
                         (mutants/test_results tables), schema_version 2, exact round trip,
                         v_survival_by_operator/v_persistent_survivors/v_flaky_tests
                         (needs the [db] extra; see scripts/verify_phase17.py)
+    phase17-history-routes — Phase 17 C1: GET /api/projects/{slug}/operators, /survivors, /flaky
+                        (needs the [db] extra; see scripts/verify_phase17.py)
     phase18-s3        — lane sandbox + owned-path write guard (see scripts/verify_phase18.py)
 """
 
@@ -52,6 +54,7 @@ from pathlib import Path
 from verify_phase17 import (  # scripts/ is sys.path[0]
     check_phase17_api,
     check_phase17_endpoints,
+    check_phase17_history_routes,
     check_phase17_mutants_tests,
     check_phase17_pipeline,
     check_phase17_store,
@@ -799,6 +802,7 @@ CHECKS: dict[str, callable] = {
     "phase17-endpoints": check_phase17_endpoints,
     "phase17-api": check_phase17_api,
     "phase17-mutants-tests": check_phase17_mutants_tests,
+    "phase17-history-routes": check_phase17_history_routes,
     "phase18-s1": check_phase18_s1,
     "phase17-engine": check_phase17_engine,
     "phase18-s2": check_phase17_engine,
