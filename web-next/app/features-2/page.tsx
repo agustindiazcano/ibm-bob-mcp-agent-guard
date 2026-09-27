@@ -21,7 +21,6 @@ const ROWS: { feature: string; status: string; tone: TagTone; evidence: string }
   { feature: "Charts (Operators / Survivors / Flaky)", status: "Real", tone: "live", evidence: "Already in the frontend" },
   { feature: "Provider switch + Gemini models", status: "Real", tone: "live", evidence: "Shipped" },
   { feature: "Swarm (S0-S4)", status: "Partial", tone: "gated", evidence: "Parallel lanes done; Critic (S5) + publish (S6) pending" },
-  { feature: "IBM Bob usage", status: "Real", tone: "live", evidence: "12 commits, 1st of 6 on the team, evidence in repo" },
 ];
 
 export default function Features2Page() {
@@ -29,7 +28,7 @@ export default function Features2Page() {
     <SlideShell>
       <SlideHeader
         eyebrow="Features, continued"
-        title="Fourteen more things that are real, not roadmap."
+        title="Thirteen more things that are real, not roadmap."
         lead="Every row is either measured in this repo, live in CI, or running in production — with one honestly marked partial."
       />
       <div className={blocks.tableWrap}>

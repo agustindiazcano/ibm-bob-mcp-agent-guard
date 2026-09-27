@@ -10,8 +10,7 @@ export const metadata: Metadata = {
 const KPIS = [
   { label: "Bob commits", value: "12", detail: "1st of 6 on the team" },
   { label: "Bob PRs", value: "4", detail: "#1, #2, #4, #6" },
-  { label: "Bob lines", value: "820", detail: "of 5,134 total in this repo" },
-  { label: "Bob factor", value: "16.0%", detail: "share of repo lines" },
+  { label: "Bob lines", value: "820", detail: "(recorded 25/09)" },
 ];
 
 const PHASES = [
@@ -62,7 +61,7 @@ export default function IbmBobPage() {
           </>
         }
       />
-      <div className={blocks.grid4}>
+      <div className={blocks.grid3}>
         {KPIS.map((k) => (
           <div key={k.label} className={blocks.tile}>
             <span className={blocks.muted}>{k.label}</span>
