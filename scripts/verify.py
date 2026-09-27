@@ -627,7 +627,8 @@ with tempfile.TemporaryDirectory(prefix='repoguard-seq-stub-') as tmp:
     assert [row['stage'] for row in r.stages] == ['writer', 'critic'] * len(r.files_attempted), r.stages
     for row in r.stages:
         want = ['write_test_file', 'run_tests'] if row['stage'] == 'writer' else ['run_tests']
-        assert row['tool_calls'] == want, row
+        tool_names = [t['tool'] if isinstance(t, dict) else t for t in row['tool_calls']]
+        assert tool_names == want, row
         assert row['wall_s'] >= 0 and row['llm_calls'] >= 2, row
     assert all(note.endswith('APPROVED') for note in r.critic_notes), r.critic_notes
     assert set(r.wall_s) == {'baseline', 'ai', 'remeasure', 'total'}, r.wall_s
