@@ -270,8 +270,12 @@ export function ResultsDashboard() {
     // selectProject only touches state setters and a ref, safe to omit.
   }, [demoMode]);
 
-  const bannerKey =
-    projects.status === "unavailable"
+  // Demo Mode never shows a real error/unavailable banner -- even a stale
+  // one from a previous real-mode fetch, for the one render before the
+  // demoMode effect clears it. It has its own "Select a repo" prompt above.
+  const bannerKey = demoMode
+    ? null
+    : projects.status === "unavailable"
       ? projects.reason.kind
       : projects.status === "ok" && projects.data.length === 0
         ? "empty"
@@ -281,7 +285,7 @@ export function ResultsDashboard() {
 
   return (
     <>
-      {projects.status === "unavailable" && !banner && (
+      {!demoMode && projects.status === "unavailable" && !banner && (
         <p className={styles.alert} role="alert">
           {projects.reason.message}
         </p>
@@ -325,9 +329,9 @@ export function ResultsDashboard() {
       </div>
 
       {demoMode && !selected ? (
-        <p className={styles.alert} role="status">
-          Select a repo above to see its analytics.
-        </p>
+        <div className={styles.banner} role="status">
+          <strong>Select a repo above to see its analytics.</strong>
+        </div>
       ) : (
         <>
       <Kpis trend={views.trend} />
