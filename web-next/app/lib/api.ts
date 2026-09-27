@@ -1,22 +1,18 @@
 import type { AnalyzeResponse, RepoFormValues, StreamEvent, SummaryResponse } from "./types";
 
 export function apiBase(): string {
-  const base = process.env.NEXT_PUBLIC_REPOGUARD_API_BASE;
-  if (!base) {
-    throw new Error("NEXT_PUBLIC_REPOGUARD_API_BASE is not set");
-  }
-  return base;
+  return process.env.NEXT_PUBLIC_REPOGUARD_API_BASE || "https://repoguard-ljm5hefnsq-uc.a.run.app";
 }
 
 export async function request(url: string, init?: RequestInit): Promise<Response> {
   try {
     return await fetch(url, init);
-  } catch {
-    // The browser reports "backend down" and "CORS rejected" as the same
-    // opaque TypeError ("Failed to fetch"), so the message names both.
+  } catch (err) {
+    // Technical detail logged to console for debugging
+    console.error(`[API Network Error] Could not connect to backend at ${apiBase()}. Verify service status and CORS origins:`, err);
+    // Clean user-facing error message
     throw new Error(
-      `Can't reach the backend at ${apiBase()}. Check that repoguard serve is running there ` +
-        `and that its REPOGUARD_CORS_ORIGINS allows ${window.location.origin}.`,
+      `No se pudo conectar con el servidor backend (${apiBase()}). Verificá el estado del servicio o tu conexión a internet.`
     );
   }
 }

@@ -44,7 +44,6 @@ export function ActionBar({ onAnalyze, onGate, onAutofix, busy, isAnalyzing, isA
         ) : (
           <span>Analyze</span>
         )}
-        <span className={styles.buttonSub}>(Full Suite)</span>
       </button>
 
       <button
@@ -54,8 +53,7 @@ export function ActionBar({ onAnalyze, onGate, onAutofix, busy, isAnalyzing, isA
         disabled={busy}
         title="Fast quality check (seconds): measures line coverage and checks against the gate threshold. Skips mutation testing."
       >
-        <span>Gate (Fast)</span>
-        <span className={styles.buttonSub}>(No Mutation)</span>
+        <span>Gate</span>
       </button>
 
       <button
@@ -86,7 +84,6 @@ export function ActionBar({ onAnalyze, onGate, onAutofix, busy, isAnalyzing, isA
         ) : (
           <span>Autofix</span>
         )}
-        <span className={styles.buttonSub}>(Self-Healing AI)</span>
       </button>
 
       <Tooltip
