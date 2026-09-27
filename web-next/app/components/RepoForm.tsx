@@ -127,7 +127,7 @@ export function RepoForm({ values, onChange, token, onTokenChange, disabled }: P
             onClick={() => onChange({ ...values, provider: "vertex" })}
           >
             <span className={`${styles.providerBadge} ${styles.providerBadgeGcp}`}>GCP</span>
-            <span>Google Vertex AI (Gemini 2.5)</span>
+            <span>Google Vertex AI (Gemini 3)</span>
           </button>
           <button
             type="button"
@@ -138,6 +138,24 @@ export function RepoForm({ values, onChange, token, onTokenChange, disabled }: P
             <span>IBM watsonx.ai (Mistral/Llama)</span>
           </button>
         </div>
+        {(values.provider ?? "vertex") === "vertex" && (
+          <div className={styles.providerOptions}>
+            <button
+              type="button"
+              className={`${styles.providerBtn} ${(values.modelId ?? "gemini-3.8-flash") === "gemini-3.8-flash" ? styles.providerBtnActive : ""}`}
+              onClick={() => onChange({ ...values, modelId: "gemini-3.8-flash" })}
+            >
+              <span>Gemini 3.8 Flash (default)</span>
+            </button>
+            <button
+              type="button"
+              className={`${styles.providerBtn} ${values.modelId === "gemini-3.5-flash" ? styles.providerBtnActive : ""}`}
+              onClick={() => onChange({ ...values, modelId: "gemini-3.5-flash" })}
+            >
+              <span>Gemini 3.5 Flash</span>
+            </button>
+          </div>
+        )}
       </div>
 
       <div className={styles.infoBanner}>

@@ -204,19 +204,23 @@ def api_ingest_run(record: dict, response: Response, authorization: str | None =
 
 
 @app.post("/api/summary")
-def api_summary(dashboard: dict, provider: str | None = Query(default=None)) -> dict:
+def api_summary(
+    dashboard: dict,
+    provider: str | None = Query(default=None),
+    model_id: str | None = Query(default=None),
+) -> dict:
     """Wrap narrative.generate_summary() over an already-measured dashboard dict."""
     from ..narrative import generate_summary
 
-    result = generate_summary(dashboard, provider=provider)
+    result = generate_summary(dashboard, provider=provider, model_id=model_id)
     return {"ok": result.ok, "text": result.text, "error": result.error, "provider": result.provider}
-
 
 
 class FixRequest(BaseModel):
     repo_path: str = "."
     gate_threshold: float = 80.0
     provider: str | None = None
+    model_id: str | None = None
 
 
 @app.post("/api/fix")
@@ -234,7 +238,7 @@ def api_fix(body: FixRequest, request: Request) -> StreamingResponse:
     if not Path(body.repo_path).is_dir():
         raise HTTPException(status_code=400, detail=f"repo_path does not exist or is not a directory: {body.repo_path}")
     return StreamingResponse(
-        start_fix_stream(body.repo_path, body.gate_threshold, body.provider, ip),
+        start_fix_stream(body.repo_path, body.gate_threshold, body.provider, body.model_id, ip),
         media_type="application/x-ndjson",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
