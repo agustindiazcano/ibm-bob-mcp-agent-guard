@@ -67,11 +67,10 @@ export function streamUrl(repoPath: string, gateThreshold: number): string {
 
 // POST /api/fix streams NDJSON (one event per line) for several minutes, so
 // it's read incrementally here instead of awaited as one JSON body.
-// EventSource can't send a POST body or an Authorization header.
 export async function streamFix(
   { repoPath, gateThreshold, provider }: RepoFormValues,
-  token: string,
   onEvent: (event: StreamEvent) => void,
+  token?: string,
 ): Promise<void> {
   const payload: Record<string, unknown> = {
     repo_path: repoPath,
@@ -81,9 +80,15 @@ export async function streamFix(
     payload.provider = provider;
   }
 
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const effectiveToken = token?.trim() || process.env.NEXT_PUBLIC_FIX_TOKEN || "";
+  if (effectiveToken) {
+    headers.Authorization = `Bearer ${effectiveToken}`;
+  }
+
   const res = await request(`${apiBase()}/api/fix`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    headers,
     body: JSON.stringify(payload),
   });
   if (!res.ok || !res.body) {

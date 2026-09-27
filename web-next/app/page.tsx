@@ -12,7 +12,6 @@ import { FixResultPanel } from "./components/FixResultPanel";
 import { EndpointsList } from "./components/EndpointsList";
 import { Card } from "./components/Card";
 import { SlideIndicator } from "./components/site/SlideIndicator";
-import { useConfig } from "./context/ConfigContext";
 import styles from "./page.module.css";
 import { fetchAnalyze, fetchSummary, streamFix, streamUrl } from "./lib/api";
 import type { AnalyzeResponse, FixDone, RepoFormValues, StreamEvent, SummaryResponse } from "./lib/types";
@@ -26,7 +25,6 @@ const DEFAULT_VALUES: RepoFormValues = {
 };
 
 export default function Home() {
-  const { autofixToken, openConfig } = useConfig();
   const [values, setValues] = useState<RepoFormValues>(DEFAULT_VALUES);
   const [busy, setBusy] = useState(false);
   const [autofixing, setAutofixing] = useState(false);
@@ -96,12 +94,7 @@ export default function Home() {
     }
   }
 
-  async function runAutofix(explicitToken?: string) {
-    const activeToken = explicitToken ?? autofixToken;
-    if (!activeToken.trim()) {
-      openConfig();
-      return;
-    }
+  async function runAutofix() {
     ++runRef.current;
     setBusy(true);
     setAutofixing(true);
@@ -112,7 +105,7 @@ export default function Home() {
     setFix(null);
 
     try {
-      await streamFix(values, activeToken, (event) => {
+      await streamFix(values, (event) => {
         if (event.type === "heartbeat") {
           return;
         }
@@ -132,10 +125,6 @@ export default function Home() {
   }
 
   function handleAutofixClick() {
-    if (!autofixToken.trim()) {
-      openConfig();
-      return;
-    }
     void runAutofix();
   }
 

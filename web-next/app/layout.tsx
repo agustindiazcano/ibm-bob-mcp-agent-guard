@@ -4,8 +4,6 @@ import { SiteNav } from "./components/site/SiteNav";
 import { SiteFooter } from "./components/site/SiteFooter";
 import { StickyDemoFooter } from "./components/site/StickyDemoFooter";
 import { DemoModeProvider } from "./context/DemoModeContext";
-import { ConfigProvider } from "./context/ConfigContext";
-import { ConfigModal } from "./components/ConfigModal";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -33,17 +31,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${raleway.variable}`}>
       <body>
-        <ConfigProvider>
-          <DemoModeProvider>
-            <SiteNav />
-            {children}
-            <SiteFooter />
-            <StickyDemoFooter />
-            <ConfigModal />
-          </DemoModeProvider>
-        </ConfigProvider>
+        <DemoModeProvider>
+          <SiteNav />
+          {children}
+          <SiteFooter />
+          <StickyDemoFooter />
+        </DemoModeProvider>
       </body>
     </html>
   );
 }
-
