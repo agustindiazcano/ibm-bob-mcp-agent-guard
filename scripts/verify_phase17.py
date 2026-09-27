@@ -19,6 +19,12 @@ Phase 17 checks for scripts/verify.py (measurement history store).
                         body) — 401/201/200-idempotent/422; `repoguard analyze --push URL` against
                         a real `repoguard serve` subprocess, and REPOGUARD_TOKEN unset fails before
                         measuring
+    phase17-mutants-tests — Phase 17 A2-gap: per-mutant/per-test records loaded into the store.
+                        schema_version 2; record["mutants"]/["tests"] match the engine's counts and
+                        have unique fingerprints/test_ids; exact round trip through the mutants and
+                        test_results tables; runs.tests_measured is True; v_survival_by_operator,
+                        v_persistent_survivors and v_flaky_tests all return without error, the first
+                        two with real rows
 
 Each check runs its script in a fresh interpreter (sys.executable), same as verify.py.
 """
@@ -118,7 +124,7 @@ try:
             m = c.execute(select(mutation_results).where(mutation_results.c.run_id == id_mut)).one()
             assert (m.score, m.killed, m.survived, m.total) == (mut.mutation.score, mut.mutation.killed, mut.mutation.survived, mut.mutation.total), f'{label}: mutation differs'
             r = c.execute(select(runs).where(runs.c.id == id_demo)).one()
-            assert r.endpoints_measured is True and r.tests_measured is False and r.source == 'cli'
+            assert r.endpoints_measured is True and r.tests_measured is True and r.source == 'cli'
             assert r.operators_hash == MUTATION_OPERATORS_HASH and r.status == 'ok'
             assert c.execute(select(runs.c.endpoints_measured).where(runs.c.id == id_mut)).scalar_one() is False
         init_db(engine)  # views are dropped and recreated; the data must survive
@@ -464,6 +470,89 @@ print('OK')
 """
 
 
+_MUTANTS_TESTS = _COMMON + r"""
+import subprocess
+from datetime import datetime, timezone
+from repoguard_engine.pipeline import run_pipeline
+
+tmp = Path(tempfile.mkdtemp(prefix='verify17mt-'))
+try:
+    demo_dir = copy_demo(tmp)
+    # A real git repo so collect_context reports dirty=False, not None --
+    # v_persistent_survivors/v_flaky_tests both filter on "NOT r.dirty",
+    # which excludes NULL (unknown) rows.
+    git = lambda *a: subprocess.run(['git', '-c', 'user.email=v@x', '-c', 'user.name=v', *a],
+                                    cwd=demo_dir, check=True, capture_output=True, timeout=30)
+    git('init', '-q'); git('add', '.'); git('commit', '-qm', 'init')
+
+    demo = run_pipeline(demo_dir, include_mutation=True, include_endpoints=False)
+    assert demo.mutation.total > 0, 'expected a real mutation run'
+
+    from repoguard_engine.store.context import collect_context
+    from repoguard_engine.store.db import get_engine, init_db
+    from repoguard_engine.store.record import SCHEMA_VERSION, build_run_record, new_run_id
+    from repoguard_engine.store.repository import save_record
+    from repoguard_engine.store.models import mutants, runs, test_results
+    from sqlalchemy import select, text
+
+    now = datetime.now(timezone.utc)
+    ctx = collect_context(demo.repo_path, 'verify-mt')
+    assert ctx.dirty is False, 'the throwaway demo-repo copy should be a clean git checkout'
+    rec = build_run_record(ctx, run_id=new_run_id(), started_at=now, finished_at=now,
+                           gate_threshold=demo.gate_threshold, coverage=demo.coverage,
+                           mutation=demo.mutation, risk=demo.risk, endpoints=None)
+    assert rec['schema_version'] == 2 == SCHEMA_VERSION
+
+    assert len(rec['mutants']) == demo.mutation.total, (len(rec['mutants']), demo.mutation.total)
+    assert len({m['fingerprint'] for m in rec['mutants']}) == demo.mutation.total, 'duplicate fingerprints'
+    assert len(rec['tests']) == len(demo.coverage.tests) == 5, len(rec['tests'])
+    print(f"  record: schema_version=2, {len(rec['mutants'])} mutants (unique fingerprints), {len(rec['tests'])} tests")
+
+    engine = get_engine(f'sqlite:///{tmp / "store.db"}')
+    init_db(engine)
+    run_id = save_record(engine, rec, project='verify-mt', source='cli')
+
+    with engine.connect() as c:
+        stored_mutants = c.execute(select(mutants).where(mutants.c.run_id == run_id)
+                                   .order_by(mutants.c.mutant_index)).all()
+        assert len(stored_mutants) == demo.mutation.total
+        by_index = {m['index']: m for m in rec['mutants']}
+        for row in stored_mutants:
+            src = by_index[row.mutant_index]
+            assert (row.fingerprint, row.file_path, row.function_name, row.lineno,
+                    row.operator, row.description, row.outcome) == \
+                   (src['fingerprint'], src['file'], src['function'], src['lineno'],
+                    src['operator'], src['description'], src['outcome']), row
+
+        stored_tests = c.execute(select(test_results).where(test_results.c.run_id == run_id)).all()
+        assert {(t.test_id, t.outcome, t.duration_s) for t in stored_tests} == \
+               {(t['test_id'], t['outcome'], t['duration_s']) for t in rec['tests']}
+
+        tests_measured = c.execute(select(runs.c.tests_measured).where(runs.c.id == run_id)).scalar_one()
+        assert tests_measured is True, 'runs.tests_measured must be True'
+    print(f'  round trip: {len(stored_mutants)} mutants, {len(stored_tests)} tests exact match, runs.tests_measured=True')
+
+    with engine.connect() as c:
+        survival = c.execute(text('SELECT operator, total, survived, survival_pct FROM v_survival_by_operator')).all()
+        assert len(survival) >= 1, 'v_survival_by_operator returned no rows'
+        assert sum(row.total for row in survival) == demo.mutation.total
+
+        # The views' own definition of "survivor": textually outcome != 'killed'
+        # (timeout/error included), not MutationResult.survived.
+        expected_survivor_fps = {m['fingerprint'] for m in rec['mutants'] if m['outcome'] != 'killed'}
+        survivors = c.execute(text('SELECT fingerprint FROM v_persistent_survivors')).all()
+        assert {row.fingerprint for row in survivors} == expected_survivor_fps, \
+            (len(survivors), len(expected_survivor_fps))
+
+        flaky = c.execute(text('SELECT * FROM v_flaky_tests')).all()  # one run: empty is correct, must not error
+    print(f'  views: v_survival_by_operator {len(survival)} operator rows, '
+          f'v_persistent_survivors {len(survivors)} survivors, v_flaky_tests {len(flaky)} rows (0 expected on one run)')
+finally:
+    shutil.rmtree(tmp, ignore_errors=True)
+print('OK')
+"""
+
+
 def _check(title: str, script: str, timeout: int) -> bool:
     print(f"=== {title} ===")
     rc, out = _run_script(script, timeout)
@@ -489,3 +578,8 @@ def check_phase17_api() -> bool:
     ok1 = _check("Phase 17 A3.1/A3.2: read routes + POST /api/runs ingest", _API, timeout=180)
     ok2 = _check("Phase 17 A3.3: repoguard analyze --push (real repoguard serve)", _PUSH, timeout=180)
     return ok1 and ok2
+
+
+def check_phase17_mutants_tests() -> bool:
+    return _check("Phase 17 A2-gap: per-mutant/per-test records loaded into the store",
+                  _MUTANTS_TESTS, timeout=900)

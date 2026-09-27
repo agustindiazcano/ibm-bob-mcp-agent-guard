@@ -12,8 +12,20 @@ Derived values (passed_gate, deltas, trends) are views, never columns.
 from __future__ import annotations
 
 from sqlalchemy import (
-    JSON, Boolean, CheckConstraint, Column, DateTime, Double, ForeignKey, Index,
-    Integer, MetaData, String, Table, Text, UniqueConstraint,
+    JSON,
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Double,
+    ForeignKey,
+    Index,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -98,6 +110,34 @@ risk_scores = Table(
     Column("score", Double, nullable=False),
     Column("rank", Integer, nullable=False),
     Column("reasons", _Json, nullable=False),
+)
+
+# One row per mutant (Phase 17 A2-gap). fingerprint is a sha1 hex digest
+# (§4.1); outcome mirrors mutation.py's MutantRecord, never a "killed" bool.
+mutants = Table(
+    "mutants", metadata,
+    _run_fk(),
+    Column("mutant_index", Integer, primary_key=True),
+    Column("fingerprint", String(40), nullable=False),
+    Column("file_path", Text, nullable=False),
+    Column("function_name", Text, nullable=False),
+    Column("lineno", Integer, nullable=False),
+    Column("operator", Text, nullable=False),
+    Column("description", Text, nullable=False),
+    Column("outcome", String(16), nullable=False),
+    CheckConstraint("outcome IN ('killed', 'survived', 'timeout', 'error')", name="ck_mutants_outcome"),
+    Index("ix_mutants_fingerprint", "fingerprint"),
+)
+
+# One row per test, from junit.xml (Phase 17 A2-gap). Always present -- a run
+# always measures coverage, and coverage always measures tests.
+test_results = Table(
+    "test_results", metadata,
+    _run_fk(),
+    Column("test_id", Text, primary_key=True),
+    Column("outcome", String(16), nullable=False),
+    Column("duration_s", Double, nullable=False),
+    CheckConstraint("outcome IN ('passed', 'failed', 'error', 'skipped')", name="ck_test_results_outcome"),
 )
 
 # Consumed by GET /api/projects/{slug}/endpoints (Phase 17 A1-gap).
