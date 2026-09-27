@@ -137,8 +137,8 @@
 .button {
   height: 40px;
   padding: 0 18px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-soft);
   background: rgba(255, 255, 255, 0.05);
   color: #ffffff;
   font-size: 13.5px;
@@ -159,30 +159,29 @@
 }
 
 .primary {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: linear-gradient(135deg, var(--accent) 0%, #ff4d6d 100%);
+  border-color: transparent;
   color: #ffffff;
-  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.35);
+  box-shadow: 0 3px 14px rgba(255, 111, 94, 0.4);
 }
 
 .primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.5);
+  background: linear-gradient(135deg, var(--accent-hover) 0%, #ff6f8f 100%);
+  box-shadow: 0 6px 22px rgba(255, 111, 94, 0.55);
+  transform: translateY(-2px);
 }
 
 .autofixBtn {
-  background: #16a34a;
-  border-color: #22c55e;
+  background: linear-gradient(135deg, #16a34a 0%, #0ea5e9 100%);
+  border-color: transparent;
   color: #ffffff;
-  box-shadow: 0 2px 10px rgba(34, 197, 94, 0.35);
+  box-shadow: 0 3px 14px rgba(16, 185, 129, 0.4);
 }
 
 .autofixBtn:hover:not(:disabled) {
-  background: #15803d;
-  border-color: #4ade80;
-  box-shadow: 0 4px 18px rgba(34, 197, 94, 0.55);
-  transform: translateY(-1px);
+  background: linear-gradient(135deg, #15803d 0%, #0284c7 100%);
+  box-shadow: 0 6px 22px rgba(16, 185, 129, 0.55);
+  transform: translateY(-2px);
 }
 
 .swarmGroup {
