@@ -882,6 +882,18 @@ regression PASS, `phase0` PASS; `demo-repo/` untouched throughout.
 
 ---
 
+### Session 26 — Phase 19 E1: Scripted Provider (`feat/19-eval-scripted-provider`)
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Implemented `ScriptedProvider` for Phase 19 step E1 to inject 8 scripted attack vectors and an honest run | `repoguard_engine/ai_providers/scripted.py` |
+| 2 | Added Phase 19 test scripts (P1-P8 attack vectors) and `phase19` verification | `scripts/phase19_scripts.py`, `scripts/verify_phase19.py`, `scripts/verify.py` |
+| 3 | Updated `PENDING.md` Phase 19 E1 to done (🟢) | `PENDING.md` |
+
+Verified: `verify.py phase19` passed (using stubs for mutation speed, pending G1-G5).
+
+---
+
 ## How to resume
 
 1. Read `PENDING.md` for the task list (Phase 11 is now 🟢 — read its "3 attempts, 3 bugs" narrative before touching `watson_agent/` again, it explains real, non-obvious API constraints).

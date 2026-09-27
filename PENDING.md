@@ -503,7 +503,7 @@ go unnoticed; no benchmark beyond one live run on one fixture.
 | 4 | G4 | Sham mutant + outcome classes (shared with Phase 18 S1/S2) + monotonic kill set | 🔴 |
 | 5 | G5 | `FixResult.status`/`integrity`, evidence always written, publish gate on mutation gain + integrity | 🔴 |
 | 6 | G6 | Source-only coverage — **needs approval (D9)**: moves 65.1% → 60.26%, and the `ci.yml` threshold of 60 needs a decision | 🔴 |
-| 7 | E1 | `ai_providers/scripted.py` + 8 attack scripts + `verify.py phase19` in CI (8/8 stopped, honest run 71/79) | 🔴 |
+| 7 | E1 | `ai_providers/scripted.py` + 8 attack scripts + `verify.py phase19` in CI (8/8 stopped, honest run 71/79) | 🟢 |
 | 8 | O1 | `repoguard-out/fix_run.json` structured run record | 🔴 |
 | 9 | E2 | `scripts/eval_fixloop.py` (K = 3 × provider/model × fixture) — credentialed | 🔴 |
 | 10 | E3 | Held-out fixture `eval-fixtures/<name>/` — **needs approval (D3)** | 🔴 |
