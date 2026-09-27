@@ -82,7 +82,13 @@ ibm-bob-mcp-agent-guard/
 │   ├── testing/          Credential-free test doubles — ScriptedProvider (never wired into get_provider(); used by verify.py phase18-seq-stub)
 │   ├── swarm/            Multi-agent fix loop (Phase 18) — one lane per source file, parallel sandboxes, fan-in behind a single Gate
 │   │   ├── sandbox.py        lane_sandbox() — per-lane temp copy outside the target repo, cleanup, import-isolation probe (SandboxLeak)
-│   │   └── guard.py          writer_toolset/critic_toolset — stricter wrapper over watson_agent/tools.py (never edits it, AGENTS.md §8)
+│   │   ├── guard.py          writer_toolset/critic_toolset — stricter wrapper over watson_agent/tools.py (never edits it, AGENTS.md §8)
+│   │   ├── blackboard.py     repoguard-out/swarm/<run_id>/ file contract — schema-tagged, atomic writes, .test.py.txt-only snapshot guard, Timeline
+│   │   ├── plan.py           build_plan(baseline) -> Plan — one lane per file with a survivor or gap, no cap, sha256 tests/ manifest
+│   │   ├── verify.py         the lane Verifier — suite-first, then scoped mutation, joined by fingerprint (never by index)
+│   │   ├── lane.py           WRITING -> VERIFYING -> ACCEPTED|NO_GAIN|FAILED, best-round-wins, any exception -> FAILED (no critic yet — S5)
+│   │   ├── runner.py         run_lanes() — sandboxes created serially up front, one shared mutation pool, lanes in their own thread pool
+│   │   └── tests/            engine-internal unit tests (blackboard.py) — no [db]/[ai] extra needed
 │   ├── store/            Run history, optional [db] extra (Phase 17, docs/DATA_PLATFORM.md) — no SQLAlchemy import in __init__
 │   │   ├── context.py        collect_context — project slug, git sha/branch/dirty, versions, operators hash
 │   │   ├── record.py         build_run_record / validate_run_record — the plain-dict run record
