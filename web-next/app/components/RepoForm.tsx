@@ -110,9 +110,40 @@ export function RepoForm({ values, onChange, token, onTokenChange, disabled }: P
         </label>
       </div>
 
+      <div className={styles.providerSection}>
+        <span className={styles.field}>
+          <span>
+            Multicloud AI Provider
+            <Tooltip
+              content="Choose which cloud AI provider powers narrative summaries and the self-healing fix loop. Google Vertex AI (Gemini) is faster; IBM watsonx.ai runs Mistral/Llama."
+              ariaLabel="About AI providers"
+            />
+          </span>
+        </span>
+        <div className={styles.providerOptions}>
+          <button
+            type="button"
+            className={`${styles.providerBtn} ${(values.provider ?? "vertex") === "vertex" ? styles.providerBtnActive : ""}`}
+            onClick={() => onChange({ ...values, provider: "vertex" })}
+          >
+            <span className={`${styles.providerBadge} ${styles.providerBadgeGcp}`}>GCP</span>
+            <span>Google Vertex AI (Gemini 2.5)</span>
+          </button>
+          <button
+            type="button"
+            className={`${styles.providerBtn} ${values.provider === "watsonx" ? styles.providerBtnActive : ""}`}
+            onClick={() => onChange({ ...values, provider: "watsonx" })}
+          >
+            <span className={`${styles.providerBadge} ${styles.providerBadgeIbm}`}>IBM</span>
+            <span>IBM watsonx.ai (Mistral/Llama)</span>
+          </button>
+        </div>
+      </div>
+
       <div className={styles.infoBanner}>
         <strong>Target Environment & Scope:</strong> Supports Python ≥ 3.10 with <code>pytest</code> and optional FastAPI endpoint inspection. Best suited for focused microservices, packages, or modules. For large codebases, run <strong>Gate (Fast)</strong> or keep mutation testing unchecked to avoid long execution times.
       </div>
+
     </fieldset>
   );
 }

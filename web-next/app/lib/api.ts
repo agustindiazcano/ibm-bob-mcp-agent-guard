@@ -49,8 +49,9 @@ export async function fetchAnalyze(values: RepoFormValues): Promise<AnalyzeRespo
   return res.json() as Promise<AnalyzeResponse>;
 }
 
-export async function fetchSummary(result: AnalyzeResponse): Promise<SummaryResponse> {
-  const res = await request(`${apiBase()}/api/summary`, {
+export async function fetchSummary(result: AnalyzeResponse, provider?: string): Promise<SummaryResponse> {
+  const url = provider ? `${apiBase()}/api/summary?provider=${encodeURIComponent(provider)}` : `${apiBase()}/api/summary`;
+  const res = await request(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(result),
@@ -72,14 +73,22 @@ export function streamUrl(repoPath: string, gateThreshold: number): string {
 // it's read incrementally here instead of awaited as one JSON body.
 // EventSource can't send a POST body or an Authorization header.
 export async function streamFix(
-  { repoPath, gateThreshold }: RepoFormValues,
+  { repoPath, gateThreshold, provider }: RepoFormValues,
   token: string,
   onEvent: (event: StreamEvent) => void,
 ): Promise<void> {
+  const payload: Record<string, unknown> = {
+    repo_path: repoPath,
+    gate_threshold: gateThreshold,
+  };
+  if (provider) {
+    payload.provider = provider;
+  }
+
   const res = await request(`${apiBase()}/api/fix`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ repo_path: repoPath, gate_threshold: gateThreshold }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok || !res.body) {
     throw await failure(res, "autofix");

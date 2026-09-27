@@ -46,10 +46,13 @@ export type StreamEvent = {
   data: Record<string, unknown>;
 };
 
+export type AIProvider = "vertex" | "watsonx";
+
 export type RepoFormValues = {
   repoPath: string;
   mutation: boolean;
   gateThreshold: number;
+  provider?: AIProvider;
 };
 
 // core.build_dashboard_data's dict: /api/analyze minus the fields the server

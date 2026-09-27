@@ -204,12 +204,13 @@ def api_ingest_run(record: dict, response: Response, authorization: str | None =
 
 
 @app.post("/api/summary")
-def api_summary(dashboard: dict) -> dict:
+def api_summary(dashboard: dict, provider: str | None = Query(default=None)) -> dict:
     """Wrap narrative.generate_summary() over an already-measured dashboard dict."""
     from ..narrative import generate_summary
 
-    result = generate_summary(dashboard)
+    result = generate_summary(dashboard, provider=provider)
     return {"ok": result.ok, "text": result.text, "error": result.error, "provider": result.provider}
+
 
 
 class FixRequest(BaseModel):
