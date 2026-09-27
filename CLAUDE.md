@@ -169,7 +169,7 @@ Expected results on a clean copy of `demo-repo/` (delete `demo-repo/repoguard-ou
 | Determinism | run `run_mutation` twice | identical results (20.25%, 16/79 both times) |
 | Visual | run `visual_check` twice with no changes | 0.0% diff |
 | After (reference) | copy `docs/expected-after-tests/*.py` into `demo-repo/tests/`, re-measure | 71 passed, coverage 100%, mutation 89.87% (71/79) |
-| Store (needs `[db]`) | `python3 scripts/verify.py phase17-store` (+ `REPOGUARD_TEST_DATABASE_URL` for Postgres) | PASS: exact round trip, stored coverage `60.264900662251656` (not rounded) |
+| Store (needs `[db]`) | `python3 scripts/verify.py phase17-store` (+ `REPOGUARD_TEST_DATABASE_URL` for Postgres) | PASS: exact round trip, stored coverage `60.264900662251655` (not rounded) |
 | Persistence is inert | `python3 scripts/verify.py phase17-pipeline` | PASS: `repoguard-out/*.json` byte-identical stored vs. not stored; stored mutation 16/79 = 20.25 |
 | History API (needs `[db]`) | `python3 scripts/verify.py phase17-endpoints phase17-api` | PASS: read routes, `POST /api/runs` ingest tokens, a real `repoguard analyze --push` against a real `repoguard serve` |
 

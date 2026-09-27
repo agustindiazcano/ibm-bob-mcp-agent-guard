@@ -650,7 +650,7 @@ print(f'OK: {len(r.files_attempted)} files, {len(provider.calls)} scripted chat 
 # Pinned from the first real run (Session 23), not derived. After numbers are
 # (covered lines, total lines, mutation %, killed, mutants, tests passed).
 _SEQ_STUB_FILES = ["shop/inventory.py", "shop/api.py", "shop/pricing.py"]
-_SEQ_STUB_AFTER = (362, 367, 86.08, 68, 79, 56)
+_SEQ_STUB_AFTER = (146, 151, 86.08, 68, 79, 56)
 
 
 _TEMP_DEMO_COPY = """

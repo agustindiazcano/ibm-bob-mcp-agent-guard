@@ -439,7 +439,7 @@ repoguard analyze ./demo-repo --mutation --project demo
 
 Rules carried over from `AGENTS.md §4`:
 
-- The engine measures; the database only stores. Values are stored exactly as measured (`Double`, no rounding: coverage is stored as `60.264900662251656`, not `60.3`); `passed_gate`, deltas and trends are SQL views, never stored numbers.
+- The engine measures; the database only stores. Values are stored exactly as measured (`Double`, no rounding: coverage is stored as `60.264900662251655`, not `60.3`); `passed_gate`, deltas and trends are SQL views, never stored numbers.
 - Persistence is off unless `REPOGUARD_DATABASE_URL` is set, and cannot change a measured number (`verify.py phase17-pipeline` checks that the `repoguard-out/*.json` files are byte-identical with and without it). A bad URL or a missing `[db]` extra fails before measuring, not after.
 - The public web API never writes: `/api/analyze` doesn't store runs, even with the variable set, until per-project tokens exist (A3).
 - Every run stores the mutation operator set's hash; trends are drawn only between runs that used the same operators.

@@ -3,6 +3,7 @@ name: CI
 # Backend only — path-filtered so a frontend-only change (web-next/) doesn't
 # trigger a Python/mutation run; see .github/workflows/frontend-ci.yml.
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths-ignore:
@@ -148,3 +149,26 @@ jobs:
 
       - name: Verify phase17-api (history read routes, ingest tokens, analyze --push)
         run: python scripts/verify.py phase17-api
+
+  guardrails-phase19:
+    runs-on: ubuntu-latest
+    # Phase 19 fix-loop guardrails: G1 env allow-list, G2 static AST policy,
+    # and G3 per-file acceptance gate (canary, repetition, preservation).
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install repoguard
+        run: pip install -e .
+
+      - name: Verify phase19-env (G1 env allow-list)
+        run: python scripts/verify.py phase19-env
+
+      - name: Verify phase19-policy (G2 static policy AST)
+        run: python scripts/verify.py phase19-policy
+
+      - name: Verify phase19-accept (G3 per-file acceptance gate)
+        run: python scripts/verify.py phase19-accept

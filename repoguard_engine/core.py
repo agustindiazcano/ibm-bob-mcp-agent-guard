@@ -137,7 +137,7 @@ def measure_coverage(repo_path: str | Path, tests_dir: str = "tests") -> Coverag
         if fdata.get("missing_lines"):
             missing[fname] = fdata["missing_lines"]
 
-    percent = round((covered_lines / total_lines * 100), 5) if total_lines > 0 else 0.0
+    percent = (covered_lines / total_lines * 100) if total_lines > 0 else 0.0
 
     result = CoverageResult(
         percent=percent,
