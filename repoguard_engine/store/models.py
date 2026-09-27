@@ -165,3 +165,16 @@ api_tokens = Table(
     UniqueConstraint("token_hash", name="uq_api_tokens_hash"),
     Index("ix_api_tokens_project", "project_id"),
 )
+
+# Autofix rate limiting (replaces the REPOGUARD_FIX_TOKEN gate): one row per
+# POST /api/fix call that was allowed through. web/rate_limit.py counts rows
+# in a trailing window per IP and globally; nothing here is ever read back
+# as a measurement.
+fix_requests = Table(
+    "fix_requests", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("ip", String(64), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Index("ix_fix_requests_created", "created_at"),
+    Index("ix_fix_requests_ip_created", "ip", "created_at"),
+)

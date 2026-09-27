@@ -156,6 +156,9 @@ jobs:
       - name: Verify phase17-history-routes (operators, survivors, flaky routes)
         run: python scripts/verify.py phase17-history-routes
 
+      - name: Verify autofix-ratelimit (per-IP + global caps, in-memory and SQLite)
+        run: python scripts/verify.py autofix-ratelimit
+
   guardrails-phase19:
     runs-on: ubuntu-latest
     # Phase 19 fix-loop guardrails: G1 env allow-list, G2 static AST policy,
