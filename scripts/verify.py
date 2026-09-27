@@ -53,6 +53,8 @@ import urllib.request
 from pathlib import Path
 
 from verify_phase17 import (  # scripts/ is sys.path[0]
+    check_autofix_active_run,
+    check_autofix_rate_limit,
     check_phase17_api,
     check_phase17_endpoints,
     check_phase17_history_routes,
@@ -810,6 +812,8 @@ CHECKS: dict[str, callable] = {
     "phase17-endpoints": check_phase17_endpoints,
     "phase17-api": check_phase17_api,
     "phase17-mutants-tests": check_phase17_mutants_tests,
+    "autofix-ratelimit": check_autofix_rate_limit,
+    "autofix-active-run": check_autofix_active_run,
     "phase17-history-routes": check_phase17_history_routes,
     "phase18-s1": check_phase18_s1,
     "phase17-engine": check_phase17_engine,

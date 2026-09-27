@@ -73,9 +73,20 @@ export function streamUrl(repoPath: string, gateThreshold: number): string {
 // it's read incrementally here instead of awaited as one JSON body.
 export async function streamFix(
   { repoPath, gateThreshold, provider, modelId }: RepoFormValues,
-  onEvent: (event: StreamEvent) => void,
-  token?: string,
+  tokenOrOnEvent: string | ((event: StreamEvent) => void),
+  onEventOrToken?: ((event: StreamEvent) => void) | string,
 ): Promise<void> {
+  let onEvent: (event: StreamEvent) => void;
+  let token: string | undefined;
+
+  if (typeof tokenOrOnEvent === "function") {
+    onEvent = tokenOrOnEvent;
+    token = typeof onEventOrToken === "string" ? onEventOrToken : undefined;
+  } else {
+    token = tokenOrOnEvent;
+    onEvent = onEventOrToken as (event: StreamEvent) => void;
+  }
+
   const payload: Record<string, unknown> = {
     repo_path: repoPath,
     gate_threshold: gateThreshold,

@@ -9,7 +9,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, Header, HTTPException, Query, Response
+from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -204,33 +204,41 @@ def api_ingest_run(record: dict, response: Response, authorization: str | None =
 
 
 @app.post("/api/summary")
-def api_summary(dashboard: dict, provider: str | None = Query(default=None)) -> dict:
+def api_summary(
+    dashboard: dict,
+    provider: str | None = Query(default=None),
+    model_id: str | None = Query(default=None),
+) -> dict:
     """Wrap narrative.generate_summary() over an already-measured dashboard dict."""
     from ..narrative import generate_summary
 
-    result = generate_summary(dashboard, provider=provider)
+    result = generate_summary(dashboard, provider=provider, model_id=model_id)
     return {"ok": result.ok, "text": result.text, "error": result.error, "provider": result.provider}
-
 
 
 class FixRequest(BaseModel):
     repo_path: str = "."
     gate_threshold: float = 80.0
     provider: str | None = None
+    model_id: str | None = None
 
 
 @app.post("/api/fix")
-def api_fix(body: FixRequest, authorization: str | None = Header(default=None)) -> StreamingResponse:
+def api_fix(body: FixRequest, request: Request) -> StreamingResponse:
     """Run the AI fix loop on a sandbox copy of repo_path, streaming NDJSON
-    progress events and a final `done` (or `error`) event. Token-gated, one
-    run at a time, never modifies repo_path -- see web/fix_job.py."""
-    from .fix_job import check_token, start_fix_stream
+    progress events and a final `done` (or `error`) event. Rate-limited per
+    IP and globally, and one run at a time *per IP* -- not a shared secret,
+    not a single server-wide slot every visitor queues behind (see
+    web/rate_limit.py). Never modifies repo_path -- see web/fix_job.py."""
+    from .fix_job import start_fix_stream
+    from .rate_limit import check_rate_limit, client_ip
 
-    check_token(authorization)
+    ip = client_ip(request.headers.get("x-forwarded-for"), request.client.host if request.client else None)
+    check_rate_limit(ip)
     if not Path(body.repo_path).is_dir():
         raise HTTPException(status_code=400, detail=f"repo_path does not exist or is not a directory: {body.repo_path}")
     return StreamingResponse(
-        start_fix_stream(body.repo_path, body.gate_threshold, body.provider),
+        start_fix_stream(body.repo_path, body.gate_threshold, body.provider, body.model_id, ip),
         media_type="application/x-ndjson",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

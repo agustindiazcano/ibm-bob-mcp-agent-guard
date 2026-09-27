@@ -130,6 +130,10 @@ export function RepoForm({ values, onChange, disabled }: Props) {
           </span>
         </label>
       </div>
+
+      <div className={styles.infoBanner}>
+        <strong>Target Environment & Scope:</strong> Supports Python ≥ 3.10 with <code>pytest</code> and optional FastAPI endpoint inspection. Best suited for focused microservices, packages, or modules. For large codebases, run <strong>Gate (Fast)</strong> or keep mutation testing unchecked to avoid long execution times.
+      </div>
     </fieldset>
   );
 }
