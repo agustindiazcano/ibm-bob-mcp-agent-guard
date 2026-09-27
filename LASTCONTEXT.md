@@ -13,6 +13,21 @@ CLI / package name: `repoguard`. GitHub: https://github.com/agustindiazcano/ibm-
 
 ## Session summary
 
+### Session 32 — Demo Mode toggle, Sticky camera-following footer with tech stack & team, and keyboard arrow nav (`feat/demo-mode-showcase`)
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Created `DemoModeContext` with `useSyncExternalStore` for persistent, hydration-safe state across pages | `web-next/app/context/DemoModeContext.tsx` |
+| 2 | Added animated `DemoSwitch` toggle (ON / OFF) at the top left of `SiteNav` | `web-next/app/components/site/DemoSwitch.tsx`, `DemoSwitch.module.css` |
+| 3 | Added keyboard arrow navigation (`ArrowLeft` / `ArrowRight`) to cycle across all navbar tabs without touching the mouse, with keyboard shortcut hint badges `[ ← ] [ → ]` | `web-next/app/components/site/SiteNav.tsx`, `SiteNav.module.css` |
+| 4 | Built `StickyDemoFooter`: camera-following fixed bottom footer (matching navbar height 60px) active in Demo OFF mode, showcasing IBM Bob, watsonx.ai, Vertex AI, Google Cloud, FastAPI, Python 3.10+, Full CI/CD (GitHub Actions + Cloud Run), and `Team Argentina · Agustin-Diaz-Cano` | `web-next/app/components/site/StickyDemoFooter.tsx`, `StickyDemoFooter.module.css` |
+| 5 | Integrated `DemoModeProvider` and `StickyDemoFooter` into root layout | `web-next/app/layout.tsx` |
+| 6 | Validated with `npm run lint` and `npm run build` — 100% clean PASS | `web-next/` |
+
+Verification status: **100% PASS** on `npm run lint` and `npm run build`.
+
+---
+
 ### Session 31 — Frontend UX & clarity polish, narrative prompt number rounding, demo repo presets (`feat/frontend-ux-clarity`)
 
 | # | Action | Files affected |
