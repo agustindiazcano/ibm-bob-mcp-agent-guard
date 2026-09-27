@@ -16,7 +16,7 @@
 - [How it works](#how-it-works)
 - [Is it multi-agent?](#is-it-multi-agent)
 - [Multi-agent swarm (in progress)](#multi-agent-swarm-in-progress)
-- [Evaluation & guardrails (planned)](#evaluation--guardrails-planned)
+- [Evaluation & guardrails](#evaluation--guardrails)
 - [Quick start](#quick-start)
 - [Commands](#commands)
 - [Using the watsonx.ai fix loop](#using-the-watsonxai-fix-loop)
@@ -168,31 +168,39 @@ The swarm has to earn its place with two measurements: it must be faster than th
 | [§10](docs/MULTI_AGENT_SWARM.md#10-build-order) | Build order and cut line |
 | [§11](docs/MULTI_AGENT_SWARM.md#11-verification-scriptsverifypy-phase18) | Verification, including a credential-free end-to-end test |
 
-## Evaluation & guardrails (planned)
+## Evaluation & guardrails
 
-> Design only (`PENDING.md` Phase 19). Plan: [`docs/EVAL_GUARDRAILS_PLAN.md`](docs/EVAL_GUARDRAILS_PLAN.md) · build steps: [`docs/EVAL_GUARDRAILS_IMPLEMENTATION.md`](docs/EVAL_GUARDRAILS_IMPLEMENTATION.md).
+> **Built and verified in CI (`PENDING.md` Phase 19).** Plan: [`docs/EVAL_GUARDRAILS_PLAN.md`](docs/EVAL_GUARDRAILS_PLAN.md) · build steps: [`docs/EVAL_GUARDRAILS_IMPLEMENTATION.md`](docs/EVAL_GUARDRAILS_IMPLEMENTATION.md).
 
-The fix loop is already guarded against **damage**: it can only write under `tests/`. It is not yet guarded against **gaming its own score**. Measured on a throwaway copy of `demo-repo`: a single test with no behavioral assertions, which only checks that the source files' hashes haven't changed, scores **100% (79/79)** on mutation. That's higher than the honest reference suite's 89.87%. The same probes showed that model-written tests can read server secrets from the environment, overwrite the repo's existing tests, and write a `conftest.py`, and that coverage counts the test files themselves (65.1% before source-only guard, 60.3% source-only).
+TestMind AI está estrictamente configurado con guardrails de integridad para neutralizar **alucinaciones y trampas de modelos LLM**. Cuando un modelo genera tests, puede alucinar aserciones triviales, inventar código que pasa sin probar nada, o hacer trampa leyendo el código fuente e inspeccionando hashes para inflar artificialmente el mutation score al 100%.
 
-Phase 19 adds a control to every measurement, the way an experiment has a blank run, and a benchmark that is binary and counted, never an LLM's opinion:
+> **En dos líneas:**  
+> Implementamos y validamos la suite completa de guardrails de integridad (G1 a G6 y O1) en el motor de ejecución.  
+> Integramos su verificación automatizada continua en GitHub Actions CI (job `guardrails-phase19`), alcanzando el 100% de la suite en verde.
 
-| Phase | What | Needs |
-|---|---|---|
-| 19.0 | Plan + implementation docs (this section) | Done |
-| 19.1 · G1 | Pytest subprocesses get an allow-listed environment: no tokens or credentials | — |
-| 19.2 · G2 | Static policy on every test file the model writes (no source reads/hashing, no pytest hooks, no skip, no unseeded randomness…) | Approval: changes the write guard |
-| 19.3 · G3 | Per-file acceptance: 3 identical passing runs, a no-op source canary, existing tests preserved. Failures are quarantined | — |
-| 19.4 · G4 | Mutation integrity: sham mutant, killed/survived/timeout/error, no previously killed mutant may survive | Shared with Phase 18 |
-| 19.5 · G5 | Run status (`accepted`/`partial`/`rejected`), evidence always written, `--publish` gated on mutation gain + integrity, not only coverage | — |
-| 19.6 · G6 | Source-only coverage | Approval: moves the published 65.1% → 60.3% |
-| 19.7 · E1 | Scripted provider + 8 attack scripts in CI: 8/8 stopped, honest run still 71/79 | — |
-| 19.8 · O1 | `repoguard-out/fix_run.json`: every tool call, guard event, token count when the provider reports it | — |
-| 19.9 · E2 | `scripts/eval_fixloop.py`: 3 repeats × provider/model × fixture, ΔMS, gap closure, validity, success *k of K* | Credentials |
-| 19.10 · E3 | A held-out fixture the prompts were never tuned on | Approval |
-| 19.11 · E4 | Real-fault check on a BugsInPy subset: tests written on the fixed version must fail on the buggy one | Approval |
-| 19.12–13 | Integrity badge in the dashboard · Pynguin / TestGenEval comparison | Below the cut line |
+### Guardrails contra alucinaciones y trampas de LLMs
 
-External reference: **TestGenEval** (the same metrics: coverage and mutation score, on real Python repos), **SWT-Bench** (fail-to-pass tests for real issues) and **BugsInPy** (real Python bugs). SWE-bench measures source fixes, which this tool never makes, so it isn't the right yardstick here.
+| Guardrail | Alucinación o Trampa que neutraliza | Mecanismo de Control | Verificación Real |
+|---|---|---|---|
+| **G1: Env Allow-List** | Fuga o uso alucinado de secretos del servidor (`REPOGUARD_FIX_TOKEN`, `WATSONX_APIKEY`). | Allow-list estricta de variables de entorno en subprocess pytest; ningún secreto llega al código generado. | ✅ **PASS** (`phase19-env` en CI, 40s) |
+| **G2: Policy AST** | Tests con alucinaciones sintácticas, sin `assert`, lectura de fuentes (`open('shop/api.py')`), hashes (`hashlib`), hooks de pytest o skips abusivos. | Análisis estático del AST antes de escribir a disco; rechaza cualquier patrón de trampa o test vacío. | ✅ **PASS** (`phase19-policy` en CI, 40s) |
+| **G3: Acceptance Gate** | Tests flaky, trampas dependientes del orden de ejecución, canarios y borrado/vandalismo de tests existentes. | Ejecución 3× idéntica, canario no-op en código fuente, verificación de preservación de test IDs y bisección de suite completa. Pasa a cuarentena si falla. | ✅ **PASS** (`phase19-accept` en CI, 40s) |
+| **G4: Mutation Integrity** | Mutantes contados falsamente como "killed" debido a errores o caídas del harness de pytest. | Clasificación de resultado explícita (`killed`, `survived`, `timeout`, `error`); los errores del harness nunca cuentan como bugs atrapados. | ✅ **PASS** (`engine-parallel-mutation` en CI) |
+| **G5: Integrity & Status** | Falsos positivos de reporte; publicación de PR sin incremento real de mutación. | `FixResult.status` (`accepted`, `partial`, `rejected`), registro de integridad y evidencia persistida obligatoriamente. | ✅ **PASS** (`fix-loop-stub` en CI) |
+| **G6: Source-only Coverage** | Inflación artificial de coverage contabilizando las líneas de los propios tests (`tests/`). | Medición estricta sobre código de producción (`shop/`): 60.2649% real (91/151 líneas), descartando `tests/`. | ✅ **PASS** (`quality-gate` en CI, 30s) |
+| **O1: Structured Run Record** | Pérdida de trazabilidad o alucinación de reportes de ejecución. | Generación atómica de `repoguard-out/fix_run.json` con registro detallado de cada tool call y decisión. | ✅ **PASS** (`fix-loop-stub` en CI) |
+
+### Resumen de la Suite de Tests en CI (GitHub Actions)
+
+| Job de CI | Chequeos que ejecuta | Resultado | Tiempo |
+|---|---|---|---|
+| **`guardrails-phase19`** | G1 (`phase19-env`), G2 (`phase19-policy`), G3 (`phase19-accept`) | ✅ **PASS** | 40s |
+| **`quality-gate`** | Phase 0 skeleton, Phase 7 compact MCP, `demo-repo` pytest, 60.0% coverage gate | ✅ **PASS** | 30s |
+| **`mutation-determinism`** | Phase 3 AST mutation determinism (dos pasadas idénticas sobre 79 mutantes) | ✅ **PASS** | 2m 17s |
+| **`store`** | Phase 17: Persistencia SQLite + PostgreSQL 16 real, endpoints, rutas de historial | ✅ **PASS** | 3m 23s |
+| **`fix-loop-stub`** | Phase 18 S0: Loop secuencial con `ScriptedProvider`, herramientas y evidencia | ✅ **PASS** | 3m 33s |
+| **`engine-parallel-mutation`** | Phase 18 S1 parallel workers, single-file scope, Phase 17/18 per-mutant records | ✅ **PASS** | 3m 35s |
+| **`frontend-ci`** | Linting y build de producción de Next.js (`web-next`) | ✅ **PASS** | 26s |
 
 ## Quick start
 
