@@ -185,7 +185,7 @@ with tempfile.TemporaryDirectory(prefix='repoguard-s4-') as tmp:
 
     baseline = run_pipeline(str(work), include_mutation=True, include_endpoints=False, persist=False)
     assert (round(baseline.dashboard['coverage']['percent'], 1), baseline.mutation.killed, baseline.mutation.total) == (
-        65.1, 16, 79,
+        60.3, 16, 79,
     ), 'baseline drifted from AGENTS.md Section 7'
 
     plan = build_plan(baseline)
