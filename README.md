@@ -25,7 +25,7 @@
 - [Project structure](#project-structure)
 - [CI/CD](#cicd)
 - [Deploy to Google Cloud](#deploy-to-google-cloud)
-- [Database (in progress)](#database-in-progress)
+- [Database](#database)
 - [Infrastructure as code](#infrastructure-as-code)
 - [IBM Bob Usage](#ibm-bob-usage)
 - [AI-Assisted Development](#ai-assisted-development)
@@ -283,16 +283,16 @@ Status key: ✅ implemented and running in this repo · ⚠️ implemented but n
 | Frontend | Next.js 16.3.6, React 19.2.8, TypeScript 5, ESLint 9 | `web-next/` dashboard | ✅ (lint + build pass; end-to-end checked in a browser locally) |
 | Legacy UI | Static HTML served by FastAPI | `repoguard serve` dashboard | ✅ |
 | Charts (docs) | matplotlib (`[docs]` extra) | README before/after image | ✅ |
-| Charts (dashboard) | Recharts | Trend, survival-by-operator and fix-effect charts | 🗺️ Phase 17 ([design](docs/DATA_PLATFORM.md#6-charts-web-next-dashboard)) |
+| Charts (dashboard) | Recharts | Trend, survival-by-operator and fix-effect charts | 🟡 backend routes done (`/operators`, `/survivors`, `/flaky`, plus `/trend`/`/risk-heatmap`); `web-next` charts themselves still 🗺️ Phase 17 C1 ([design](docs/DATA_PLATFORM.md#6-charts-web-next-dashboard)) |
 | Container | Docker (`python:3.11-slim`) | Single image for Cloud Run | ✅ builds and deploys via `cd.yml` |
 | CI | GitHub Actions: `ci.yml`, `frontend-ci.yml` | Verify checks, tests, coverage gate, mutation determinism, frontend lint/build | ✅ green on `main` |
 | CD | GitHub Actions: `cd.yml` | Build → Artifact Registry → Cloud Run | ✅ deploys on every push to `main` via Workload Identity Federation ([`docs/DEPLOY.md`](docs/DEPLOY.md)) |
 | Cloud (backend) | Google Cloud Run, Artifact Registry | Hosting the API + dashboard | ✅ deployed and live, called by the Vercel frontend below |
 | Cloud (frontend) | Vercel | Hosting `web-next/` | ✅ deployed: https://ibm-bob-mcp-agent-guard.vercel.app/, calling the Cloud Run backend (`NEXT_PUBLIC_REPOGUARD_API_BASE`) |
-| Database | PostgreSQL 16 (Cloud SQL planned); SQLite locally | Run history per commit | 🟡 store built and verified on SQLite + Postgres 16 (Phase 17 A1, `verify.py phase17-store`); Cloud SQL not provisioned ([design](docs/DATA_PLATFORM.md#4-database-design)) |
+| Database | PostgreSQL 16 (Cloud SQL, live) + SQLite locally | Run history per commit | ✅ store built and verified on SQLite + Postgres 16 (Phase 17 A1); live Cloud SQL instance provisioned and wired to the deployed service (Phase 17 B1, [design](docs/DATA_PLATFORM.md#4-database-design)) |
 | Data access | SQLAlchemy 2 (Core), psycopg 3 (`[db]` extra) | One code path for SQLite and Postgres | ✅ `repoguard_engine/store/` |
-| Infrastructure as code | Terraform (google, random providers), local state (gitignored) | Provisioning GCP | ✅ CI/CD identity (Artifact Registry, deployer SA, WIF); Cloud SQL/Secret Manager still 🗺️ Phase 17 ([design](docs/DATA_PLATFORM.md#8-infrastructure-as-code-terraform)) |
-| Secrets | Google Secret Manager | Database password | 🗺️ Phase 17 (not needed until Cloud SQL exists) |
+| Infrastructure as code | Terraform (google, random providers), local state (gitignored) | Provisioning GCP | ✅ CI/CD identity (Artifact Registry, deployer SA, WIF) + Cloud SQL/Secret Manager (Phase 17 B1, [design](docs/DATA_PLATFORM.md#8-infrastructure-as-code-terraform)) |
+| Secrets | Google Secret Manager | Database password + Autofix bearer token | ✅ `repoguard-database-url` and `repoguard-fix-token`, both live on the deployed service |
 | CD authentication | Workload Identity Federation (GitHub OIDC) | Replacing the JSON service-account key | ✅ done since Phase 13, now Terraform-managed |
 | User accounts | Google Identity Platform | Optional sign-in for the dashboard | 🗺️ Phase 17, below the cut line |
 | Version control | git | `repoguard fix --publish`: branch, commit, push | ✅ |
@@ -414,11 +414,15 @@ instance stops. The next section plans a fix for that.
 The Next.js dashboard (`web-next/`) is a separate Vercel project — see
 [`docs/ARCHITECTURE-front.md`](docs/ARCHITECTURE-front.md).
 
-## Database (in progress)
+## Database
 
-> `PENDING.md` Phase 17. **Built (A1):** the store and the pipeline hook,
-> verified on SQLite and a real PostgreSQL 16. **Not yet:** per-mutant and
-> per-test history (A2), read routes and CI ingest (A3), charts (C), Cloud SQL (B).
+> `PENDING.md` Phase 17. **Built:** the store and pipeline hook (A1); per-mutant
+> and per-test history loaded into the store, with `v_survival_by_operator`/
+> `v_persistent_survivors`/`v_flaky_tests` views (A2-gap); read routes and CI
+> ingest, including `/operators`/`/survivors`/`/flaky` (A3/C1 backend); a real
+> Cloud SQL instance provisioned and wired to the deployed service (B1). **Not
+> yet:** the `web-next` charts themselves (C1 frontend) and `/fix-effect`
+> (needs a `fix_sessions` table, a separate task).
 
 Every run used to write `repoguard-out/*.json` and forget. With
 `REPOGUARD_DATABASE_URL` set, `repoguard analyze` / `gate` and the MCP
@@ -440,11 +444,6 @@ Rules carried over from `AGENTS.md §4`:
 - The public web API never writes: `/api/analyze` doesn't store runs, even with the variable set, until per-project tokens exist (A3).
 - Every run stores the mutation operator set's hash; trends are drawn only between runs that used the same operators.
 
-Before the history is useful for flaky tests and persistent surviving
-mutants, the engine must stop discarding two things (block A2): the outcome
-of each mutant (today only positional IDs of the survivors are kept) and the
-outcome of each test.
-
 | Topic | Link |
 |---|---|
 | Why a database, and what "data-driven" QA uses history for | [§1](docs/DATA_PLATFORM.md#1-why-a-database-now) |
@@ -462,14 +461,21 @@ outcome of each test.
 > `PENDING.md` Phase 17, blocks B1–B2. **Built:** the CI/CD identity — Artifact
 > Registry, the `repoguard-deployer` service account + roles, and the
 > Workload Identity Federation pool/provider that lets `cd.yml` deploy
-> without a JSON key. **Not yet:** Cloud SQL, Secret Manager and the rest of
-> the database infrastructure (waits on Phase 17 Block A2/A3, since Terraform
-> shouldn't provision what the app doesn't use yet).
+> without a JSON key — plus a real Cloud SQL for PostgreSQL 16 instance,
+> database, user and a Secret Manager secret holding the connection string,
+> wired onto the deployed Cloud Run service.
 
 **Terraform** (`infra/terraform/`) codifies the WIF identity that
 `docs/DEPLOY.md` §1 originally created by hand via `gcloud` for Phase 13 —
 `terraform import` adopted the live resources, and `terraform plan` against
-the real project confirms "No changes" (`infra/terraform/README.md`).
+the real project confirms "No changes" (`infra/terraform/README.md`) — plus
+`db.tf`, new infrastructure applied fresh (no import needed): Cloud SQL,
+its database/user, and the `repoguard-database-url` secret, with IAM grants
+scoping the Cloud Run runtime service account to just that secret and
+`roles/cloudsql.client`. Cloud Run itself stays outside Terraform (still
+deployed by `cd.yml`'s `gcloud run deploy`); wiring the database and the
+`REPOGUARD_FIX_TOKEN` secret onto the live service was a documented human
+step (`infra/terraform/README.md`), now done.
 `infra-ci.yml` runs `terraform fmt -check` + `validate` on every change under
 `infra/terraform/**`, with no credentials. Terraform owns identity only; CD
 keeps deploying the image, and the frontend stays on Vercel, outside
@@ -609,8 +615,10 @@ frontend consumes the same endpoints rather than replacing them.
 small multi-page site, not a single dashboard: a shared `SiteNav`/`SiteFooter`
 (`web-next/app/components/site/`) links **Analyze** (`/`, the dashboard
 above), **Results** (`/results`, a run-history view — reads `fetchProjects`/
-`fetchView` and shows "Run history isn't on this backend yet" until Phase 17
-A3's read routes exist), **Project** (`/project`), **Technical**
+`fetchView` and shows "Run history isn't on this backend yet" until it's
+wired to Phase 17 A3/C1's read routes, which now exist and return real data
+on the deployed service — the frontend wiring itself is a separate,
+not-yet-done task), **Project** (`/project`), **Technical**
 (`/technical`) and **AI-assisted dev** (`/ai-development`) — the last three
 are explainer pages covering the same ground as this README's sections, laid
 out for someone who lands on the deployed site instead of GitHub.
@@ -619,20 +627,20 @@ The AI summary works on the public demo (`provider: vertex`). **Autofix** is
 built: with a token, the button runs the AI fix loop through `POST /api/fix`
 on a temporary copy of the repo. Progress streams live, and the result shows
 the engine-measured before → after plus the test files written. Nothing is
-committed. It's off on Cloud Run until `REPOGUARD_FIX_TOKEN` is attached
-(`docs/DEPLOY.md` §5), and its first live run from the public demo is still
-pending. The frontend gets no Terraform or
+committed. `REPOGUARD_FIX_TOKEN` is now attached on Cloud Run
+(`docs/DEPLOY.md` §5) — the endpoint correctly returns `401` for a missing/
+wrong token instead of the earlier `503` disabled state; a full first live
+run from the public demo (measured before/after) is still pending. The frontend gets no Terraform or
 GCP infrastructure: it ships as a plain Vercel project, with its own
 path-filtered CI (`.github/workflows/frontend-ci.yml`). See `PENDING.md`
 Phase 14 and `docs/ARCHITECTURE-front.md`.
 
-**In progress: run history for the backend.** The store is built and
-verified on SQLite + real Postgres (Phase 17 A1); the CI/CD identity is
-already Terraform-managed (blocks B1–B2). What's left is Cloud SQL +
-Secret Manager, per-mutant/per-test history (A2), read routes (A3) and
-dashboard charts (C). See [Database](#database-in-progress) and
-[Infrastructure as code](#infrastructure-as-code) above (`PENDING.md`
-Phase 17).
+**Run history for the backend.** The store, per-mutant/per-test history,
+read routes, and a live Cloud SQL instance wired to the deployed service are
+all built (Phase 17 A1–A3, B1). What's left is the `web-next` dashboard
+charts themselves (C1) and `/fix-effect` (needs a `fix_sessions` table). See
+[Database](#database) and [Infrastructure as code](#infrastructure-as-code)
+above (`PENDING.md` Phase 17).
 
 **In progress: a real multi-agent swarm.** Step 0 (groundwork) is built —
 injectable provider, per-stage timing, a credential-free `ScriptedProvider`.
