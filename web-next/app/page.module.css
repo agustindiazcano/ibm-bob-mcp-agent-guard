@@ -15,9 +15,10 @@
 }
 
 .title {
-  font-size: 26px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
+  font-family: var(--font-raleway), sans-serif;
+  font-size: 28px;
+  font-weight: 750;
+  letter-spacing: -0.015em;
 }
 
 .subtitle {
