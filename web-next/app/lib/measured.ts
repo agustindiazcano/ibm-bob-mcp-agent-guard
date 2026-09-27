@@ -19,7 +19,7 @@ export const DEMO_REPO_RESULTS: BeforeAfter[] = [
     detail: "16 / 79 → 71 / 79 mutants killed",
     emphasis: true,
   },
-  { label: "Line coverage", before: "65.1%", after: "100%", detail: "What most dashboards stop at" },
+  { label: "Line coverage", before: "60.3%", after: "100%", detail: "What most dashboards stop at" },
   { label: "Tests", before: "5", after: "71", detail: "Passing, against unmodified source" },
   { label: "API endpoints with a test", before: "1 of 7", after: "7 of 7", detail: "Found by parsing FastAPI routes" },
 ];

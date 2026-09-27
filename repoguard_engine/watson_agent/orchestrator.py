@@ -18,13 +18,22 @@ from __future__ import annotations
 import json
 import subprocess
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
+from typing import Literal
 
+from .._common import write_out
 from ..ai_providers import ChatProvider, get_provider
 from ..pipeline import run_pipeline
+from .acceptance import (
+    accept_file,
+    changed_test_files,
+    collect_test_ids,
+    quarantine,
+    snapshot_tests,
+)
 from .prompts import CRITIC_PROMPT, TEST_WRITER_PROMPT
 from .tools import TOOL_REGISTRY, TOOL_SCHEMAS, SourceEditRejected
 
@@ -49,6 +58,10 @@ class FixResult:
     # Wall seconds per phase: "baseline", "ai", "remeasure", "total". Phase 18's
     # H1 (swarm vs sequential speed) needs these; Phase 11's run recorded none.
     wall_s: dict[str, float] = field(default_factory=dict)
+    
+    status: Literal["accepted", "partial", "rejected", "error"] = "error"
+    integrity: dict = field(default_factory=dict)
+    acceptance: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -57,7 +70,7 @@ class StageResult:
     called in order, how many chat() round trips it took, and its wall time."""
 
     content: str
-    tool_calls: list[str] = field(default_factory=list)
+    tool_calls: list[dict] = field(default_factory=list)
     llm_calls: int = 0
     wall_s: float = 0.0
 
@@ -84,6 +97,8 @@ def _priority_files(risk: list) -> list[str]:
 
 
 def _run_chat_stage(
+    stage_name: str,
+    file_rel: str,
     model: ChatProvider,
     system_prompt: str,
     user_prompt: str,
@@ -118,22 +133,28 @@ def _run_chat_stage(
             return stage
 
         for call in tool_calls:
+            tool_start = time.perf_counter()
             name = call["function"]["name"]
-            stage.tool_calls.append(name)
             try:
                 args = json.loads(call["function"]["arguments"] or "{}")
             except json.JSONDecodeError:
                 args = {}
+            
+            target_path = args.get("file_path") or args.get("test_path") or None
+            
             args["repo_path"] = repo_path
+            outcome_str = "ok"
             try:
                 tool_fn = registry[name]
             except KeyError:
                 result = {"error": f"no such tool: {name}"}
+                outcome_str = "error"
             else:
                 try:
                     result = tool_fn(**args)
                 except SourceEditRejected as exc:
                     result = {"error": str(exc)}
+                    outcome_str = "rejected:SourceEditRejected"
                 except Exception as exc:
                     # Any other tool-execution failure (bad args, a path
                     # the model hallucinated that doesn't exist, ...) is a
@@ -142,6 +163,18 @@ def _run_chat_stage(
                     # SourceEditRejected is a hard stop by design (the
                     # write guard); everything else gets reported back.
                     result = {"error": f"{type(exc).__name__}: {exc}"}
+                    outcome_str = "error"
+            
+            stage.tool_calls.append({
+                "stage": stage_name,
+                "file": file_rel,
+                "tool": name,
+                "arguments": args,
+                "target": target_path,
+                "outcome": outcome_str,
+                "ms": int((time.perf_counter() - tool_start) * 1000)
+            })
+            
             messages.append(
                 {
                     "role": "tool",
@@ -213,6 +246,17 @@ def run_fix_loop(
     files = _priority_files(baseline.risk)
     emit("baseline_done", {"dashboard": baseline.dashboard, "files": files})
 
+    before = snapshot_tests(Path(repo))
+    ids_before = collect_test_ids(Path(repo))
+    accepted_files = set()
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    
+    result.integrity = {
+        "policy": 0, "quarantined": 0, "canary": 0,
+        "flaky": 0, "preserved_ids_restored": 0,
+        "survivor_regressions": 0,
+    }
+
     phase_started = time.perf_counter()
     for file_rel in files:
         result.files_attempted.append(file_rel)
@@ -225,31 +269,125 @@ def run_fix_loop(
             "Read this file, then write one pytest test file under tests/ "
             "that kills as many of the surviving mutants as possible."
         )
-        writer = _run_chat_stage(model, TEST_WRITER_PROMPT, writer_prompt, repo)
+        writer = _run_chat_stage("writer", file_rel, model, TEST_WRITER_PROMPT, writer_prompt, repo)
         result.stages.append(_stage_row(file_rel, "writer", writer))
 
         emit("critic_start", {"file": file_rel})
         critic_prompt = f"Review whatever test file(s) were just written for {file_rel}."
-        critic = _run_chat_stage(model, CRITIC_PROMPT, critic_prompt, repo)
+        critic = _run_chat_stage("critic", file_rel, model, CRITIC_PROMPT, critic_prompt, repo)
         result.stages.append(_stage_row(file_rel, "critic", critic))
         result.critic_notes.append(f"{file_rel}: {critic.content}")
+        
+        # acceptance
+        for test_file in changed_test_files(before, Path(repo)):
+            if test_file not in accepted_files:
+                acc = accept_file(Path(repo), test_file)
+                result.acceptance.append({"file": test_file, "accepted": acc.accepted, "reasons": acc.reasons})
+                if acc.accepted:
+                    accepted_files.add(test_file)
+                else:
+                    orig = before.get(test_file)
+                    quarantine(Path(repo), test_file, acc, run_id, orig)
+                    result.integrity["quarantined"] += 1
+                    for r in acc.reasons:
+                        if r.startswith("Policy"): result.integrity["policy"] += 1
+                        elif r.startswith("Canary"): result.integrity["canary"] += 1
+                        elif r.startswith("Repetition"): result.integrity["flaky"] += 1
+                emit("acceptance", {"file": test_file, "accepted": acc.accepted, "reasons": acc.reasons})
+                
+    # Preservation check
+    ids_after = collect_test_ids(Path(repo))
+    if not ids_before.issubset(ids_after):
+        missing = ids_before - ids_after
+        for test_file in list(accepted_files) + changed_test_files(before, Path(repo)):
+            if Path(test_file).exists():
+                orig = before.get(test_file)
+                acc = accept_file(Path(repo), test_file) # Just a dummy to quarantine
+                acc.accepted = False
+                acc.reasons = ["Preservation: missing original test IDs"]
+                quarantine(Path(repo), test_file, acc, run_id, orig)
+                result.integrity["quarantined"] += 1
+                result.integrity["preserved_ids_restored"] += 1
+                if test_file in accepted_files:
+                    accepted_files.remove(test_file)
+                emit("acceptance", {"file": test_file, "accepted": False, "reasons": acc.reasons})
+                
+    # Whole-suite check
+    acc_suite = accept_file(Path(repo), "tests")
+    if not acc_suite.accepted:
+        new_files = [f for f in accepted_files if f not in before]
+        # Drop one by one (bisection)
+        for offender in new_files:
+            orig = before.get(offender)
+            tgt = Path(repo) / offender
+            tgt.unlink(missing_ok=True)
+            acc_check = accept_file(Path(repo), "tests")
+            if acc_check.accepted:
+                # Found the offender
+                acc = accept_file(Path(repo), offender) # Just for the object
+                acc.accepted = False
+                acc.reasons = ["Whole-suite: fails when run together with others"]
+                quarantine(Path(repo), offender, acc, run_id, orig)
+                accepted_files.remove(offender)
+                emit("acceptance", {"file": offender, "accepted": False, "reasons": acc.reasons})
+                break
+            # Restore if it didn't help
+            if orig is not None:
+                tgt.write_bytes(orig)
+            elif tgt.exists():
+                tgt.unlink()
+
     result.wall_s["ai"] = time.perf_counter() - phase_started
 
     emit("remeasure_start", {})
     phase_started = time.perf_counter()
-    after = run_pipeline(
-        repo, include_mutation=True, include_endpoints=True, gate_threshold=gate_threshold, persist=False,
-    )
-    result.after = after.dashboard
-    result.wall_s["remeasure"] = time.perf_counter() - phase_started
-    emit("remeasure_done", {"dashboard": after.dashboard, "passed_gate": after.passed_gate})
+    try:
+        if not accepted_files:
+            class _DummyPipelineResult:
+                def __init__(self, d):
+                    self.dashboard = d
+                    self.passed_gate = False
+                    self.mutation = type('Mutation', (), {'surviving_mutant_ids': d.get("mutation", {}).get("surviving_mutant_ids", [])})() if d.get("mutation") else None
+            after = _DummyPipelineResult(baseline.dashboard)
+        else:
+            after = run_pipeline(
+                repo, include_mutation=True, include_endpoints=True, gate_threshold=gate_threshold, persist=False,
+            )
+        result.after = after.dashboard
+        result.wall_s["remeasure"] = time.perf_counter() - phase_started
+        emit("remeasure_done", {"dashboard": after.dashboard, "passed_gate": after.passed_gate})
+        
+        k_a = result.after["mutation"]["killed"] if result.after and result.after.get("mutation") else 0
+        k_b = result.baseline["mutation"]["killed"] if result.baseline and result.baseline.get("mutation") else 0
+        surv_before = set(baseline.mutation.surviving_mutant_ids) if baseline.mutation else set()
+        surv_after = set(after.mutation.surviving_mutant_ids) if after.mutation else set()
+        
+        result.integrity["survivor_regressions"] = len(surv_after - surv_before)
+        
+        if result.integrity["survivor_regressions"] > 0 or not accepted_files or k_a <= k_b:
+            result.status = "rejected"
+        elif result.integrity["quarantined"] == 0:
+            result.status = "accepted"
+        else:
+            result.status = "partial"
+            
+        if publish and result.status == "accepted" and after.passed_gate:
+            _publish(repo)
+            result.published = True
+            
+    except RuntimeError as exc:
+        result.status = "rejected"
+        result.critic_notes.append(f"RuntimeError in re-measure: {exc}")
+        result.wall_s["remeasure"] = time.perf_counter() - phase_started
+    except Exception as exc:
+        result.status = "error"
+        result.critic_notes.append(f"Error in re-measure: {exc}")
+        result.wall_s["remeasure"] = time.perf_counter() - phase_started
+    finally:
+        result.wall_s["total"] = time.perf_counter() - started
+        result.evidence_path = _write_evidence(repo, result)
+        _write_fix_run(repo, result, model)
 
-    if publish and after.passed_gate:
-        _publish(repo)
-        result.published = True
-
-    result.wall_s["total"] = time.perf_counter() - started
-    result.evidence_path = _write_evidence(repo, result)
     return result
 
 
@@ -307,7 +445,36 @@ def _timing_section(result: FixResult) -> str:
     lines += ["", "| File | Stage | Wall s | LLM calls | Tools called |", "|---|---|---|---|---|"]
     lines += [
         f"| {row['file']} | {row['stage']} | {row['wall_s']:.1f} | {row['llm_calls']} | "
-        f"{', '.join(row['tool_calls']) or '(none)'} |"
+        f"{', '.join(tc['tool'] for tc in row['tool_calls']) or '(none)'} |"
         for row in result.stages
     ]
     return "\n".join(lines)
+
+
+def _write_fix_run(repo_path: str, result: FixResult, model: ChatProvider) -> None:
+    """Structured run record (O1, docs/EVAL_GUARDRAILS_IMPLEMENTATION.md
+    Section 9) -- everything eval/benchmark tooling needs to score this run
+    without re-parsing watson-evidence/'s prose report."""
+    all_tool_calls = [tc for stage in result.stages for tc in stage["tool_calls"]]
+    record = {
+        "run_id": datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S"),
+        "repo_path": result.repo_path,
+        "provider": type(model).__name__,
+        # Best-effort: not every ChatProvider implementation exposes this,
+        # and the Protocol doesn't require it -- never guessed.
+        "model_id": getattr(model, "model_id", None) or getattr(model, "_model_id", None),
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "wall_s": result.wall_s,
+        "llm_calls": sum(row["llm_calls"] for row in result.stages),
+        "usage": None,
+        "status": result.status,
+        "files_attempted": result.files_attempted,
+        "integrity": result.integrity,
+        "acceptance": result.acceptance,
+        "tool_calls": all_tool_calls,
+        "before": (result.baseline or {}).get("mutation"),
+        "after": (result.after or {}).get("mutation"),
+        "published": result.published,
+        "evidence_path": result.evidence_path,
+    }
+    write_out(Path(repo_path), "fix_run", record)

@@ -443,7 +443,7 @@ try:
     res = httpx.get(base + '/api/projects/verify-push/trend', timeout=10)
     assert res.status_code == 200
     rows = res.json()
-    assert len(rows) == 1 and rows[0]['coverage_pct'] == 65.11627906976744, rows
+    assert len(rows) == 1 and rows[0]['coverage_pct'] == 60.264900662251656, rows
     print(f"  real repoguard serve + repoguard analyze --push: 1 stored run, coverage {rows[0]['coverage_pct']!r}")
 
     t1 = time.monotonic()

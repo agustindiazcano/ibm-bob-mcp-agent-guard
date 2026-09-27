@@ -182,6 +182,11 @@ def fix(repo_path: str, threshold: float, publish: bool, provider: str | None) -
     if publish:
         console.print("[bold green]PR opened[/]" if result.published else "[yellow]Gate failed — nothing published[/]")
 
+    if result.status not in ("accepted", "partial"):
+        console.print(f"[bold red]Fix loop failed with status: {result.status}[/]")
+        sys.exit(1)
+    console.print(f"[bold green]Fix loop completed with status: {result.status}[/]")
+
 
 @main.command()
 @click.option("--host", default="127.0.0.1", show_default=True)

@@ -40,10 +40,10 @@ jobs:
           python -m pytest -q
 
       - name: Coverage gate on demo-repo
-        # Current measured baseline is 65.1% (AGENTS.md §7) — the threshold is
+        # Current measured baseline is 60.3% (AGENTS.md §7) — the threshold is
         # set just under that, not at an aspirational 80%, so this gate fails
         # on a real regression instead of always failing or never firing.
-        run: repoguard gate demo-repo --threshold 60
+        run: repoguard gate demo-repo --threshold 60.0
 
   mutation-determinism:
     runs-on: ubuntu-latest

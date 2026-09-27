@@ -39,6 +39,12 @@ _RUN_TESTS_OUTPUT_CHARS = 4000
 class SourceEditRejected(PermissionError):
     """Raised when the model tries to read outside the repo or write outside tests/."""
 
+class TestPolicyRejected(SourceEditRejected):
+    """Raised when the model tries to write a test that violates the static policy."""
+
+def _source_roots(root: Path) -> list[str]:
+    return [p.name for p in root.iterdir() if p.is_dir() and (p / "__init__.py").exists() and p.name != "tests"]
+
 
 def measure_coverage_tool(repo_path: str) -> dict:
     result = measure_coverage(repo_path)
@@ -102,11 +108,11 @@ def run_tests(repo_path: str, file_path: str = "tests") -> dict:
     if not (target == tests_root or target.is_relative_to(tests_root)):
         raise SourceEditRejected(f"refused to run {file_path}: only tests/ (or a path under it) is allowed")
 
-    env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
+    from ..core import pytest_env
     proc = subprocess.run(
         [sys.executable, "-m", "pytest", str(target), "-q", "--no-header"],
         cwd=root,
-        env=env,
+        env=pytest_env(),
         capture_output=True,
         text=True,
         timeout=_RUN_TESTS_TIMEOUT,
@@ -128,6 +134,12 @@ def write_test_file(repo_path: str, file_path: str, content: str) -> dict:
         raise SourceEditRejected(
             f"refused to write {file_path}: only paths under tests/ are allowed"
         )
+        
+    from .policy import check_test_source
+    violations = check_test_source(content, file_path, source_roots=_source_roots(root))
+    if violations:
+        raise TestPolicyRejected("; ".join(f"{v.rule} (line {v.lineno}): {v.detail}" for v in violations))
+        
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
     return {"ok": True, "path": str(target.relative_to(root))}

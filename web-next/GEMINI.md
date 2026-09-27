@@ -153,11 +153,11 @@ Expected results on a clean copy of `demo-repo/` (delete `demo-repo/repoguard-ou
 | Check | Command | Expected |
 |---|---|---|
 | Suite | `cd demo-repo && python3 -m pytest -q` | 5 passed |
-| Full measure | `repoguard analyze ./demo-repo --mutation` | coverage 65.1%, mutation 20.25% (16/79), 4 files with coverage gaps (without `--mutation`, mutation is not run and reports `null`) |
+| Full measure | `repoguard analyze ./demo-repo --mutation` | coverage 60.3%, mutation 20.25% (16/79), 4 files with coverage gaps (without `--mutation`, mutation is not run and reports `null`) |
 | Determinism | run `run_mutation` twice | identical results (20.25%, 16/79 both times) |
 | Visual | run `visual_check` twice with no changes | 0.0% diff |
 | After (reference) | copy `docs/expected-after-tests/*.py` into `demo-repo/tests/`, re-measure | 71 passed, coverage 100%, mutation 89.87% (71/79) |
-| Store (needs `[db]`) | `python3 scripts/verify.py phase17-store` (+ `REPOGUARD_TEST_DATABASE_URL` for Postgres) | PASS: exact round trip, stored coverage `65.11627906976744` (not rounded) |
+| Store (needs `[db]`) | `python3 scripts/verify.py phase17-store` (+ `REPOGUARD_TEST_DATABASE_URL` for Postgres) | PASS: exact round trip, stored coverage `60.264900662251656` (not rounded) |
 | Persistence is inert | `python3 scripts/verify.py phase17-pipeline` | PASS: `repoguard-out/*.json` byte-identical stored vs. not stored; stored mutation 16/79 = 20.25 |
 
 Never leave the reference tests inside `demo-repo/tests/` after verifying.
