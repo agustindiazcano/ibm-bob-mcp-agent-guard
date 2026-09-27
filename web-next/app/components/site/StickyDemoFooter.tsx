@@ -139,7 +139,6 @@ export function StickyDemoFooter() {
           <span className={styles.stackTitle}>Tech Stack:</span>
           
           <span className={styles.pill} title="IBM Bob Agent Architecture">
-            <IbmLogo />
             <span>IBM Bob</span>
           </span>
 

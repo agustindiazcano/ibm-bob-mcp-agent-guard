@@ -88,34 +88,24 @@ export function RepoForm({ values, onChange, disabled }: Props) {
         </label>
       </div>
 
-      <div className={styles.providerSection}>
-        <span className={styles.field}>
-          <span>
-            Multicloud AI Provider
-            <Tooltip
-              content="Choose which cloud AI provider powers narrative summaries and the self-healing fix loop. Google Vertex AI (Gemini) is faster; IBM watsonx.ai runs Mistral/Llama."
-              ariaLabel="About AI providers"
-            />
-          </span>
+      <div className={styles.field}>
+        <span>
+          Multicloud AI Provider & Model
+          <Tooltip
+            content="Choose which cloud AI provider and LLM powers narrative summaries and the self-healing fix loop. Google Vertex AI runs Gemini Flash 3.8 / 3.5 (global endpoint). IBM watsonx runs Mistral/Llama."
+            ariaLabel="About AI providers"
+          />
         </span>
-        <div className={styles.providerOptions}>
-          <button
-            type="button"
-            className={`${styles.providerBtn} ${(values.provider ?? "vertex") === "vertex" ? styles.providerBtnActive : ""}`}
-            onClick={() => onChange({ ...values, provider: "vertex" })}
-          >
-            <span className={`${styles.providerBadge} ${styles.providerBadgeGcp}`}>GCP</span>
-            <span>Google Vertex AI (Gemini 2.5)</span>
-          </button>
-          <button
-            type="button"
-            className={`${styles.providerBtn} ${values.provider === "watsonx" ? styles.providerBtnActive : ""}`}
-            onClick={() => onChange({ ...values, provider: "watsonx" })}
-          >
-            <span className={`${styles.providerBadge} ${styles.providerBadgeIbm}`}>IBM</span>
-            <span>IBM watsonx.ai (Mistral/Llama)</span>
-          </button>
-        </div>
+        <select
+          className={styles.select}
+          value={values.provider ?? "vertex"}
+          onChange={(e) => onChange({ ...values, provider: e.target.value as "vertex" | "watsonx" })}
+        >
+          <option value="vertex">Google Vertex AI · Gemini 3.8 Flash (Default)</option>
+          <option value="vertex">Google Vertex AI · Gemini 3.5 Flash</option>
+          <option value="watsonx">IBM watsonx.ai · Mistral Small 24B / Llama 3.3</option>
+        </select>
+        <span className={styles.fieldNote}>Gemini 3.8 Flash active as default provider.</span>
       </div>
 
       <div className={styles.infoBanner}>

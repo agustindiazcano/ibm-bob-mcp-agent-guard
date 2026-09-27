@@ -7,7 +7,8 @@ export function DemoSwitch() {
   const { demoMode, toggleDemoMode } = useDemoMode();
 
   return (
-    <div className={styles.container}>
+    <div className={styles.container} title={`Demo Mode: ${demoMode ? "ON" : "OFF"}`}>
+      <span className={styles.label}>Demo</span>
       <button
         type="button"
         role="switch"
@@ -18,10 +19,6 @@ export function DemoSwitch() {
       >
         <span className={styles.thumb} />
       </button>
-      <span>Demo</span>
-      <span className={`${styles.stateText} ${demoMode ? styles.stateTextOn : styles.stateTextOff}`}>
-        {demoMode ? "ON" : "OFF"}
-      </span>
     </div>
   );
 }

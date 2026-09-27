@@ -85,8 +85,6 @@ export function SiteNav() {
   return (
     <header className={styles.bar}>
       <nav className={styles.inner} aria-label="Main">
-        <DemoSwitch />
-        <span className={styles.divider} aria-hidden="true" />
         <Brand />
         <div className={styles.links}>
           <NavLinks links={PRODUCT_LINKS} pathname={pathname} />
@@ -94,6 +92,7 @@ export function SiteNav() {
           <NavLinks links={ABOUT_LINKS} pathname={pathname} />
         </div>
         <div className={styles.end}>
+          <DemoSwitch />
           <button
             type="button"
             className={styles.configBtn}
