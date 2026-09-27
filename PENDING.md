@@ -369,6 +369,18 @@ checkout — running bare `repoguard analyze ...` here silently measured *that* 
 `pip install -e ".[ai,vertex,db,docs]"` from this checkout; anyone with parallel worktrees should
 check `pip show repoguard`'s "Editable project location" before trusting a bare CLI run.
 
+### Verified CI & Guardrails Results (Run 36295730583)
+
+| Test Suite / Job | Target / Scope | Result | Execution Time |
+|---|---|---|---|
+| **`quality-gate`** | Phase 0 skeleton, Phase 7 compact MCP, `demo-repo` pytest, 60.0% coverage gate | ✅ **PASS** | 30s |
+| **`guardrails-phase19`** | G1 (env allow-list), G2 (static AST policy), G3 (acceptance gate) | ✅ **PASS** | 40s |
+| **`mutation-determinism`** | Phase 3 AST mutation engine determinism (two runs on `demo-repo`) | ✅ **PASS** | 2m 17s |
+| **`store`** | Phase 17 A1-A3: SQLite + Postgres 16 round-trip, pipeline persistence, endpoints, API routes | ✅ **PASS** | 3m 23s |
+| **`fix-loop-stub`** | Phase 18 S0 sequential fix-loop with `ScriptedProvider`, tools, timing, evidence | ✅ **PASS** | 3m 33s |
+| **`engine-parallel-mutation`** | Phase 18 S1 parallel workers (workers=1 vs workers=4), single-file scope, Phase 17/18 per-mutant records | ✅ **PASS** | 3m 35s |
+| **`frontend-ci`** | `web-next` npm lint + build | ✅ **PASS** | 26s |
+
 ---
 
 ## Standalone tasks (not phase-blocked)

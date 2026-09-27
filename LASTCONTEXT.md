@@ -13,6 +13,20 @@ CLI / package name: `repoguard`. GitHub: https://github.com/agustindiazcano/ibm-
 
 ## Session summary
 
+### Session 29 — GitHub Actions CI integration for Guardrails & Phase 17/18 fixes (`feat/19-guardrails-g1-g5`)
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Added `guardrails-phase19` job to `.github/workflows/ci.yml` running G1 (`phase19-env`), G2 (`phase19-policy`), G3 (`phase19-accept`) in 40s on Linux | `.github/workflows/ci.yml` |
+| 2 | Added `workflow_dispatch` trigger to `.github/workflows/ci.yml` for on-demand CI runs | `.github/workflows/ci.yml` |
+| 3 | Fixed float precision assertion in `scripts/verify_phase17.py:456` (`round(..., 4) == 60.2649`) unblocking PostgreSQL/SQLite `store` job | `scripts/verify_phase17.py` |
+| 4 | Fixed `phase18-seq-stub` in `scripts/verify.py` to extract tool names from dict `tool_calls` structure (introduced in O1) | `scripts/verify.py` |
+| 5 | Verified in GitHub Actions: 100% of jobs passed in green (run `36295730583` on PR #76) | PR #76 |
+
+Verification status: **100% PASS** on GitHub Actions (`quality-gate` 30s, `guardrails-phase19` 40s, `mutation-determinism` 2m17s, `store` 3m23s, `fix-loop-stub` 3m33s, `engine-parallel-mutation` 3m35s, `frontend-ci` 26s).
+
+---
+
 ### Session 27 — Phase 19 G1-G6 + O1, on `feat/19-guardrails-g1-g5`
 
 | # | Action | Files affected |
