@@ -179,6 +179,9 @@ jobs:
       - name: Verify phase19-accept (G3 per-file acceptance gate)
         run: python scripts/verify.py phase19-accept
 
+      - name: Verify phase19-e3 (held-out fixture eval-fixtures/ledger)
+        run: python scripts/verify.py phase19-e3
+
   swarm-phase18:
     runs-on: ubuntu-latest
     # Phase 18 S4: multi-agent swarm lane state machine, thread pool,

@@ -64,6 +64,7 @@ from verify_phase18 import check_phase18_s3, check_phase18_s4
 from verify_phase19 import (
     check_phase19,
     check_phase19_accept,
+    check_phase19_e3,
     check_phase19_env,
     check_phase19_policy,
 )
@@ -819,6 +820,7 @@ CHECKS: dict[str, callable] = {
     "phase19-env": check_phase19_env,
     "phase19-policy": check_phase19_policy,
     "phase19-accept": check_phase19_accept,
+    "phase19-e3": check_phase19_e3,
 }
 
 

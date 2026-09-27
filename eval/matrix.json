@@ -1,0 +1,11 @@
+{
+  "gate_threshold": 60.0,
+  "providers": [
+    {"provider": "vertex", "model_id": null},
+    {"provider": "watsonx", "model_id": null}
+  ],
+  "fixtures": [
+    {"name": "demo-repo", "path": "demo-repo", "ceiling": 71},
+    {"name": "ledger", "path": "eval-fixtures/ledger", "ceiling": null}
+  ]
+}
