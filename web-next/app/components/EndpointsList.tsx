@@ -1,5 +1,6 @@
 import type { Endpoint } from "../lib/types";
 import { Card } from "./Card";
+import { Tooltip } from "./Tooltip";
 import styles from "./Lists.module.css";
 
 export function EndpointsList({ endpoints }: { endpoints: Endpoint[] }) {
@@ -9,6 +10,10 @@ export function EndpointsList({ endpoints }: { endpoints: Endpoint[] }) {
     endpoints.length > 0 ? (
       <span className={styles.count}>
         {tested} / {endpoints.length} tested
+        <Tooltip
+          content="Detects whether FastAPI route handlers are invoked or referenced in tests via AST analysis. Testing an internal service/class (e.g. Cart) does not verify its HTTP route."
+          ariaLabel="About endpoint test detection"
+        />
       </span>
     ) : undefined;
 
@@ -24,7 +29,14 @@ export function EndpointsList({ endpoints }: { endpoints: Endpoint[] }) {
                 <span className={styles.file}>
                   <span className={styles.method}>{ep.method}</span> {ep.path}
                 </span>
-                <span className={ep.has_test ? styles.badgePass : styles.badge}>
+                <span
+                  className={ep.has_test ? styles.badgePass : styles.badge}
+                  title={
+                    ep.has_test
+                      ? "A test file directly targets or references this HTTP route or handler."
+                      : "No test directly exercises this route. Even if internal classes have unit tests, the HTTP endpoint is untested."
+                  }
+                >
                   {ep.has_test ? "tested" : "no test"}
                 </span>
               </div>
@@ -37,10 +49,10 @@ export function EndpointsList({ endpoints }: { endpoints: Endpoint[] }) {
       )}
       {endpoints.length > 0 && (
         <p className={styles.note}>
-          &ldquo;Tested&rdquo; means a test file mentions the route&rsquo;s path or function name (a static
-          check, not a request).
+          <strong>How endpoints are checked:</strong> AST static analysis looks for test references to the endpoint&rsquo;s route path or handler function. If your unit tests exercise internal logic (e.g. <code>cart.py</code>) directly without calling the FastAPI route (e.g. <code>/cart</code> in <code>api.py</code>), the endpoint is correctly flagged as <code>no test</code>.
         </p>
       )}
     </Card>
   );
 }
+

@@ -132,7 +132,9 @@ export default function Home() {
     <main className={styles.main}>
       <header className={styles.header}>
         <h1 className={styles.title}>TestMind AI</h1>
-        <p className={styles.subtitle}>Measures whether a Python repo&rsquo;s tests actually catch bugs.</p>
+        <p className={styles.subtitle}>
+          Self-Healing Test Suites & Quality Gate for Python · Measures real test effectiveness with AST mutation testing & closes coverage gaps with AI.
+        </p>
       </header>
       <Card title="Analyze a repository">
         <RepoForm values={values} onChange={setValues} token={token} onTokenChange={setToken} disabled={busy} />
@@ -146,9 +148,22 @@ export default function Home() {
         />
       </Card>
       {error && (
-        <p className={styles.alert} role="alert">
-          {error}
-        </p>
+        <div className={styles.alert} role="alert">
+          <div>
+            <strong>Error: </strong>
+            {error}
+          </div>
+          {error.toLowerCase().includes("503") && (
+            <p style={{ marginTop: "6px", fontSize: "12px", opacity: 0.9 }}>
+              Tip: HTTP 503 from Autofix means <code>REPOGUARD_FIX_TOKEN</code> is not enabled on this server or AI provider credentials (watsonx.ai or Vertex AI) are missing.
+            </p>
+          )}
+          {error.toLowerCase().includes("401") && (
+            <p style={{ marginTop: "6px", fontSize: "12px", opacity: 0.9 }}>
+              Tip: HTTP 401 indicates the provided Autofix token does not match the server&rsquo;s <code>REPOGUARD_FIX_TOKEN</code>.
+            </p>
+          )}
+        </div>
       )}
       <StreamLog events={events} pending={pending} />
       {fix && <FixResultPanel fix={fix} />}

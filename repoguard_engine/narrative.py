@@ -39,6 +39,8 @@ def _build_prompt(dashboard: dict) -> str:
     gaps = dashboard.get("gaps") or {}
     risk = dashboard.get("risk") or []
 
+    coverage_pct = round(coverage.get('percent', 0.0), 1) if coverage.get('percent') is not None else "Unknown"
+
     lines = [
         "You are writing a short, plain-English summary of pre-computed "
         "software test-quality metrics for a report. Use ONLY the numbers "
@@ -46,20 +48,21 @@ def _build_prompt(dashboard: dict) -> str:
         "invent any number, file name, or metric not listed here. If a "
         "value is missing, say it wasn't measured — do not guess it.",
         "",
-        f"Coverage: {coverage.get('percent')}% "
+        f"Coverage: {coverage_pct}% "
         f"({coverage.get('covered_lines')} of {coverage.get('total_lines')} lines)",
         f"Files with coverage gaps: {len(gaps.get('uncovered_files', []))}",
     ]
     if mutation:
+        mut_score = round(mutation.get('score', 0.0), 1) if mutation.get('score') is not None else "Unknown"
         lines.append(
-            f"Mutation score: {mutation.get('score')}% "
+            f"Mutation score: {mut_score}% "
             f"({mutation.get('killed')} of {mutation.get('total')} mutants killed, "
             f"{mutation.get('survived')} survived)"
         )
     else:
         lines.append("Mutation score: not measured in this run")
     if risk:
-        top = ", ".join(f"{r.get('file')} ({r.get('score')})" for r in risk[:3])
+        top = ", ".join(f"{r.get('file')} ({round(r.get('score', 0.0), 3)})" for r in risk[:3])
         lines.append(f"Top risk files: {top}")
 
     lines.append(

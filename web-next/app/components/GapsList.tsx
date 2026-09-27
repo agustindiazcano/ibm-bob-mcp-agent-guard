@@ -1,10 +1,18 @@
 import type { AnalyzeResponse } from "../lib/types";
 import { Card } from "./Card";
+import { Tooltip } from "./Tooltip";
 import styles from "./Lists.module.css";
 
 export function GapsList({ gaps }: { gaps: AnalyzeResponse["gaps"] }) {
+  const aside = (
+    <Tooltip
+      content="Files with statements that pytest never executed. Autofix prioritizes generating tests targeting these specific missing lines."
+      ariaLabel="About coverage gaps"
+    />
+  );
+
   return (
-    <Card title="Coverage gaps">
+    <Card title="Coverage gaps" aside={aside}>
       {gaps.uncovered_files.length === 0 ? (
         <p className={styles.none}>No coverage gaps.</p>
       ) : (
@@ -28,3 +36,4 @@ export function GapsList({ gaps }: { gaps: AnalyzeResponse["gaps"] }) {
     </Card>
   );
 }
+
