@@ -1,5 +1,5 @@
 .main {
-  max-width: 1120px;
+  max-width: 880px;
   margin: 0 auto;
   padding: 32px 16px 100px;
   display: flex;
@@ -11,7 +11,10 @@
 .header {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
+  text-align: center;
+  align-items: center;
+  margin-bottom: 6px;
 }
 
 .headerRow {
@@ -28,10 +31,16 @@
   font-weight: 100;
   letter-spacing: -0.015em;
   line-height: 1.1;
+  text-align: center;
 }
 
 .subtitle {
   color: var(--text-muted);
+  max-width: 660px;
+  text-align: center;
+  margin: 0 auto;
+  font-size: 14.5px;
+  line-height: 1.5;
 }
 
 .alert {

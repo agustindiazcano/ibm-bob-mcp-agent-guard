@@ -23,12 +23,8 @@ export function RepoForm({ values, onChange, disabled }: Props) {
           <span>
             Repo path on server
             <Tooltip
-              content="Absolute or relative path to a Python project on the server machine containing pytest tests."
+              content="Path to a Python project on the server machine containing pytest tests (Python ≥ 3.10, FastAPI endpoint inspection supported)."
               ariaLabel="About repo path"
-            />
-            <Tooltip
-              content="Target Environment & Scope: Supports Python ≥ 3.10 with pytest and optional FastAPI endpoint inspection. Best suited for focused microservices, packages, or modules. For large codebases, run Gate or keep mutation testing unchecked to avoid long execution times."
-              ariaLabel="About environment and scope"
             />
           </span>
           <input

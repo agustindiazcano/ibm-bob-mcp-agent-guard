@@ -100,7 +100,7 @@ export function ActionBar({
       <div className={styles.swarmGroup}>
         <label
           className={`${styles.swarmControl} ${swarm ? styles.swarmOn : ""}`}
-          title="Multi-agent swarm: aumenta la velocidad del testing paralelizando tareas con multiples agentes a la vez"
+          title="Multi-agent swarm: Accelerates testing speed by parallelizing tasks across multiple agents simultaneously in isolated sandboxes."
         >
           <input
             type="checkbox"
@@ -118,15 +118,10 @@ export function ActionBar({
           </span>
         </label>
         <Tooltip
-          content="Aumenta la velocidad del testing paralelizando tareas con múltiples agentes a la vez."
-          ariaLabel="Información sobre Multi-agent swarm"
+          content="Accelerates test generation and healing by parallelizing tasks across multiple agents simultaneously in isolated sandboxes."
+          ariaLabel="About Multi-agent swarm"
         />
       </div>
-
-      <Tooltip
-        content="Analyze runs the full inspection. Gate (Fast) is for fast CI/CD quality checks without the minutes needed for mutation testing. Autofix runs the AI loop to write tests for untested code."
-        ariaLabel="Explain actions"
-      />
     </div>
   );
 }

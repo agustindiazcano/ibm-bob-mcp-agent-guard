@@ -195,9 +195,9 @@
   height: 40px;
   padding: 0 14px;
   border-radius: 10px;
-  border: 1px solid rgba(249, 115, 22, 0.5);
-  background: rgba(249, 115, 22, 0.08);
-  color: #fed7aa;
+  border: 1px solid rgba(217, 119, 6, 0.45);
+  background: rgba(217, 119, 6, 0.08);
+  color: #fde68a;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -206,12 +206,13 @@
   gap: 10px;
   user-select: none;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.15);
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.12);
   position: relative;
 }
 
 .swarmControl:hover {
-  border-color: #fbbf24;
+  border-color: #f59e0b;
+  background: rgba(217, 119, 6, 0.14);
   color: #ffffff;
   transform: translateY(-1px);
   animation: goldenAura 1.8s ease-in-out infinite;
@@ -249,7 +250,7 @@
 }
 
 .swarmOn .swarmSlider {
-  background: #f97316;
+  background: #d97706;
 }
 
 .swarmOn .swarmSlider::after {
@@ -264,7 +265,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #f97316;
+  color: #f59e0b;
   transition: transform 0.2s ease, color 0.2s ease;
 }
 
