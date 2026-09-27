@@ -24,7 +24,7 @@ function highlightPythonLine(line: string): React.ReactNode[] {
 
   // Tokenization patterns
   const tokens: React.ReactNode[] = [];
-  let remaining = line;
+  const remaining = line;
   let keyIndex = 0;
 
   // Single regex with capturing groups for tokenizer
@@ -103,11 +103,12 @@ export function CodeViewer({ files, initialActiveIndex = 0 }: Props) {
   const [copied, setCopied] = useState(false);
 
   const activeFile = files[activeIndex] || files[0];
+  const content = activeFile?.content;
 
   const lines = useMemo(() => {
-    if (!activeFile?.content) return [];
-    return activeFile.content.split("\n");
-  }, [activeFile?.content]);
+    if (!content) return [];
+    return content.split("\n");
+  }, [content]);
 
   const handleCopy = async () => {
     if (!activeFile?.content) return;

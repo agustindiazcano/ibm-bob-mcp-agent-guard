@@ -229,11 +229,13 @@ export function ResultsDashboard() {
 
   useEffect(() => {
     if (demoMode) {
-      ++selectRef.current;
-      setProjects({ status: "ok", data: MOCK_PROJECTS });
-      setSelected("");
-      setViews(allViews({ status: "ok", data: [] }));
-      return;
+      const timer = setTimeout(() => {
+        ++selectRef.current;
+        setProjects({ status: "ok", data: MOCK_PROJECTS });
+        setSelected("");
+        setViews(allViews({ status: "ok", data: [] }));
+      }, 0);
+      return () => clearTimeout(timer);
     }
     // Show cached data immediately (last real fetch this browser saw) while
     // the real request is in flight, instead of a loading flash. Replaced
@@ -241,16 +243,18 @@ export function ResultsDashboard() {
     // unreachable, the cached view just stays on screen.
     const cached = loadResultsCache();
     if (cached && cached.projects.length > 0) {
-      setProjects({ status: "ok", data: cached.projects });
-      setSelected(cached.selected);
-      setViews(
-        Object.fromEntries(
-          SLOTS.map((s) => [
-            s.view,
-            cached.views[s.view] ? { status: "ok", data: cached.views[s.view]! } : { status: "loading" },
-          ]),
-        ) as Views,
-      );
+      setTimeout(() => {
+        setProjects({ status: "ok", data: cached.projects });
+        setSelected(cached.selected);
+        setViews(
+          Object.fromEntries(
+            SLOTS.map((s) => [
+              s.view,
+              cached.views[s.view] ? { status: "ok", data: cached.views[s.view]! } : { status: "loading" },
+            ]),
+          ) as Views,
+        );
+      }, 0);
     }
 
     void fetchProjects().then((state) => {
