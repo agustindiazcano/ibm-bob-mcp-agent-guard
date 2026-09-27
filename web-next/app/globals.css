@@ -9,6 +9,10 @@
   --accent-hover: #1d4ed8;
   --accent-soft: #e8efff;
   --accent-text: #ffffff;
+  /* Second chart series (mutation, vs. --accent for coverage). Validated as
+     a categorical pair against --accent with dataviz's palette validator:
+     CVD ΔE 29.9, normal-vision ΔE 38.5, both well clear of the 8/15 floors. */
+  --series-2: #eb6834;
   --pass: #15803d;
   --pass-soft: #e7f6ec;
   --fail: #b91c1c;
@@ -33,6 +37,7 @@
     --accent-hover: #7aa2ff;
     --accent-soft: #1b2640;
     --accent-text: #0d0f13;
+    --series-2: #d95926;
     --pass: #4ade80;
     --pass-soft: #12281b;
     --fail: #f87171;

@@ -1,0 +1,109 @@
+/* Styles specific to the SVG line chart (TrendChart). The bar/table views
+   (OperatorsChart, SurvivorsTable, FlakyTests) reuse ../components/Lists.module.css
+   instead of duplicating table/list styling here. */
+
+.chartWrap {
+  position: relative;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legendLine {
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+  display: inline-block;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.axisLabel {
+  font-size: 10.5px;
+  fill: var(--text-muted);
+}
+
+.gridline {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.overlay {
+  fill: transparent;
+  cursor: crosshair;
+}
+
+.crosshair {
+  stroke: var(--border);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.tooltip {
+  position: absolute;
+  top: 0;
+  transform: translate(-50%, calc(-100% - 6px));
+  min-width: 150px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 8px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.tooltipDate {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.tooltipRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tooltipRow + .tooltipRow {
+  margin-top: 3px;
+}
+
+.tooltipKeyLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+
+.tooltipKey {
+  width: 10px;
+  height: 2px;
+  border-radius: 1px;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.tooltipValue {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
