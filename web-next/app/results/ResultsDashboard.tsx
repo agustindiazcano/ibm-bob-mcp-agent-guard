@@ -181,12 +181,14 @@ export function ResultsDashboard() {
       // Canned, clearly-labeled sample data -- never the real API. Every
       // number in it was measured for real at some point (mockData.ts's own
       // header), just not necessarily by *this* session's backend.
-      ++selectRef.current;
-      setProjects({ status: "ok", data: MOCK_PROJECTS });
-      setSelected(MOCK_PROJECTS[0].slug);
-      setViews(
-        Object.fromEntries(SLOTS.map((s) => [s.view, { status: "ok", data: MOCK_VIEWS[s.view] }])) as Views,
-      );
+      void Promise.resolve().then(() => {
+        ++selectRef.current;
+        setProjects({ status: "ok", data: MOCK_PROJECTS });
+        setSelected(MOCK_PROJECTS[0].slug);
+        setViews(
+          Object.fromEntries(SLOTS.map((s) => [s.view, { status: "ok", data: MOCK_VIEWS[s.view] }])) as Views,
+        );
+      });
       return;
     }
     void fetchProjects().then((state) => {
