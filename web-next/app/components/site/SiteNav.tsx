@@ -147,7 +147,7 @@ export function SiteNav() {
         <div id="site-menu" className={styles.menu}>
           {demoMode ? (
             <>
-              <span className={styles.menuLabel}>Demo Slides (10)</span>
+              <span className={styles.menuLabel}>Demo Slides ({DEMO_SLIDES.length})</span>
               {DEMO_SLIDES.map((slide) => {
                 const active = isActive(pathname, slide.href);
                 return (
