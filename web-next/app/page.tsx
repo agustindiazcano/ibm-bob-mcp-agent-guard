@@ -382,7 +382,7 @@ export default function Home() {
       <StreamLog events={events} pending={pending} />
       {fix && demoMode && (
         <p style={{ marginTop: "-8px", marginBottom: "8px", fontSize: "12px", opacity: 0.8 }}>
-          🎬 Demo Mode — simulated timing, real measured numbers (see <code>AGENTS.md §7</code>).
+          Demo Mode — simulated timing, real measured numbers (see <code>AGENTS.md §7</code>).
         </p>
       )}
       {fix && <FixResultPanel fix={fix} />}

@@ -59,16 +59,13 @@ export function FixResultPanel({ fix }: { fix: FixDone }) {
       <section className={styles.heroCard} aria-label="Autofix Healing Results">
         <div className={styles.heroHeader}>
           <div className={styles.heroTitle}>
-            <span className={styles.heroIcon}>⚡</span>
             <span>Self-Healing Autofix Completed</span>
           </div>
           <div className={styles.badges}>
             <span className={styles.providerBadge}>
-              <span>🤖</span>
               <span>via {fix.provider}</span>
             </span>
             <span className={styles.filesCountBadge}>
-              <span>📦</span>
               <span>{fix.files.length} test file{fix.files.length === 1 ? "" : "s"} generated</span>
             </span>
           </div>
@@ -77,7 +74,6 @@ export function FixResultPanel({ fix }: { fix: FixDone }) {
         <div className={styles.metricsGrid}>
           <div className={styles.metricCard}>
             <div className={styles.metricLabel}>
-              <span>🎯</span>
               <span>Mutation Score (Defect Detection)</span>
             </div>
             <div className={styles.metricComparison}>
@@ -94,7 +90,6 @@ export function FixResultPanel({ fix }: { fix: FixDone }) {
 
           <div className={styles.metricCard}>
             <div className={styles.metricLabel}>
-              <span>📊</span>
               <span>Line Coverage</span>
             </div>
             <div className={styles.metricComparison}>
@@ -111,7 +106,6 @@ export function FixResultPanel({ fix }: { fix: FixDone }) {
         </div>
 
         <div className={styles.heroNotice}>
-          <span>💡</span>
           <div>
             <strong>Isolated Sandbox Execution: </strong>
             Tests were generated, evaluated by the AI Critic, and executed in an isolated server sandbox.
@@ -129,7 +123,6 @@ export function FixResultPanel({ fix }: { fix: FixDone }) {
           className={`${styles.tabButton} ${activeTab === "tests" ? styles.tabButtonActive : ""}`}
           onClick={() => setActiveTab("tests")}
         >
-          <span>💻</span>
           <span>Generated Tests</span>
           <span className={styles.tabCount}>{fix.files.length}</span>
         </button>
@@ -141,7 +134,6 @@ export function FixResultPanel({ fix }: { fix: FixDone }) {
           className={`${styles.tabButton} ${activeTab === "critic" ? styles.tabButtonActive : ""}`}
           onClick={() => setActiveTab("critic")}
         >
-          <span>🛡️</span>
           <span>Critic Reviews & Quality Gates</span>
           <span className={styles.tabCount}>{normalizedNotes.length}</span>
         </button>
@@ -154,7 +146,6 @@ export function FixResultPanel({ fix }: { fix: FixDone }) {
             className={`${styles.tabButton} ${activeTab === "evidence" ? styles.tabButtonActive : ""}`}
             onClick={() => setActiveTab("evidence")}
           >
-            <span>📋</span>
             <span>Audit & Verification Evidence</span>
           </button>
         )}
