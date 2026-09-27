@@ -5,7 +5,24 @@ import { useEffect, useRef, useState } from "react";
 import { EndpointsList } from "../components/EndpointsList";
 import { RiskTable } from "../components/RiskTable";
 import { ChartSlot } from "./ChartSlot";
-import { fetchProjects, fetchView, type HistoryView, type Loaded, type Project, type Row, type TrendRow, type RiskHeatmapRow, type EndpointRow } from "./history";
+import { FlakyTests } from "./FlakyTests";
+import {
+  fetchProjects,
+  fetchView,
+  type EndpointRow,
+  type FlakyRow,
+  type HistoryView,
+  type Loaded,
+  type OperatorRow,
+  type Project,
+  type RiskHeatmapRow,
+  type Row,
+  type SurvivorRow,
+  type TrendRow,
+} from "./history";
+import { OperatorsChart } from "./OperatorsChart";
+import { SurvivorsTable } from "./SurvivorsTable";
+import { TrendChart } from "./TrendChart";
 import styles from "./results.module.css";
 
 type SlotSpec = {
@@ -209,6 +226,12 @@ export function ResultsDashboard() {
             state={state}
             wide={s.wide}
           >
+            {s.view === "trend" && state.status === "ok" && state.data.length > 0 && (
+              <TrendChart rows={state.data as TrendRow[]} />
+            )}
+            {s.view === "operators" && state.status === "ok" && state.data.length > 0 && (
+              <OperatorsChart operators={state.data as OperatorRow[]} />
+            )}
             {s.view === "risk-heatmap" && state.status === "ok" && state.data.length > 0 && (
               <RiskTable
                 risk={(state.data as RiskHeatmapRow[]).map((r) => ({
@@ -220,6 +243,12 @@ export function ResultsDashboard() {
             )}
             {s.view === "endpoints" && state.status === "ok" && state.data.length > 0 && (
               <EndpointsList endpoints={state.data as EndpointRow[]} />
+            )}
+            {s.view === "survivors" && state.status === "ok" && state.data.length > 0 && (
+              <SurvivorsTable survivors={state.data as SurvivorRow[]} />
+            )}
+            {s.view === "flaky" && state.status === "ok" && state.data.length > 0 && (
+              <FlakyTests tests={state.data as FlakyRow[]} />
             )}
           </ChartSlot>
         )})}
