@@ -5,7 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { BobBadge, Brand } from "./Brand";
 import { DemoSwitch } from "./DemoSwitch";
-import { ABOUT_LINKS, PRODUCT_LINKS, REPO_URL, type SiteLink } from "./links";
+import { ABOUT_LINKS, DEMO_SLIDES, PRODUCT_LINKS, REPO_URL, type SiteLink } from "./links";
+import { useDemoMode } from "../../context/DemoModeContext";
 import styles from "./SiteNav.module.css";
 
 const ALL_NAV_LINKS: SiteLink[] = [...PRODUCT_LINKS, ...ABOUT_LINKS];
@@ -23,7 +24,10 @@ function NavLinks({ links, pathname, onNavigate }: { links: SiteLink[]; pathname
         href={href}
         className={`${styles.link} ${active ? styles.active : ""}`}
         aria-current={active ? "page" : undefined}
-        onClick={onNavigate}
+        onClick={(e) => {
+          (e.currentTarget as HTMLElement).blur();
+          onNavigate?.();
+        }}
       >
         {label}
       </Link>
@@ -34,10 +38,14 @@ function NavLinks({ links, pathname, onNavigate }: { links: SiteLink[]; pathname
 export function SiteNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const { demoMode } = useDemoMode();
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
 
-  // Keyboard navigation: ArrowLeft and ArrowRight to navigate across navbar tabs
+  // Active navigation items depending on whether Demo Mode is enabled
+  const navItems = demoMode ? DEMO_SLIDES : ALL_NAV_LINKS;
+
+  // Keyboard navigation: ArrowLeft and ArrowRight to navigate across navbar tabs or slides
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       // Don't trigger if user is typing in form controls
@@ -53,43 +61,67 @@ export function SiteNav() {
       }
 
       if (e.key === "ArrowRight") {
-        const idx = ALL_NAV_LINKS.findIndex((link) => isActive(pathname, link.href));
-        if (idx >= 0 && idx < ALL_NAV_LINKS.length - 1) {
+        const idx = navItems.findIndex((link) => isActive(pathname, link.href));
+        if (idx >= 0 && idx < navItems.length - 1) {
           e.preventDefault();
-          router.push(ALL_NAV_LINKS[idx + 1].href);
+          (document.activeElement as HTMLElement)?.blur();
+          router.push(navItems[idx + 1].href);
         } else if (idx === -1) {
           e.preventDefault();
-          router.push(ALL_NAV_LINKS[0].href);
+          (document.activeElement as HTMLElement)?.blur();
+          router.push(navItems[0].href);
         }
       } else if (e.key === "ArrowLeft") {
-        const idx = ALL_NAV_LINKS.findIndex((link) => isActive(pathname, link.href));
+        const idx = navItems.findIndex((link) => isActive(pathname, link.href));
         if (idx > 0) {
           e.preventDefault();
-          router.push(ALL_NAV_LINKS[idx - 1].href);
+          (document.activeElement as HTMLElement)?.blur();
+          router.push(navItems[idx - 1].href);
         }
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [pathname, router]);
+  }, [pathname, router, navItems]);
 
   return (
     <header className={styles.bar}>
       <nav className={styles.inner} aria-label="Main">
-        <DemoSwitch />
-        <span className={styles.divider} aria-hidden="true" />
         <Brand />
-        <div className={styles.links}>
-          <NavLinks links={PRODUCT_LINKS} pathname={pathname} />
-          <span className={styles.divider} aria-hidden="true" />
-          <NavLinks links={ABOUT_LINKS} pathname={pathname} />
-          <span className={styles.kbdHint} title="Use Arrow Left & Arrow Right keys to navigate pages">
-            <kbd className={styles.kbd}>&larr;</kbd>
-            <kbd className={styles.kbd}>&rarr;</kbd>
-          </span>
-        </div>
+
+        {demoMode ? (
+          <div className={styles.slideLinks} role="tablist" aria-label="Demo Slides">
+            {DEMO_SLIDES.map((slide) => {
+              const active = isActive(pathname, slide.href);
+              const numStr = String(slide.slideNumber).padStart(2, "0");
+              return (
+                <Link
+                  key={slide.href}
+                  href={slide.href}
+                  className={`${styles.slideLink} ${active ? styles.slideLinkActive : ""}`}
+                  aria-current={active ? "page" : undefined}
+                  title={`Slide ${numStr}: ${slide.slideTitle}`}
+                  onClick={(e) => {
+                    (e.currentTarget as HTMLElement).blur();
+                    close();
+                  }}
+                >
+                  <span>{numStr}</span>
+                </Link>
+              );
+            })}
+          </div>
+        ) : (
+          <div className={styles.links}>
+            <NavLinks links={PRODUCT_LINKS} pathname={pathname} />
+            <span className={styles.divider} aria-hidden="true" />
+            <NavLinks links={ABOUT_LINKS} pathname={pathname} />
+          </div>
+        )}
+
         <div className={styles.end}>
+          <DemoSwitch />
           <BobBadge />
           <a className={styles.iconLink} href={REPO_URL} target="_blank" rel="noreferrer" aria-label="Source on GitHub">
             <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -110,15 +142,39 @@ export function SiteNav() {
           </button>
         </div>
       </nav>
+
       {open && (
         <div id="site-menu" className={styles.menu}>
-          <span className={styles.menuLabel}>Product</span>
-          <NavLinks links={PRODUCT_LINKS} pathname={pathname} onNavigate={close} />
-          <span className={styles.menuLabel}>About</span>
-          <NavLinks links={ABOUT_LINKS} pathname={pathname} onNavigate={close} />
+          {demoMode ? (
+            <>
+              <span className={styles.menuLabel}>Demo Slides (10)</span>
+              {DEMO_SLIDES.map((slide) => {
+                const active = isActive(pathname, slide.href);
+                return (
+                  <Link
+                    key={slide.href}
+                    href={slide.href}
+                    className={`${styles.link} ${active ? styles.active : ""}`}
+                    onClick={close}
+                  >
+                    <span style={{ fontWeight: 700, marginRight: 8, color: "var(--accent)" }}>
+                      {String(slide.slideNumber).padStart(2, "0")}
+                    </span>
+                    {slide.slideTitle}
+                  </Link>
+                );
+              })}
+            </>
+          ) : (
+            <>
+              <span className={styles.menuLabel}>Product</span>
+              <NavLinks links={PRODUCT_LINKS} pathname={pathname} onNavigate={close} />
+              <span className={styles.menuLabel}>About</span>
+              <NavLinks links={ABOUT_LINKS} pathname={pathname} onNavigate={close} />
+            </>
+          )}
         </div>
       )}
     </header>
   );
 }
-

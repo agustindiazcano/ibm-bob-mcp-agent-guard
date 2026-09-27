@@ -1,22 +1,18 @@
 import type { AnalyzeResponse, RepoFormValues, StreamEvent, SummaryResponse } from "./types";
 
 export function apiBase(): string {
-  const base = process.env.NEXT_PUBLIC_REPOGUARD_API_BASE;
-  if (!base) {
-    throw new Error("NEXT_PUBLIC_REPOGUARD_API_BASE is not set");
-  }
-  return base;
+  return process.env.NEXT_PUBLIC_REPOGUARD_API_BASE || "https://repoguard-ljm5hefnsq-uc.a.run.app";
 }
 
 export async function request(url: string, init?: RequestInit): Promise<Response> {
   try {
     return await fetch(url, init);
-  } catch {
-    // The browser reports "backend down" and "CORS rejected" as the same
-    // opaque TypeError ("Failed to fetch"), so the message names both.
+  } catch (err) {
+    // Technical detail logged to console for debugging
+    console.error(`[API Network Error] Could not connect to backend at ${apiBase()}. Verify service status and CORS origins:`, err);
+    // Clean user-facing error message
     throw new Error(
-      `Can't reach the backend at ${apiBase()}. Check that repoguard serve is running there ` +
-        `and that its REPOGUARD_CORS_ORIGINS allows ${window.location.origin}.`,
+      `No se pudo conectar con el servidor backend (${apiBase()}). Verificá el estado del servicio o tu conexión a internet.`
     );
   }
 }
@@ -52,7 +48,7 @@ export async function fetchAnalyze(values: RepoFormValues): Promise<AnalyzeRespo
 export async function fetchSummary(result: AnalyzeResponse, provider?: string, modelId?: string): Promise<SummaryResponse> {
   const params = new URLSearchParams();
   if (provider) params.set("provider", provider);
-  if (modelId) params.set("model_id", modelId);
+  if (provider === "vertex" && modelId) params.set("model_id", modelId);
   const query = params.toString();
   const url = query ? `${apiBase()}/api/summary?${query}` : `${apiBase()}/api/summary`;
   const res = await request(url, {
@@ -75,12 +71,22 @@ export function streamUrl(repoPath: string, gateThreshold: number): string {
 
 // POST /api/fix streams NDJSON (one event per line) for several minutes, so
 // it's read incrementally here instead of awaited as one JSON body.
-// EventSource can't send a POST body or an Authorization header.
 export async function streamFix(
   { repoPath, gateThreshold, provider, modelId }: RepoFormValues,
-  token: string,
-  onEvent: (event: StreamEvent) => void,
+  tokenOrOnEvent: string | ((event: StreamEvent) => void),
+  onEventOrToken?: ((event: StreamEvent) => void) | string,
 ): Promise<void> {
+  let onEvent: (event: StreamEvent) => void;
+  let token: string | undefined;
+
+  if (typeof tokenOrOnEvent === "function") {
+    onEvent = tokenOrOnEvent;
+    token = typeof onEventOrToken === "string" ? onEventOrToken : undefined;
+  } else {
+    token = tokenOrOnEvent;
+    onEvent = onEventOrToken as (event: StreamEvent) => void;
+  }
+
   const payload: Record<string, unknown> = {
     repo_path: repoPath,
     gate_threshold: gateThreshold,
@@ -92,9 +98,15 @@ export async function streamFix(
     payload.model_id = modelId;
   }
 
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const effectiveToken = token?.trim() || process.env.NEXT_PUBLIC_FIX_TOKEN || "";
+  if (effectiveToken) {
+    headers.Authorization = `Bearer ${effectiveToken}`;
+  }
+
   const res = await request(`${apiBase()}/api/fix`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    headers,
     body: JSON.stringify(payload),
   });
   if (!res.ok || !res.body) {

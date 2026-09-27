@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useDemoMode } from "../context/DemoModeContext";
 import { EndpointsList } from "../components/EndpointsList";
 import { RiskTable } from "../components/RiskTable";
 import { ChartSlot } from "./ChartSlot";
@@ -20,10 +21,65 @@ import {
   type SurvivorRow,
   type TrendRow,
 } from "./history";
+import {
+  MOCK_ENDPOINTS,
+  MOCK_FLAKY,
+  MOCK_OPERATORS,
+  MOCK_PROJECT,
+  MOCK_PROJECTS,
+  MOCK_RISK_HEATMAP,
+  MOCK_SURVIVORS,
+  MOCK_TREND,
+} from "./mockData";
 import { OperatorsChart } from "./OperatorsChart";
 import { SurvivorsTable } from "./SurvivorsTable";
 import { TrendChart } from "./TrendChart";
 import styles from "./results.module.css";
+
+// Demo Mode's canned response per view -- fix-effect has no mock yet (no
+// real fix_sessions table exists either way, see PENDING.md), so it stays
+// empty like the real backend's honest "nothing recorded" response.
+const MOCK_VIEWS: Record<HistoryView, Row[]> = {
+  trend: MOCK_TREND,
+  operators: MOCK_OPERATORS,
+  "risk-heatmap": MOCK_RISK_HEATMAP,
+  "fix-effect": [],
+  endpoints: MOCK_ENDPOINTS,
+  survivors: MOCK_SURVIVORS,
+  flaky: MOCK_FLAKY,
+};
+
+// Real-mode cache: the last successfully-fetched projects/views, so opening
+// /results shows something immediately instead of a loading flash or an
+// error banner, until a real fetchProjects()/fetchView() call succeeds and
+// replaces it. Never used in Demo Mode. localStorage, not a JWT -- this is
+// cached read data for one browser, not an auth credential to verify.
+const CACHE_KEY = "testmind_results_cache_v1";
+
+type ResultsCache = { projects: Project[]; selected: string; views: Partial<Record<HistoryView, Row[]>> };
+
+function loadResultsCache(): ResultsCache | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    return raw ? (JSON.parse(raw) as ResultsCache) : null;
+  } catch {
+    return null;
+  }
+}
+
+function patchResultsCache(patch: Partial<ResultsCache>) {
+  try {
+    const current = loadResultsCache() ?? { projects: [], selected: "", views: {} };
+    const next: ResultsCache = {
+      projects: patch.projects ?? current.projects,
+      selected: patch.selected ?? current.selected,
+      views: { ...current.views, ...(patch.views ?? {}) },
+    };
+    localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+  } catch {
+    // Private browsing, quota, etc. -- caching is a convenience, never required.
+  }
+}
 
 type SlotSpec = {
   view: HistoryView;
@@ -133,6 +189,7 @@ function Kpis({ trend }: { trend: Loaded<Row[]> }) {
 }
 
 export function ResultsDashboard() {
+  const { demoMode } = useDemoMode();
   const [projects, setProjects] = useState<Loaded<Project[]>>({ status: "loading" });
   const [selected, setSelected] = useState("");
   const [views, setViews] = useState<Views>(() => allViews({ status: "loading" }));
@@ -142,32 +199,87 @@ export function ResultsDashboard() {
     const pick = ++selectRef.current;
     setSelected(slug);
     setViews(allViews({ status: "loading" }));
+    patchResultsCache({ selected: slug });
     for (const { view } of SLOTS) {
       void fetchView(slug, view).then((state) => {
         // Drop responses for a project the user has already switched away from.
         if (selectRef.current === pick) {
           setViews((prev) => ({ ...prev, [view]: state }));
+          if (state.status === "ok") {
+            patchResultsCache({ views: { [view]: state.data } });
+          }
         }
       });
     }
   }
 
+  // Demo Mode: only the last project (MOCK_PROJECT) has a canned story --
+  // the other two are placeholders that honestly show "no runs yet", same
+  // as a real empty project would. Nothing is selected by default.
+  function selectDemoProject(slug: string) {
+    ++selectRef.current;
+    setSelected(slug);
+    const hasData = slug === MOCK_PROJECT.slug;
+    setViews(
+      Object.fromEntries(
+        SLOTS.map((s) => [s.view, { status: "ok", data: hasData ? MOCK_VIEWS[s.view] : [] }]),
+      ) as Views,
+    );
+  }
+
   useEffect(() => {
-    void fetchProjects().then((state) => {
-      setProjects(state);
-      if (state.status === "ok" && state.data.length > 0) {
-        selectProject(state.data[0].slug);
-      } else if (state.status === "ok") {
+    if (demoMode) {
+      const timer = setTimeout(() => {
+        ++selectRef.current;
+        setProjects({ status: "ok", data: MOCK_PROJECTS });
+        setSelected("");
         setViews(allViews({ status: "ok", data: [] }));
-      } else if (state.status === "unavailable") {
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+    // Show cached data immediately (last real fetch this browser saw) while
+    // the real request is in flight, instead of a loading flash. Replaced
+    // the moment a real "ok" response comes back; if the backend is
+    // unreachable, the cached view just stays on screen.
+    const cached = loadResultsCache();
+    if (cached && cached.projects.length > 0) {
+      setTimeout(() => {
+        setProjects({ status: "ok", data: cached.projects });
+        setSelected(cached.selected);
+        setViews(
+          Object.fromEntries(
+            SLOTS.map((s) => [
+              s.view,
+              cached.views[s.view] ? { status: "ok", data: cached.views[s.view]! } : { status: "loading" },
+            ]),
+          ) as Views,
+        );
+      }, 0);
+    }
+
+    void fetchProjects().then((state) => {
+      if (state.status === "ok") {
+        setProjects(state);
+        if (state.data.length > 0) {
+          patchResultsCache({ projects: state.data });
+          selectProject(state.data[0].slug);
+        } else {
+          setViews(allViews({ status: "ok", data: [] }));
+        }
+      } else if (!cached) {
+        setProjects(state);
         setViews(allViews(state));
       }
     });
-    // Runs once on mount; selectProject only touches state setters and a ref.
-  }, []);
+    // selectProject only touches state setters and a ref, safe to omit.
+  }, [demoMode]);
 
-  const bannerKey =
-    projects.status === "unavailable"
+  // Demo Mode never shows a real error/unavailable banner -- even a stale
+  // one from a previous real-mode fetch, for the one render before the
+  // demoMode effect clears it. It has its own "Select a repo" prompt above.
+  const bannerKey = demoMode
+    ? null
+    : projects.status === "unavailable"
       ? projects.reason.kind
       : projects.status === "ok" && projects.data.length === 0
         ? "empty"
@@ -177,7 +289,7 @@ export function ResultsDashboard() {
 
   return (
     <>
-      {projects.status === "unavailable" && !banner && (
+      {!demoMode && projects.status === "unavailable" && !banner && (
         <p className={styles.alert} role="alert">
           {projects.reason.message}
         </p>
@@ -197,10 +309,14 @@ export function ResultsDashboard() {
           <span>Project</span>
           <select
             value={selected}
-            onChange={(e) => selectProject(e.target.value)}
+            onChange={(e) => (demoMode ? selectDemoProject(e.target.value) : selectProject(e.target.value))}
             disabled={projectList.length === 0}
           >
-            {projectList.length === 0 && <option value="">{projects.status === "loading" ? "Loading…" : "No projects"}</option>}
+            {(projectList.length === 0 || (demoMode && !selected)) && (
+              <option value="">
+                {projectList.length === 0 ? (projects.status === "loading" ? "Loading…" : "No projects") : "Select a repo…"}
+              </option>
+            )}
             {projectList.map((p) => (
               <option key={p.slug} value={p.slug}>
                 {p.slug}
@@ -210,6 +326,12 @@ export function ResultsDashboard() {
         </label>
       </div>
 
+      {demoMode && !selected ? (
+        <div className={styles.banner} role="status">
+          <strong>Select a repo above to see its analytics.</strong>
+        </div>
+      ) : (
+        <>
       <Kpis trend={views.trend} />
 
       <div className={styles.grid}>
@@ -253,6 +375,8 @@ export function ResultsDashboard() {
           </ChartSlot>
         )})}
       </div>
+        </>
+      )}
     </>
   );
 }

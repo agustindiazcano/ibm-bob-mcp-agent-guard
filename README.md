@@ -531,8 +531,8 @@ Bob's repository impact for this repo specifically:
 </tr>
 <tr>
 <td><img src="bob-evidence/bob-images/b/11-bob-ide-2026-09-25_16-35-phase8-test-writer-subagent-mode-setup.png" width="220" alt="IBM Bob setting up the Phase 8 Test Writer subagent mode"><br/><sub>Phase 8: Test Writer subagent mode</sub></td>
-<td><img src="bob-evidence/bob-images/bob-stats/ranking-bob-commits.png" width="220" alt="Bobalytics repository-impact table sorted by Bob commits, this repo ranked 1st with 12 commits"><br/><sub>Ranked 1st by Bob commits (12)</sub></td>
-<td align="center"><a href="bob-evidence/bob-images/"><sub>32 screenshots total →<br/>bob-evidence/bob-images/</sub></a></td>
+<td align="center"><sub>Bobalytics ranking screenshots removed — they showed other teams' names in the same leaderboard table. Numbers only (see the KPI table above).</sub></td>
+<td align="center"><a href="bob-evidence/bob-images/"><sub>26 screenshots total →<br/>bob-evidence/bob-images/</sub></a></td>
 </tr>
 </table>
 

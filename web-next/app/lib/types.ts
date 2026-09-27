@@ -59,6 +59,7 @@ export type RepoFormValues = {
   gateThreshold: number;
   provider?: AIProvider;
   modelId?: VertexModel;
+  swarm?: boolean;
 };
 
 // core.build_dashboard_data's dict: /api/analyze minus the fields the server

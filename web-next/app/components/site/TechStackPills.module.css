@@ -1,0 +1,56 @@
+.stackSection {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.stackTitle {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.65);
+  white-space: nowrap;
+  margin-right: 4px;
+}
+
+.pill {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+  transition: color 0.15s ease;
+}
+
+.pill:hover {
+  color: #ffffff;
+}
+
+.pill svg {
+  flex-shrink: 0;
+  display: block;
+  fill: currentColor;
+  opacity: 0.8;
+  transition: opacity 0.15s ease;
+}
+
+.pill:hover svg {
+  opacity: 1;
+}
+
+.ciDivider {
+  opacity: 0.5;
+  font-weight: 400;
+  margin: 0 1px;
+}

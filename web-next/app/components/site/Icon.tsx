@@ -10,6 +10,10 @@ const PATHS = {
   globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM3 12h18M12 3c2.5 2.7 3.5 5.7 3.5 9s-1 6.3-3.5 9c-2.5-2.7-3.5-5.7-3.5-9s1-6.3 3.5-9Z",
   plug: "M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0V8ZM12 17v4",
   shield: "M12 3 5 6v5.5c0 4.3 3 7.9 7 9.5 4-1.6 7-5.2 7-9.5V6l-7-3ZM9 12l2 2 4-4",
+  check: "M20 6 9 17l-5-5",
+  trend: "m22 7-8.5 8.5-5-5L2 17M16 7h6v6",
+  pipeline: "M5 12h14M12 5l7 7-7 7M5 6v12",
+  server: "M4 4h16v6H4zm0 10h16v6H4zm4-7h.01M8 17h.01",
 } as const;
 
 export type IconName = keyof typeof PATHS;

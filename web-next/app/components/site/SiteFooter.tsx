@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BobBadge, Brand } from "./Brand";
 import { ABOUT_LINKS, PRODUCT_LINKS, REPO_URL, repoDoc, type SiteLink } from "./links";
+import { TechStackPills } from "./TechStackPills";
 import styles from "./SiteFooter.module.css";
 
 const SOURCE_LINKS: SiteLink[] = [
@@ -49,10 +50,20 @@ export function SiteFooter() {
           <Column title="About" links={ABOUT_LINKS} />
           <Column title="Source" links={SOURCE_LINKS} external />
         </div>
+
+        <div className={styles.techSection}>
+          <TechStackPills />
+        </div>
+
         <div className={styles.bottom}>
           <span>
             Built by{" "}
-            <a href="https://orcid.org/0009-0001-4336-490X" target="_blank" rel="noreferrer" className={styles.link}>
+            <a
+              href="https://www.agustindiazcano.com/"
+              target="_blank"
+              rel="noreferrer"
+              className={styles.authorLink}
+            >
               Agustin Diaz-Cano
             </a>{" "}
             &middot; Team Argentina

@@ -7,9 +7,6 @@ import styles from "./Controls.module.css";
 type Props = {
   values: RepoFormValues;
   onChange: (values: RepoFormValues) => void;
-  // Kept out of RepoFormValues so it never lands in /api/analyze's query string.
-  token: string;
-  onTokenChange: (token: string) => void;
   disabled: boolean;
 };
 
@@ -18,26 +15,36 @@ const DEMO_REPOS = [
   { label: "Ledger Demo", path: "./eval-fixtures/ledger", desc: "Accounting ledger fixture (core ledger + transactions)" },
 ];
 
-export function RepoForm({ values, onChange, token, onTokenChange, disabled }: Props) {
+const DEMO_PATHS = new Set(DEMO_REPOS.map((d) => d.path));
+const URL_PATTERN = /^https?:\/\/\S+$/i;
+
+export function RepoForm({ values, onChange, disabled }: Props) {
+  const trimmedPath = values.repoPath.trim();
+  // The presets above send a server-side filesystem path, not a URL -- they
+  // never go through this check. Free-typed input does: this form only
+  // validates shape client-side, the backend still just reads a local path.
+  const showUrlError = trimmedPath !== "" && !DEMO_PATHS.has(trimmedPath) && !URL_PATTERN.test(trimmedPath);
+
   return (
     <fieldset className={styles.form} disabled={disabled}>
       <div className={styles.repoRow}>
         <label className={styles.field}>
-          <span>
-            Repo path on server
-            <Tooltip
-              content="Absolute or relative path to a Python project on the server machine containing pytest tests."
-              ariaLabel="About repo path"
-            />
-          </span>
+          <span>Repository URL</span>
           <input
-            className={styles.input}
+            className={`${styles.input} ${showUrlError ? styles.inputError : ""}`}
             type="text"
             value={values.repoPath}
             onChange={(e) => onChange({ ...values, repoPath: e.target.value })}
-            placeholder="./demo-repo"
+            placeholder="https://github.com/usuario/repo"
             spellCheck={false}
+            aria-invalid={showUrlError}
           />
+          <span className={styles.fieldNote}>El repositorio debe ser un proyecto Python (pytest, Python ≥ 3.10).</span>
+          {showUrlError && (
+            <span className={styles.fieldError} role="alert">
+              Formato incorrecto — debe ser una URL. Ejemplo: https://github.com/usuario/repo
+            </span>
+          )}
         </label>
         <div className={styles.presetsBar}>
           <span>Quick select demo:</span>
@@ -75,24 +82,38 @@ export function RepoForm({ values, onChange, token, onTokenChange, disabled }: P
           <span className={styles.fieldNote}>Target coverage for PASS/FAIL</span>
         </label>
 
-        <label className={styles.field}>
+        <div className={`${styles.field} ${styles.providerField}`}>
           <span>
-            Autofix token
+            Multicloud AI Provider & Model
             <Tooltip
-              content="Requires backend REPOGUARD_FIX_TOKEN + AI provider (watsonx or Vertex AI). Tests are written in an isolated sandbox, never in source code."
-              ariaLabel="About Autofix token"
+              content="Choose which cloud AI provider and LLM powers narrative summaries and the self-healing fix loop. Google Vertex AI runs Gemini Flash 3.8 / 3.5 (global endpoint). IBM watsonx runs Mistral/Llama."
+              ariaLabel="About AI providers"
             />
           </span>
-          <input
-            className={styles.input}
-            type="password"
-            value={token}
-            onChange={(e) => onTokenChange(e.target.value)}
-            placeholder="Set on server: REPOGUARD_FIX_TOKEN"
-            autoComplete="off"
-          />
-          <span className={styles.fieldNote}>Enables AI self-healing test generation</span>
-        </label>
+          <select
+            className={styles.select}
+            value={values.provider === "watsonx" ? "watsonx" : (values.modelId ?? "gemini-3.8-flash")}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "watsonx") {
+                onChange({ ...values, provider: "watsonx", modelId: undefined });
+              } else {
+                onChange({ ...values, provider: "vertex", modelId: v as "gemini-3.8-flash" | "gemini-3.5-flash" });
+              }
+            }}
+          >
+            <option value="gemini-3.8-flash">Google Vertex AI · Gemini 3.8 Flash (Default)</option>
+            <option value="gemini-3.5-flash">Google Vertex AI · Gemini 3.5 Flash</option>
+            <option value="watsonx">IBM watsonx.ai · Mistral Small 24B / Llama 3.3</option>
+          </select>
+          <span className={styles.fieldNote}>
+            {values.provider === "watsonx"
+              ? "Mistral Small 24B / Llama 3.3 (server default)."
+              : (values.modelId ?? "gemini-3.8-flash") === "gemini-3.5-flash"
+                ? "Gemini 3.5 Flash selected."
+                : "Gemini 3.8 Flash active as default."}
+          </span>
+        </div>
 
         <label className={styles.check}>
           <input
@@ -110,59 +131,9 @@ export function RepoForm({ values, onChange, token, onTokenChange, disabled }: P
         </label>
       </div>
 
-      <div className={styles.providerSection}>
-        <span className={styles.field}>
-          <span>
-            Multicloud AI Provider
-            <Tooltip
-              content="Choose which cloud AI provider powers narrative summaries and the self-healing fix loop. Google Vertex AI (Gemini) is faster; IBM watsonx.ai runs Mistral/Llama."
-              ariaLabel="About AI providers"
-            />
-          </span>
-        </span>
-        <div className={styles.providerOptions}>
-          <button
-            type="button"
-            className={`${styles.providerBtn} ${(values.provider ?? "vertex") === "vertex" ? styles.providerBtnActive : ""}`}
-            onClick={() => onChange({ ...values, provider: "vertex" })}
-          >
-            <span className={`${styles.providerBadge} ${styles.providerBadgeGcp}`}>GCP</span>
-            <span>Google Vertex AI (Gemini 3)</span>
-          </button>
-          <button
-            type="button"
-            className={`${styles.providerBtn} ${values.provider === "watsonx" ? styles.providerBtnActive : ""}`}
-            onClick={() => onChange({ ...values, provider: "watsonx" })}
-          >
-            <span className={`${styles.providerBadge} ${styles.providerBadgeIbm}`}>IBM</span>
-            <span>IBM watsonx.ai (Mistral/Llama)</span>
-          </button>
-        </div>
-        {(values.provider ?? "vertex") === "vertex" && (
-          <div className={styles.providerOptions}>
-            <button
-              type="button"
-              className={`${styles.providerBtn} ${(values.modelId ?? "gemini-3.8-flash") === "gemini-3.8-flash" ? styles.providerBtnActive : ""}`}
-              onClick={() => onChange({ ...values, modelId: "gemini-3.8-flash" })}
-            >
-              <span>Gemini 3.8 Flash (default)</span>
-            </button>
-            <button
-              type="button"
-              className={`${styles.providerBtn} ${values.modelId === "gemini-3.5-flash" ? styles.providerBtnActive : ""}`}
-              onClick={() => onChange({ ...values, modelId: "gemini-3.5-flash" })}
-            >
-              <span>Gemini 3.5 Flash</span>
-            </button>
-          </div>
-        )}
-      </div>
-
       <div className={styles.infoBanner}>
         <strong>Target Environment & Scope:</strong> Supports Python ≥ 3.10 with <code>pytest</code> and optional FastAPI endpoint inspection. Best suited for focused microservices, packages, or modules. For large codebases, run <strong>Gate (Fast)</strong> or keep mutation testing unchecked to avoid long execution times.
       </div>
-
     </fieldset>
   );
 }
-

@@ -30,8 +30,9 @@
 }
 
 .name {
+  font-family: var(--font-raleway), sans-serif;
   font-size: 16px;
-  font-weight: 650;
+  font-weight: 100;
   letter-spacing: -0.015em;
   white-space: nowrap;
 }
@@ -39,8 +40,8 @@
 /* IBM Blue 60 / 40, so the edition label reads as IBM's color rather than
    the app's accent. */
 .badge {
-  --bob: #0f62fe;
-  --bob-soft: #edf5ff;
+  --bob: #78a9ff;
+  --bob-soft: #0f1d38;
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -66,11 +67,4 @@
   height: 7px;
   border-radius: 50%;
   background: var(--bob);
-}
-
-@media (prefers-color-scheme: dark) {
-  .badge {
-    --bob: #78a9ff;
-    --bob-soft: #0f1d38;
-  }
 }

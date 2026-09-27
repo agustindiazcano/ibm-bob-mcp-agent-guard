@@ -21,21 +21,22 @@
 }
 
 .presetBtn {
-  background: var(--surface-muted);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 3px 8px;
-  font-size: 11px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 11.5px;
   font-family: var(--font-geist-mono), monospace;
-  color: var(--text);
+  color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
 }
 
 .presetBtn:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-soft);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
 }
 
 .presetBtnActive {
@@ -52,10 +53,18 @@
   align-items: flex-start;
 }
 
-@media (min-width: 720px) {
+@media (min-width: 860px) {
   .controlsRow {
-    grid-template-columns: 140px minmax(0, 1fr) auto;
+    grid-template-columns: 135px 320px auto;
+    align-items: flex-start;
   }
+  .check {
+    margin-top: 24px;
+  }
+}
+
+.providerField {
+  max-width: 320px;
 }
 
 .field {
@@ -67,20 +76,42 @@
   color: var(--text-muted);
 }
 
-.input {
-  height: 38px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-muted);
-  color: var(--text);
-  font-size: 14px;
+.input,
+.select {
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: #12151b;
+  color: #ffffff;
+  font-size: 13.5px;
+  transition: all 0.15s ease;
+  outline: none;
 }
 
-.input:focus {
+.input:focus,
+.select:focus {
   border-color: var(--accent);
-  outline: none;
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  box-shadow: 0 0 0 3px rgba(255, 111, 94, 0.25);
+}
+
+.inputError {
+  border-color: var(--fail) !important;
+}
+
+.inputError:focus {
+  box-shadow: 0 0 0 3px rgba(251, 113, 133, 0.25) !important;
+}
+
+.fieldError {
+  font-size: 11px;
+  color: var(--fail);
+  line-height: 1.4;
+}
+
+.select option {
+  background: #15181e;
+  color: #ffffff;
 }
 
 .fieldNote {
@@ -93,8 +124,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 38px;
-  font-size: 14px;
+  height: 40px;
+  font-size: 13.5px;
   color: var(--text);
   cursor: pointer;
 }
@@ -118,32 +149,142 @@
 }
 
 .button {
-  height: 38px;
+  height: 40px;
   padding: 0 18px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-soft);
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+  font-size: 13.5px;
   font-weight: 550;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .button:hover:not(:disabled) {
-  background: var(--surface-muted);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.28);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
 .primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-text);
+  background: linear-gradient(135deg, var(--accent) 0%, #ff4d6d 100%);
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 3px 14px rgba(255, 111, 94, 0.4);
 }
 
 .primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
+  background: linear-gradient(135deg, var(--accent-hover) 0%, #ff6f8f 100%);
+  box-shadow: 0 6px 22px rgba(255, 111, 94, 0.55);
+  transform: translateY(-2px);
+}
+
+.autofixBtn {
+  background: linear-gradient(135deg, #16a34a 0%, #0ea5e9 100%);
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 3px 14px rgba(16, 185, 129, 0.4);
+}
+
+.autofixBtn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #15803d 0%, #0284c7 100%);
+  box-shadow: 0 6px 22px rgba(16, 185, 129, 0.55);
+  transform: translateY(-2px);
+}
+
+.swarmGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.swarmControl {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 159, 108, 0.45);
+  background: rgba(255, 159, 108, 0.08);
+  color: #ffd3b8;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 8px rgba(255, 159, 108, 0.12);
+  position: relative;
+}
+
+.swarmControl:hover {
+  border-color: #ff9f6c;
+  background: rgba(255, 159, 108, 0.14);
+  color: #ffffff;
+  transform: translateY(-1px);
+  animation: goldenAura 1.8s ease-in-out infinite;
+}
+
+.swarmInput {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  height: 0;
+}
+
+.swarmSlider {
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  position: relative;
+  transition: background-color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.swarmSlider::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.swarmOn .swarmSlider {
+  background: #ff8f5e;
+}
+
+.swarmOn .swarmSlider::after {
+  transform: translateX(14px);
+}
+
+.swarmText {
+  white-space: nowrap;
+}
+
+.cloudBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ff9f6c;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.swarmControl:hover .cloudBadge {
+  color: #ffc19a;
+  transform: scale(1.15);
 }
 
 .button:disabled {
@@ -248,15 +389,9 @@
 .autofixGlow {
   position: relative;
   border-color: #22c55e !important;
-  color: #15803d !important;
+  color: #4ade80 !important;
   background: var(--pass-soft) !important;
   animation: auraGreen 1.8s ease-in-out infinite !important;
-}
-
-@media (prefers-color-scheme: dark) {
-  .autofixGlow {
-    color: #4ade80 !important;
-  }
 }
 
 @keyframes spin {
@@ -285,5 +420,15 @@
     box-shadow: 0 0 26px rgba(34, 197, 94, 0.95), 0 0 50px rgba(34, 197, 94, 0.55);
   }
 }
+
+@keyframes goldenAura {
+  0%, 100% {
+    box-shadow: 0 0 14px rgba(255, 159, 108, 0.65), 0 0 28px rgba(255, 179, 138, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(255, 159, 108, 0.95), 0 0 45px rgba(255, 179, 138, 0.65);
+  }
+}
+
 
 

@@ -1,53 +1,33 @@
 :root {
-  --bg: #f6f7f9;
-  --surface: #ffffff;
-  --surface-muted: #f1f3f6;
-  --border: #e2e5ea;
-  --text: #16181d;
-  --text-muted: #5b6270;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --accent-soft: #e8efff;
+  --bg: #0a0b10;
+  --bg-gradient:
+    radial-gradient(ellipse 900px 700px at 20% -10%, rgba(255, 111, 94, 0.14) 0%, transparent 60%),
+    radial-gradient(ellipse 1000px 800px at 90% 15%, rgba(255, 138, 117, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 1400px 1000px at 50% 100%, #1a1416 0%, #0a0b10 60%);
+  --surface: #14161e;
+  --surface-muted: #191c26;
+  --border: #272b36;
+  --border-soft: rgba(255, 255, 255, 0.07);
+  --text: #e8eaee;
+  --text-muted: #98a0b2;
+  --accent: #ff6f5e;
+  --accent-hover: #ff8a75;
+  --accent-2: #ffb199;
+  --accent-soft: #3a1f1c;
   --accent-text: #ffffff;
-  /* Second chart series (mutation, vs. --accent for coverage). Validated as
-     a categorical pair against --accent with dataviz's palette validator:
-     CVD ΔE 29.9, normal-vision ΔE 38.5, both well clear of the 8/15 floors. */
-  --series-2: #eb6834;
-  --pass: #15803d;
-  --pass-soft: #e7f6ec;
-  --fail: #b91c1c;
-  --fail-soft: #fdecec;
-  --warn: #a16207;
-  --warn-soft: #fdf5e1;
-  --bar-track: #e9ecf1;
-  --radius: 10px;
-  --shadow: 0 1px 2px rgb(16 24 40 / 0.05);
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0d0f13;
-    --surface: #15181e;
-    --surface-muted: #1b1f26;
-    --border: #2a2f38;
-    --text: #e8eaee;
-    --text-muted: #9aa2b1;
-    --accent: #5b8cff;
-    --accent-hover: #7aa2ff;
-    --accent-soft: #1b2640;
-    --accent-text: #0d0f13;
-    --series-2: #d95926;
-    --pass: #4ade80;
-    --pass-soft: #12281b;
-    --fail: #f87171;
-    --fail-soft: #2d1515;
-    --warn: #facc15;
-    --warn-soft: #2a2410;
-    --bar-track: #262b33;
-    --shadow: none;
-    color-scheme: dark;
-  }
+  --series-2: #d95926;
+  --pass: #34d399;
+  --pass-soft: #0f2a20;
+  --fail: #fb7185;
+  --fail-soft: #2d1520;
+  --warn: #fbbf24;
+  --warn-soft: #2a2410;
+  --bar-track: #22262e;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --shadow: 0 10px 34px rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 3px 12px rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
 }
 
 * {
@@ -68,12 +48,32 @@ html {
 body {
   min-height: 100vh;
   color: var(--text);
-  background: var(--bg);
+  background-color: var(--bg);
+  background-image: var(--bg-gradient);
+  background-size: 160% 160%, 160% 160%, 140% 140%;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  animation: bgDrift 24s ease-in-out infinite alternate;
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+@keyframes bgDrift {
+  0% {
+    background-position: 15% -15%, 95% 10%, 50% 90%;
+  }
+  100% {
+    background-position: 35% 10%, 70% 35%, 50% 90%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    animation: none;
+  }
 }
 
 code {

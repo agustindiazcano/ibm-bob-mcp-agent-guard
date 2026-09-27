@@ -84,10 +84,13 @@ complete to be a manual bootstrap.
 direct-push commits before PR #1 existed, totals **12** by git archaeology.
 IBM Bob's own **Bobalytics** dashboard independently confirms **12 Bob
 commits** for this repo — matching exactly, not just close. (An earlier,
-slightly-earlier-timestamped Bobalytics screenshot,
-`bob-evidence/bob-images/c/23-...`, shows 11 commits / 817 lines / 15.9% —
-almost certainly the same live counter captured a few minutes before the
-count above; both are real screenshots, the later one is authoritative.)
+slightly-earlier-timestamped Bobalytics screenshot showed 11 commits / 817
+lines / 15.9% — almost certainly the same live counter captured a few
+minutes before the count above. That screenshot, and the other Bobalytics
+leaderboard exports, were removed from `bob-evidence/`: they showed other
+teams' names in the same ranking table, not just this repo's own numbers.
+The numbers themselves are unaffected — they're the text table below, not
+the screenshot.)
 The initial commit would make it 13 if counted; it's kept separate above
 because, unlike the other 12, it carries no explicit trailer.
 
@@ -104,7 +107,8 @@ From `bob-evidence/README.md`, IBM's "Bob IDE Usage Dashboard," Team Argentina:
 | Bob factor | 16.0% | 21st of 21 |
 
 **Repository impact** (this repo specifically, sortable by commits/lines/factor —
-`bob-evidence/bob-images/bob-stats/ranking-*.png` capture all three sort orders)
+the three sort-order screenshots were removed from `bob-evidence/`: the same
+leaderboard table they captured also lists other teams' names)
 
 | Repository | Bob lines | User lines | Total lines | Bob factor | Bob commits |
 |---|---|---|---|---|---|
@@ -141,12 +145,15 @@ chart to.
 
 ## Screenshot evidence
 
-32 IBM Bob screenshots total: 29 IDE session screenshots in
-`bob-evidence/bob-images/` (`a/` 1–9, `b/` 10–19, `c/` 20–29, one continuous
-sequence) plus 3 Bobalytics ranking exports in
-`bob-evidence/bob-images/bob-stats/`. A representative subset is embedded
-directly in the main `README.md`'s "IBM Bob Usage" section; the full set is
-here for the complete session record.
+26 IBM Bob screenshots total in `bob-evidence/bob-images/` (`a/` 1–9, `b/`
+10–19, `c/` a subset of 20–29 — one continuous session sequence). 6 Bobalytics
+leaderboard/ranking screenshots (3 in `bob-stats/`, 3 in the `c/` sequence)
+were removed: the same leaderboard table they captured also shows other
+teams' names, not just this repo's own numbers. Those numbers are preserved
+as text in the table above and aren't lost — only the screenshots showing
+other teams alongside them were taken down. A representative subset of the
+remaining screenshots is embedded directly in the main `README.md`'s "IBM Bob
+Usage" section; the full set is here for the complete session record.
 
 ## Claude's interleaved PRs (docs only, not engine work)
 
