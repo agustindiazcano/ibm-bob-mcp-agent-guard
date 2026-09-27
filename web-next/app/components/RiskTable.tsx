@@ -1,11 +1,19 @@
 import type { AnalyzeResponse } from "../lib/types";
 import { Card } from "./Card";
+import { Tooltip } from "./Tooltip";
 import styles from "./Lists.module.css";
 
 export function RiskTable({ risk }: { risk: AnalyzeResponse["risk"] }) {
   const sorted = [...risk].sort((a, b) => b.score - a.score);
+  const aside = (
+    <Tooltip
+      content="Risk score (0 to 1.0) is calculated from uncovered lines, gap density, and file size to prioritize which files most urgently need tests."
+      ariaLabel="About risk ranking"
+    />
+  );
+
   return (
-    <Card title="Risk ranking">
+    <Card title="Risk ranking" aside={aside}>
       <div className={styles.tableWrap}>
         <table className={styles.table}>
           <thead>
@@ -38,3 +46,4 @@ export function RiskTable({ risk }: { risk: AnalyzeResponse["risk"] }) {
     </Card>
   );
 }
+

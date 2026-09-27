@@ -13,21 +13,23 @@ CLI / package name: `repoguard`. GitHub: https://github.com/agustindiazcano/ibm-
 
 ## Session summary
 
-### Session 30 — Wire Phase 17/18 checks to CI, fix Swarm baseline & _run_chat_stage, Phase 19 E2/E3 ledger fixture (`feat/wire-ci-phase17-18`)
+### Session 31 — Frontend UX & clarity polish, narrative prompt number rounding, demo repo presets (`feat/frontend-ux-clarity`)
 
 | # | Action | Files affected |
 |---|---|---|
-| 1 | Wired `phase17-mutants-tests` and `phase17-history-routes` into `store` job in `.github/workflows/ci.yml` | `.github/workflows/ci.yml` |
-| 2 | Added dedicated `swarm-phase18` job running `phase18-s4` in `.github/workflows/ci.yml` | `.github/workflows/ci.yml` |
-| 3 | Fixed `scripts/verify_phase18.py:188` baseline coverage assertion from `65.1` to `60.3` (source-only G6 baseline from `AGENTS.md §7`) | `scripts/verify_phase18.py` |
-| 4 | Fixed `repoguard_engine/swarm/lane.py:137` call to `_run_chat_stage()` adding missing `stage_name` and `module` arguments introduced by O1 telemetry | `repoguard_engine/swarm/lane.py` |
-| 5 | Integrated Phase 19 E2 (`scripts/eval_fixloop.py`, `eval/matrix.json`) and E3 held-out ledger fixture (`eval-fixtures/ledger/`, `verify.py phase19-e3`) | `scripts/eval_fixloop.py`, `eval/matrix.json`, `eval-fixtures/ledger/**`, `repoguard_engine/watson_agent/orchestrator.py` |
-| 6 | Measured E3 in CI (`guardrails-phase19`): baseline cov 52.17% (24/46), mut 19.18% (14/73); ceiling cov 100.0% (60/60), mut 69.86% (51/73). Set `ceiling: 51` in `eval/matrix.json` | `eval/matrix.json`, `PENDING.md` |
-| 7 | Verified in GitHub Actions: 100% of jobs passed in green (run `36297654265` on PR #78) | PR #78 |
+| 1 | Rounded raw float numbers in `narrative.py` prompt (`coverage_pct`, `mut_score`, `risk_score`) to avoid unrounded decimals like `60.264900662251655%` | `repoguard_engine/narrative.py` |
+| 2 | Built accessible `Tooltip` (?) component and CSS module with dark/light mode support | `web-next/app/components/Tooltip.tsx`, `web-next/app/components/Tooltip.module.css` |
+| 3 | Added quick-select demo repository presets (`Shop Demo` `./demo-repo`, `Ledger Demo` `./eval-fixtures/ledger`), language/scope banner (Python ≥ 3.10, pytest, limits), and field tooltips in `RepoForm` | `web-next/app/components/RepoForm.tsx`, `web-next/app/components/Controls.module.css` |
+| 4 | Clarified `ActionBar`: renamed `Gate` to `Gate (Fast)` with subtitles distinguishing `Full Suite` vs `No Mutation` vs `Self-Healing AI` | `web-next/app/components/ActionBar.tsx` |
+| 5 | Added metric tooltips to `StatCards`, `GapsList`, and `RiskTable` | `web-next/app/components/StatCards.tsx`, `GapsList.tsx`, `RiskTable.tsx` |
+| 6 | Clarified static AST endpoint test detection in `EndpointsList` (explaining why unit testing an internal class doesn't mark an HTTP endpoint as tested) | `web-next/app/components/EndpointsList.tsx` |
+| 7 | Updated header copy to highlight "Self-Healing Test Suites & Quality Gate for Python" and improved Autofix error tips (HTTP 503 / 401 troubleshooting) | `web-next/app/page.tsx` |
+| 8 | Validated with `npm run lint` and `npm run build` — 100% clean PASS | `web-next/` |
 
-Verification status: **100% PASS** on GitHub Actions (`quality-gate` 30s, `guardrails-phase19` 3m0s, `mutation-determinism` 2m5s, `store` 4m36s, `fix-loop-stub` 3m6s, `engine-parallel-mutation` 2m41s, `swarm-phase18` 4m16s, `frontend-ci` 26s).
+Verification status: **100% PASS** on `npm run lint` and `npm run build`.
 
 ---
+
 
 ### Session 29 — GitHub Actions CI integration for Guardrails & Phase 17/18 fixes (`feat/19-guardrails-g1-g5`)
 
