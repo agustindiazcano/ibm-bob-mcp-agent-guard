@@ -15,7 +15,7 @@
 - [What it does](#what-it-does)
 - [How it works](#how-it-works)
 - [Is it multi-agent?](#is-it-multi-agent)
-- [Multi-agent swarm (in progress)](#multi-agent-swarm-in-progress)
+- [Multi-agent swarm](#multi-agent-swarm)
 - [Evaluation & guardrails](#evaluation--guardrails)
 - [Quick start](#quick-start)
 - [Commands](#commands)
@@ -70,6 +70,24 @@ summary panel shows "unavailable" because no AI credentials were configured
 for the capture; that's its normal state without them. How to retake it:
 [`docs/img/README.md`](docs/img/README.md).
 
+### The app in Demo Mode
+
+The site has a **Demo** switch (top right) that turns it into a slide deck
+and replays an Autofix run without spending AI quota. The timing is simulated,
+but the numbers are the measured `AGENTS.md §7` reference run
+(20.25% → 89.87% mutation, 60.3% → 100% coverage). Live site:
+https://ibm-bob-mcp-agent-guard.vercel.app/
+
+<table>
+<tr>
+<td width="50%"><img src="docs/img/demo-autofix.png" alt="Autofix replay in Demo Mode: live progress log for writer and critic per file, then mutation score 20.25% (16/79) to 89.87% (71/79) and line coverage 60.3% to 100%, with the generated test files shown in a code viewer"><br/><sub><b>Autofix:</b> live progress, before → after, and the generated tests</sub></td>
+<td width="50%"><img src="docs/img/demo-results.png" alt="Results dashboard in Demo Mode for the demo-showcase project: KPI tiles, coverage vs. mutation score per commit, survival by mutation operator, file risk ranking, untested endpoints and persistent survivors"><br/><sub><b>Results:</b> run history, survival by mutation operator, risk, endpoints, and mutants that are never killed</sub></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><img src="docs/img/demo-intro.png" width="70%" alt="TestMind AI intro slide with the Demo switch on"><br/><sub>Intro slide. The numbered tabs 00–10 are the deck</sub></td>
+</tr>
+</table>
+
 ## What it does
 
 - 🧬 **Mutation testing.** Injects one small bug at a time (flipped comparisons, swapped operators, changed constants, `return None`, removed `raise`) with its own AST engine, then reruns your suite. Every mutant that survives is a bug your tests would miss.
@@ -111,7 +129,7 @@ flowchart TB
 
 ## Is it multi-agent?
 
-**Yes: two agents working in sequence. It is not a parallel swarm.** `repoguard fix` runs an orchestrator that, for each of up to 3 files prioritized by risk, runs two agents one after the other:
+**Yes, in two modes.** By default, `repoguard fix` runs two agents in sequence; `repoguard fix --swarm` runs them as a parallel swarm, one lane per file (see [Multi-agent swarm](#multi-agent-swarm)). The default mode runs an orchestrator that, for each of up to 3 files prioritized by risk, runs two agents one after the other:
 
 - **Test writer agent:** its own system prompt, and a tool-calling loop over `read_source_file` and `write_test_file`. The write tool is hard-guarded to `tests/`.
 - **Critic agent:** a separate system prompt, with the same guarded tools, reviewing what the writer produced.
@@ -121,7 +139,7 @@ After both, the orchestrator re-measures deterministically. Both agents use the 
 The engine is also exposed through **MCP** (9 tools), so external agents such as Claude Code or any other MCP client can call the same measurements. The fix loop itself calls the engine directly rather than through MCP.
 
 **What it is not (yet):**
-- **Not a parallel swarm yet.** A parallel multi-agent design for IBM Bob exists in `.bob/`, but it was retired before its first full run (`.bob/DEPRECATED.md`). Its return, rebuilt on watsonx.ai, is planned: see [Multi-agent swarm (in progress)](#multi-agent-swarm-in-progress).
+- **The swarm isn't benchmarked with a real model yet.** `--swarm` is built and verified end to end with a scripted, credential-free provider. It hasn't yet been compared against the sequential loop on real Vertex/watsonx runs (speed and final score). See [Multi-agent swarm](#multi-agent-swarm).
 - **Multicloud, for real.** The `ChatProvider` abstraction (`repoguard_engine/ai_providers/`) is implemented; both watsonx.ai and Google Vertex AI (Gemini) run through it, `REPOGUARD_AI_PROVIDER`/`--provider` select which — see [`docs/MULTICLOUD_AI.md`](docs/MULTICLOUD_AI.md) (`PENDING.md` Phase 16).
 
 ```mermaid
@@ -140,24 +158,44 @@ flowchart TB
 | `repoguard analyze [--summarize]` | Only with `--summarize` | Deterministic pipeline; `--summarize` adds one watsonx.ai call for prose, never a metric |
 | `repoguard gate` (CI) | No | Deterministic pipeline |
 
-## Multi-agent swarm (in progress)
+## Multi-agent swarm
 
-> `PENDING.md` Phase 18. **Built (Step 0):** groundwork only — the fix loop
-> now takes an injectable `ChatProvider`, reports per-stage wall time, and a
-> credential-free `ScriptedProvider` drives it end to end in CI
-> (`verify.py phase18-seq-stub`). **Not yet:** the parallel lanes themselves
-> (S1–S8) — everything below is still design. Full plan:
-> [`docs/MULTI_AGENT_SWARM.md`](docs/MULTI_AGENT_SWARM.md).
+> `PENDING.md` Phase 18, Steps S0–S7 **built and verified with no
+> credentials**: `repoguard fix --swarm`. Still to do: a real-model benchmark
+> against the sequential loop (Step 8), the lanes view in the web UI (S8),
+> and a CI job. Full plan: [`docs/MULTI_AGENT_SWARM.md`](docs/MULTI_AGENT_SWARM.md).
+
+```bash
+repoguard fix demo-repo --swarm                       # one lane per file, min(lanes, 4) in parallel
+repoguard fix demo-repo --swarm --workers 4 --rounds 2 --mutation-workers 4
+REPOGUARD_CRITIC_PROVIDER=watsonx repoguard fix demo-repo --swarm --provider vertex   # independent critic
+```
 
 The swarm IBM Bob was designed to run (`.bob/custom_modes.yaml`: Orchestrator, Test Writer, Critic, Gate, Publisher…), rebuilt in-process on watsonx.ai. Instead of one loop working file by file, the Orchestrator opens **one lane per source file** and runs the lanes **in parallel**. Each lane has three agents:
 
 - **Test Writer (LLM):** writes tests aimed at that file's surviving mutants, in its own sandbox copy of the repo. It can only write its own test file.
 - **Verifier (deterministic):** runs mutation testing on that file and reports which mutants the new tests killed.
-- **Critic (LLM, read-only):** reviews the tests and returns APPROVED or NEEDS_WORK. NEEDS_WORK triggers one revision round.
+- **Critic (LLM, read-only):** has no write tool. It runs the tests and answers with a JSON verdict: `APPROVED`, `NEEDS_WORK` or `BLOCKED`. `NEEDS_WORK` or a red suite triggers one more writer round, with the critic's weaknesses in the prompt. The verdict is advisory: whether a lane is accepted always comes from the Verifier's measurement. The writer and the critic can run on different providers (`REPOGUARD_WRITER_PROVIDER` / `REPOGUARD_CRITIC_PROVIDER`).
 
-After all lanes finish, their files are merged, and the **Gate** re-measures the whole repo once. That number is the only one reported. The **Publisher** opens a PR if the score improved. Agents talk through files in `repoguard-out/swarm/<run_id>/`, like Bob's subagents did, so every run is auditable. Mutation testing itself also runs in parallel.
+After all lanes finish, **fan-in** merges their files one at a time in a separate sandbox. A file that turns the suite red, or makes it flaky (3 forward runs, reversed file order, each file alone), is dropped as `REJECTED_AT_FANIN`. Fan-in also aborts if `tests/` changed during the run. Then the **Gate** re-measures the whole repo once, and that number is the only one reported. If the Gate itself fails, the merge is rolled back byte for byte. The **Publisher** opens a PR if the score improved, and the **Reporter** writes `watson-evidence/NN-swarm.md`. Agents talk through files in `repoguard-out/swarm/<run_id>/`, like Bob's subagents did, so every run is auditable. Mutation testing itself also runs in parallel.
 
-The swarm has to earn its place with two measurements: it must be faster than the sequential loop, and reach at least the same final mutation score. Until then, `repoguard fix` keeps the sequential loop as its default, and the swarm runs behind `--swarm`.
+**Measured with no credentials** (`python scripts/verify.py phase18-s7`, where a scripted provider plays the model and every number comes from the engine):
+
+| | Before | Swarm Gate (4 lanes in parallel) |
+|---|---|---|
+| Tests passed | 5 | 71 |
+| Line coverage | 60.3% | 100.0% |
+| Mutation score | 20.25% (16/79) | **89.87% (71/79)** |
+
+All 4 lanes were `ACCEPTED`, 6 lane pairs overlapped in time, and `--workers 1` produced the identical Gate with the same 8 surviving mutants. Every sandbox was cleaned up and `demo-repo/` stayed untouched. 71/79 is the ceiling for this fixture; it matches the hand-written reference tests.
+
+| Check | What it proves |
+|---|---|
+| `phase18-s5` | `NEEDS_WORK` → exactly one more round, with the weakness in the prompt; an unparseable critic doesn't trigger a paid round; the critic can't write |
+| `phase18-s6` | Two files that pass alone but fail together → the later one is rejected at fan-in; a failing Gate rolls back |
+| `phase18-s7` | The end-to-end numbers above |
+
+The swarm still has to earn its place against the sequential loop on real model runs: it must be faster and reach at least the same final score. Until then, `repoguard fix` keeps the sequential loop as its default.
 
 | Doc section | What it covers |
 |---|---|
@@ -220,7 +258,8 @@ repoguard serve                     # web UI at http://127.0.0.1:8765
 | Command | What it does |
 |---|---|
 | `repoguard analyze <path> [--mutation] [--endpoints] [--summarize]` | Runs the tests and measures coverage, gaps and risk. `--mutation` adds the mutation score (slow), and `--endpoints` flags untested FastAPI endpoints. No AI unless `--summarize` is passed. Visual checks are MCP tools only. |
-| `repoguard fix <path> [--publish] [--threshold N]` | Measures, has watsonx.ai write the missing tests (guarded to `tests/`), critiques them, measures again |
+| `repoguard fix <path> [--publish] [--threshold N] [--provider vertex\|watsonx]` | Measures, has the AI write the missing tests (guarded to `tests/`), critiques them, measures again |
+| `repoguard fix <path> --swarm [--workers N] [--rounds 2] [--mutation-workers M]` | Same, as a parallel swarm: one writer/critic lane per file in its own sandbox, fan-in, one global Gate |
 | `repoguard gate <path> --threshold 80` | CI gate: exits with code 1 if coverage is below the threshold |
 | `repoguard serve [--port 8000]` | Web UI with live progress, metrics and the report |
 | `repoguard mcp` | Starts the MCP server (9 tools) for any MCP client |
@@ -288,7 +327,7 @@ Status key: ✅ implemented and running in this repo · ⚠️ implemented but n
 | Accessibility | axe-playwright-python (axe-core) | Accessibility violations (MCP tool) | ✅ locally · not in the Docker image |
 | Agent protocol | MCP via FastMCP (stdio) | 9 tools for any MCP client | ✅ |
 | AI agents | IBM watsonx.ai (`ibm-watsonx-ai`), default model `mistralai/mistral-small-3-1-24b-instruct-2503` | Writer and critic agents with tool calling (`repoguard fix`), `--summarize` prose | ✅ live-verified with real credentials — `--summarize` returns real generated text; `repoguard fix`'s tool-calling round trip runs for real, though this default model doesn't reliably invoke tools (a model-choice quality gap, not an SDK/plumbing issue — see `PENDING.md` Phase 16) |
-| Multi-agent swarm | Parallel agent lanes (`ThreadPoolExecutor`), per-lane sandboxes, file-based agent contract | Parallel Test Writer / Verifier / Critic per file, parallel mutation workers | 🟡 Step 0 done (injectable provider, `ScriptedProvider`, stage timing); lanes themselves still 🗺️ Phase 18 ([design](docs/MULTI_AGENT_SWARM.md)) |
+| Multi-agent swarm | Parallel agent lanes (`ThreadPoolExecutor`), per-lane sandboxes, file-based agent contract | Parallel Test Writer / Verifier / Critic per file, parallel mutation workers | 🟢 `fix --swarm` built, S0–S7 verified with no credentials (89.87%, 71/79); real-model benchmark pending ([design](docs/MULTI_AGENT_SWARM.md)) |
 | AI provider abstraction | `ChatProvider` protocol (`repoguard_engine/ai_providers/`) | Switching between providers without touching the agents (`REPOGUARD_AI_PROVIDER` / `--provider`) | ✅ Phase 16 Stage A ([details](docs/MULTICLOUD_AI.md)) |
 | AI (second provider) | Google Vertex AI (`google-genai`, Gemini) | Alternative model provider — no free-tier rate limits, unlike watsonx.ai's shared pool | ✅ live-verified: real text generation and a full tool-calling round trip against a real GCP project ([details](docs/VERTEX_SETUP.md)) |
 | Frontend | Next.js 16.3.6, React 19.2.8, TypeScript 5, ESLint 9 | `web-next/` dashboard | ✅ (lint + build pass; end-to-end checked in a browser locally) |
@@ -336,6 +375,7 @@ ibm-bob-mcp-agent-guard/
 │   ├── narrative.py                AI prose summary of an already-measured dashboard (never a metric source)
 │   ├── ai_providers/               ChatProvider abstraction: base.py, watsonx.py, vertex.py
 │   ├── watson_agent/               AI fix loop: guarded tools, prompts, orchestrator
+│   ├── swarm/                      Multi-agent swarm (Phase 18): sandbox, guard, plan, lanes, critic, fan-in, Gate, report
 │   ├── testing/                    Credential-free ScriptedProvider (Phase 18 Step 0) — drives the fix loop with no AI credentials
 │   ├── store/                      Run history (optional [db] extra): run record, SQLAlchemy tables + views, writer
 │   ├── pipeline.py                 Ordered pipeline: measure → gaps → risk → gate
@@ -370,7 +410,7 @@ ibm-bob-mcp-agent-guard/
 │   ├── MULTICLOUD_AI.md            ChatProvider abstraction — watsonx.ai + Vertex AI, both built and live-verified
 │   ├── WATSONX_SETUP.md            IBM Cloud credentials for the default AI provider
 │   ├── VERTEX_SETUP.md             GCP credentials for the Vertex AI provider
-│   ├── MULTI_AGENT_SWARM.md        Phase 18 swarm design — Step 0 (groundwork) built, lanes still design
+│   ├── MULTI_AGENT_SWARM.md        Phase 18 swarm design + build steps — S0–S7 built
 │   ├── EVAL_GUARDRAILS_PLAN.md            Phase 19 plan: fix-loop guardrails, evaluation, benchmark
 │   ├── EVAL_GUARDRAILS_IMPLEMENTATION.md  Phase 19 build steps and verify.py checks
 │   ├── AI_ASSISTED_DEVELOPMENT_FRAMEWORK.md  How this project itself is built (Claude, file-based contract)
@@ -588,7 +628,7 @@ The rest of this section is about the first one — how the repo itself gets bui
 - [Demo script](docs/DEMO.md): 3-minute pitch and backup plan
 - [Deploy to Cloud Run](docs/DEPLOY.md): one-time GCP setup for the CD workflow
 - [Data platform (design)](docs/DATA_PLATFORM.md): run history on Postgres, Terraform on GCP, data-driven charts
-- [Multi-agent swarm (design)](docs/MULTI_AGENT_SWARM.md): parallel Test Writer / Verifier / Critic lanes per file, the return of IBM Bob's swarm design on watsonx.ai
+- [Multi-agent swarm](docs/MULTI_AGENT_SWARM.md): parallel Test Writer / Verifier / Critic lanes per file, fan-in and a single Gate — IBM Bob's swarm design, rebuilt provider-agnostic
 - [Evaluation & guardrails (plan)](docs/EVAL_GUARDRAILS_PLAN.md): benchmark landscape, measured gaps in today's fix loop, the three layers (guardrails, evaluation, observability), decisions
 - [Evaluation & guardrails (implementation)](docs/EVAL_GUARDRAILS_IMPLEMENTATION.md): step-by-step build of Phase 19, with signatures and `verify.py phase19` checks
 - [Frontend architecture](docs/ARCHITECTURE-front.md): the Next.js dashboard on Vercel
@@ -642,10 +682,10 @@ charts themselves (C1) and `/fix-effect` (needs a `fix_sessions` table). See
 [Database](#database) and [Infrastructure as code](#infrastructure-as-code)
 above (`PENDING.md` Phase 17).
 
-**In progress: a real multi-agent swarm.** Step 0 (groundwork) is built —
-injectable provider, per-stage timing, a credential-free `ScriptedProvider`.
-The parallel lanes themselves (Test Writer / Verifier / Critic per file) are
-still design. See [Multi-agent swarm (in progress)](#multi-agent-swarm-in-progress)
+**Multi-agent swarm: built, benchmark pending.** `repoguard fix --swarm`
+(S0–S7) is verified with no credentials: 89.87% (71/79). Still to do: real
+Vertex/watsonx runs against the sequential loop (speed and final score),
+the lanes view in the web UI, and a CI job. See [Multi-agent swarm](#multi-agent-swarm)
 (`PENDING.md` Phase 18).
 
 **Also planned: evaluation and guardrails for the fix loop.** Controls that
