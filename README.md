@@ -65,6 +65,7 @@ was renamed.
 - [Documentation](#documentation)
 - [Roadmap](#roadmap)
 - [Limitations](#limitations)
+- [Hackathon](#hackathon)
 
 ## Results on the bundled demo repo
 
@@ -746,6 +747,24 @@ than opinion, which needs live credentials for both clouds at once.
 - The accessibility check is basic. Use axe-core for a full audit.
 - `repoguard fix` needs real credentials for the selected provider (`docs/WATSONX_SETUP.md` or `docs/VERTEX_SETUP.md`); without them it fails with a clear error rather than degrading silently. Live-verified this session with real watsonx.ai credentials: `--summarize` generates real text, and the fix loop's tool-calling round trip runs for real — though watsonx.ai's default model doesn't reliably invoke tools (see `PENDING.md` Phase 16), which is why Vertex AI (Gemini) was added and is now the default provider.
 
+## Hackathon
+
+Built for the [IBM Bob 2.0 Hackathon](https://lablab.ai/ai-hackathons/ibm-bob-2-hackathon)
+on lablab.ai (online, 48 hours, September 25–27, 2026). Official numbers from
+the event page:
+
+| | Count | Share |
+|---|---|---|
+| Participants | 15,727 | 100% |
+| Teams | 3,464 | 22.0% of participants (4.5 people per team on average) |
+| AI applications submitted | 1,124 | **32.4% of teams** (7.1% of participants) |
+| Teams that did not submit | 2,340 | 67.6% of teams |
+
+<img src="docs/img/hackathon-overview.png" alt="lablab.ai IBM Bob 2.0 Hackathon overview: 15727 participants, 3464 teams, 1124 AI applications" width="720">
+
+<sub>Captured from the event page on 2026-09-28. Shares are computed from
+those three numbers.</sub>
+
 ## Author
 
 **Agustin Diaz-Cano** M.Sc. Candidate, Information Systems Engineering - [UTN](https://frba.utn.edu.ar/)
@@ -755,3 +774,7 @@ than opinion, which needs live credentials for both clouds at once.
 ## Team
 
 Team Argentina
+
+---
+
+**IBM Bob 2.0 Hackathon** · [Certificate of participation](https://lablab.ai/u/@agustin_diazcano6/ai-hackathons/ibm-bob-2-hackathon/certificate) · [lablab.ai event page](https://lablab.ai/ai-hackathons/ibm-bob-2-hackathon) · [IBM Developer event page](https://developer.ibm.com/events/ibm-bob-20-hackathon/)
