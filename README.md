@@ -9,6 +9,9 @@
 > Coverage tells you which lines ran. It doesn't tell you whether your tests would notice a bug.
 > TestMind AI injects bugs into your code on purpose and measures how many your tests catch.
 
+**Full stack, deployed:** Python engine and FastAPI backend in Docker on Google Cloud Run, Postgres 16 on Cloud SQL, a Next.js + TypeScript frontend on Vercel, an MCP server, and multicloud AI (Google Vertex AI and IBM watsonx.ai).<br>
+**Infra and quality:** Terraform with Workload Identity Federation (no service-account keys), GitHub Actions CI/CD for backend, frontend and infra, and backend test jobs in CI (engine, mutation determinism, guardrails, Postgres store, fix loop, swarm) on top of 30 `verify.py` checks.
+
 ## At a glance
 
 TestMind AI is not a chat UI over a model API. The AI only ever writes test
