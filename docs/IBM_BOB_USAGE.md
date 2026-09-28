@@ -102,7 +102,7 @@ From `bob-evidence/README.md`, IBM's "Bob IDE Usage Dashboard," Team Argentina:
 
 | Metric | Value | Ranking |
 |---|---|---|
-| Bob commits | 12 | 1st of 6 |
+| Bob commits | 12 | — |
 | Bob lines | 820 | 14th of 14 |
 | Bob factor | 16.0% | 21st of 21 |
 

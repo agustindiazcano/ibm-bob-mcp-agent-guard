@@ -33,7 +33,7 @@ Each file is a task session report exported from Bob. Name it `NN-stage.md`, sav
 
 | Metric | Value | Ranking |
 |---|---|---|
-| Bob Commits | 12 | 1st of 6 |
+| Bob Commits | 12 | — |
 | Bob Lines | 820 | 14th of 14 |
 | Bob Factor | 16.0% | 21st of 21 |
 
