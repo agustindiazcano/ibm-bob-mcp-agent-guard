@@ -12,6 +12,11 @@
 **Full stack, deployed:** Python engine and FastAPI backend in Docker on Google Cloud Run, Postgres 16 on Cloud SQL, a Next.js + TypeScript frontend on Vercel, an MCP server, and multicloud AI (Google Vertex AI and IBM watsonx.ai).<br>
 **Infra and quality:** Terraform with Workload Identity Federation (no service-account keys), GitHub Actions CI/CD for backend, frontend and infra, and backend test jobs in CI (engine, mutation determinism, guardrails, Postgres store, fix loop, swarm) on top of 30 `verify.py` checks.
 
+<p align="center">
+  <img src="docs/img/app-analyze.png" alt="TestMind AI Analyze tab after a real run on demo-repo with mutation testing (Demo Mode off): live progress, line coverage 60.3% (91/151 lines), mutation score 20.25% (16/79 mutants killed), 4 files with coverage gaps, quality gate FAIL at 80%, risk ranking, and 1 of 7 API endpoints tested" width="900">
+  <br><sub>The Analyze tab after a real run on <code>demo-repo</code> with mutation testing (Demo Mode off, local backend). Every number comes from the engine.</sub>
+</p>
+
 ## At a glance
 
 TestMind AI is not a chat UI over a model API. The AI only ever writes test

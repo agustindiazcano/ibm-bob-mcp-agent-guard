@@ -4,6 +4,7 @@
 |---|---|---|
 | `results-en-light.png`, `results-en-dark.png` | Before/after results chart | `python docs/make_results_chart.py` |
 | `dashboard-light.png`, `dashboard-dark.png` | `web-next/` dashboard after Analyze with mutation testing on `demo-repo` | See below |
+| `app-analyze.png` | `web-next/` Analyze tab, Demo Mode off, after a real Analyze with mutation testing on `./demo-repo` against a local `repoguard serve` | Same as the dashboard screenshots below, 1440px wide, full page, dev badge and fixed footer bar hidden |
 | `demo-intro.png`, `demo-autofix.png`, `demo-results.png` | `web-next/` in Demo Mode: intro slide, Autofix replay, Results for `demo-showcase` | See "Demo Mode screenshots" below |
 
 Dashboard screenshots are real captures, not mockups. To retake them: start
