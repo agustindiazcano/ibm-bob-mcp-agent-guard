@@ -30,20 +30,23 @@ import hashlib
 import json
 import os
 import threading
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
 _SCHEMA_VERSION = "v1"
 _SNAPSHOT_SUFFIX = ".test.py.txt"
 _STAGE_KINDS = {"writer", "verify", "critic"}
-_RESULT_STATUSES = {"ACCEPTED", "NO_GAIN", "BLOCKED", "FAILED"}
+_RESULT_STATUSES = {"ACCEPTED", "NO_GAIN", "BLOCKED", "FAILED", "REJECTED_AT_FANIN"}
 
 
 def _safe_module_name(module: str) -> str:
     """A source file's posix path (e.g. "shop/cart.py") turned into a single
     directory-name-safe component, matching swarm/lane.py's owned-test-path
-    naming so the two stay visually associated."""
-    return module.replace("/", "_").replace("\\", "_")
+    naming so the two stay visually associated. The ".py" suffix is dropped:
+    a directory named "shop_api.py" matches every rglob("*.py") the engine
+    runs over the repo (api_check.py's endpoint scan read it as a file)."""
+    return Path(module.replace("\\", "/")).with_suffix("").as_posix().replace("/", "_")
 
 
 def _atomic_write_text(path: Path, content: str) -> None:
@@ -114,6 +117,16 @@ def write_test_snapshot(rd: Path, module: str, round_n: int, content: str) -> Pa
     return path
 
 
+def read_test_snapshot(rd: Path, module: str, round_n: int) -> str | None:
+    path = _lane_dir(rd, module) / f"writer-{round_n}{_SNAPSHOT_SUFFIX}"
+    return path.read_text(encoding="utf-8") if path.is_file() else None
+
+
+def read_final_test(rd: Path, module: str) -> str | None:
+    path = _lane_dir(rd, module) / f"final{_SNAPSHOT_SUFFIX}"
+    return path.read_text(encoding="utf-8") if path.is_file() else None
+
+
 def write_final_test(rd: Path, module: str, content: str) -> str:
     """Write the lane's final accepted test content and return its sha256
     hex digest (recorded in result.json so fan-in can check it unchanged)."""
@@ -139,9 +152,10 @@ class Timeline:
     guards the append with a lock so concurrent calls each produce exactly
     one complete, non-interleaved JSON line."""
 
-    def __init__(self, rd: Path) -> None:
+    def __init__(self, rd: Path, listener: Callable[[dict], None] | None = None) -> None:
         self._path = Path(rd) / "timeline.jsonl"
         self._lock = threading.Lock()
+        self._listener = listener
 
     def event(self, lane: str, agent: str, kind: str, **fields: object) -> None:
         record = {
@@ -152,5 +166,11 @@ class Timeline:
             **fields,
         }
         line = json.dumps(record, default=str) + "\n"
-        with self._lock, open(self._path, "a", encoding="utf-8") as f:
-            f.write(line)
+        with self._lock:
+            with open(self._path, "a", encoding="utf-8") as f:
+                f.write(line)
+            if self._listener is not None:
+                try:
+                    self._listener(record)
+                except Exception:
+                    pass  # a broken progress listener must never fail a lane

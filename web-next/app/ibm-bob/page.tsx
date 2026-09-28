@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 };
 
 const KPIS = [
-  { label: "Bob commits", value: "12", detail: "1st of 6 on the team" },
+  { label: "Bob commits", value: "12", detail: "Phases 0–8" },
   { label: "Bob PRs", value: "4", detail: "#1, #2, #4, #6" },
   { label: "Bob lines", value: "820", detail: "(recorded 25/09)" },
 ];

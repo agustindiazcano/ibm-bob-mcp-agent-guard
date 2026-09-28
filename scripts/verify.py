@@ -37,6 +37,9 @@ Phase checks implemented:
                         (needs the [db] extra; see scripts/verify_phase17.py)
     phase18-s3        — lane sandbox + owned-path write guard (see scripts/verify_phase18.py)
     phase18-s4        — lane state machine + thread pool + blackboard (see scripts/verify_phase18.py)
+    phase18-s5        — read-only critic, JSON verdict, one revision (see scripts/verify_phase18_swarm.py)
+    phase18-s6        — fan-in conflict/abort/rollback, `fix --swarm`, then phase18-seq-stub still passes
+    phase18-s7        — credential-free run_swarm reaches 71 passed / 100% / 89.87% (71/79), workers=1 == workers=4
 """
 
 from __future__ import annotations
@@ -63,6 +66,7 @@ from verify_phase17 import (  # scripts/ is sys.path[0]
     check_phase17_store,
 )
 from verify_phase18 import check_phase18_s3, check_phase18_s4
+from verify_phase18_swarm import check_phase18_s5, check_phase18_s6, check_phase18_s7
 from verify_phase19 import (
     check_phase19,
     check_phase19_accept,
@@ -622,7 +626,7 @@ with tempfile.TemporaryDirectory(prefix='repoguard-seq-stub-') as tmp:
     # compute_risk picks the top 3 files by uncovered-line ratio, so the loop
     # writes 3 of the 4 reference files (shop/cart.py is left out); the
     # numbers below are what that measured on the first real run.
-    assert r.files_attempted == EXPECTED_FILES, r.files_attempted
+    assert [f.replace(chr(92), '/') for f in r.files_attempted] == EXPECTED_FILES, r.files_attempted  # Windows paths
     got = (a['coverage']['covered_lines'], a['coverage']['total_lines'], a['mutation']['score'], a['mutation']['killed'], a['mutation']['total'], passed)
     assert got == EXPECTED_AFTER, f'after numbers changed: {got} != {EXPECTED_AFTER}'
     assert suite.returncode == 0, suite.stdout[-2000:]
@@ -820,6 +824,9 @@ CHECKS: dict[str, callable] = {
     "phase18-s2": check_phase17_engine,
     "phase18-s3": check_phase18_s3,
     "phase18-s4": check_phase18_s4,
+    "phase18-s5": check_phase18_s5,
+    "phase18-s6": lambda: check_phase18_s6() and check_phase18_seq_stub(),
+    "phase18-s7": check_phase18_s7,
     "phase19": check_phase19,
     "phase19-env": check_phase19_env,
     "phase19-policy": check_phase19_policy,

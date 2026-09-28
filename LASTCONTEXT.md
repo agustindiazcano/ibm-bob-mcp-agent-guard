@@ -13,6 +13,20 @@ CLI / package name: `repoguard`. GitHub: https://github.com/agustindiazcano/ibm-
 
 ## Session summary
 
+### Session 34 — Phase 18 S5-S7: swarm critic, fan-in, Gate, `fix --swarm` (`feat/18-swarm-s5-s7`, PR #92)
+
+| # | Action | Files affected |
+|---|---|---|
+| 1 | Read-only critic with JSON verdict + per-role providers (S5/S9) | `swarm/critic.py`, `swarm/providers.py`, `swarm/lane.py`, `watson_agent/prompts.py` |
+| 2 | Fan-in, global Gate + rollback, Reporter, `repoguard fix --swarm` (S6) | `swarm/fanin.py`, `swarm/run.py`, `swarm/report.py`, `cli.py` |
+| 3 | Fixed: lane blackboard dirs named `*.py` crashed the Gate's endpoint scan | `swarm/blackboard.py` |
+| 4 | New checks `phase18-s5/s6/s7`; S4 check updated for role-aware factories + critic; seq-stub path check made Windows-safe | `scripts/verify_phase18_swarm.py`, `scripts/verify_phase18.py`, `scripts/verify.py` |
+
+Verification: `phase18-s4`, `s5`, `s6` (+ `seq-stub`), `s7` all **PASS**. S7 swarm Gate: 71 passed, 100.0%, 89.87% (71/79), workers=1 == workers=4.
+Next: `phase18` aggregate + CI job (R11 runtime), S8 lanes UI, real credentialed H1/H2 benchmark (Step 8).
+
+---
+
 ### Session 33 — Multicloud AI Provider Switch, Rotating Gear & Glowing Auras, Token Pop-up Modal, and Smooth Transitions (`feat/demo-mode-showcase`)
 
 | # | Action | Files affected |

@@ -149,7 +149,16 @@ def gate(repo_path: str, threshold: float, project: str | None) -> None:
     help="AI provider to drive the fix loop: 'vertex' (default) or 'watsonx'. "
          "Overrides REPOGUARD_AI_PROVIDER for this call.",
 )
-def fix(repo_path: str, threshold: float, publish: bool, provider: str | None) -> None:
+@click.option("--swarm", is_flag=True, default=False,
+              help="Multi-agent swarm: one writer/critic lane per file, in parallel sandboxes, one global Gate.")
+@click.option("--workers", default=None, type=int, help="--swarm only: lanes in parallel (default min(lanes, 4)).")
+@click.option("--rounds", default=2, show_default=True, type=int, help="--swarm only: writer rounds per lane.")
+@click.option("--mutation-workers", default=None, type=int,
+              help="--swarm only: parallel mutant runs, shared by every lane (default: CPU count).")
+def fix(
+    repo_path: str, threshold: float, publish: bool, provider: str | None,
+    swarm: bool, workers: int | None, rounds: int, mutation_workers: int | None,
+) -> None:
     """Run the AI fix loop on REPO_PATH: measure, write tests, critique, re-measure.
 
     Requires credentials for the selected provider -- see docs/WATSONX_SETUP.md /
@@ -158,6 +167,10 @@ def fix(repo_path: str, threshold: float, publish: bool, provider: str | None) -
     from .ai_providers import AIProviderError
     from .mutation import NoMutantsError
     from .watson_agent import run_fix_loop
+
+    if swarm:
+        _fix_swarm(repo_path, threshold, publish, provider, workers, rounds, mutation_workers)
+        return
 
     console.print(f"[bold cyan]Fix loop[/] {repo_path} …")
     try:
@@ -186,6 +199,53 @@ def fix(repo_path: str, threshold: float, publish: bool, provider: str | None) -
         console.print(f"[bold red]Fix loop failed with status: {result.status}[/]")
         sys.exit(1)
     console.print(f"[bold green]Fix loop completed with status: {result.status}[/]")
+
+
+def _fix_swarm(
+    repo_path: str, threshold: float, publish: bool, provider: str | None,
+    workers: int | None, rounds: int, mutation_workers: int | None,
+) -> None:
+    from .ai_providers import AIProviderError
+    from .mutation import NoMutantsError
+    from .swarm import run_swarm
+    from .swarm.fanin import FanInAborted
+
+    console.print(f"[bold cyan]Swarm fix loop[/] {repo_path} …")
+    try:
+        result = run_swarm(
+            repo_path, gate_threshold=threshold, publish=publish, provider=provider,
+            workers=workers, rounds=rounds, mutation_workers=mutation_workers,
+        )
+    except AIProviderError as exc:
+        console.print(f"[bold red]✗ {escape(str(exc))}[/]")
+        sys.exit(1)
+    except (NoMutantsError, FanInAborted, RuntimeError) as exc:
+        console.print(f"[bold red]✗ Swarm stopped:[/] {escape(str(exc))}")
+        sys.exit(1)
+
+    table = Table(title=f"Lanes ({result.workers} in parallel)")
+    for column in ("File", "Status", "Round", "New kills", "Critic", "Wall s"):
+        table.add_column(column)
+    for lane in result.lanes:
+        table.add_row(lane.module, lane.status, str(lane.round), str(len(lane.newly_killed)),
+                      lane.verdict or "-", f"{lane.wall_s:.1f}")
+    console.print(table)
+    before = result.baseline.get("mutation") or {}
+    after = (result.after or {}).get("mutation") or {}
+    console.print(
+        f"Mutation score: {before.get('score', 'n/a')}% ({before.get('killed')}/{before.get('total')}) -> "
+        f"{after.get('score', 'n/a')}% ({after.get('killed')}/{after.get('total')})"
+    )
+    console.print(f"Evidence: {result.evidence_path}")
+    if result.error:
+        console.print(f"[bold red]✗ Gate failed to measure, fan-in rolled back:[/] {escape(result.error)}")
+        sys.exit(1)
+    if publish:
+        console.print("[bold green]PR opened[/]" if result.published else "[yellow]Gate failed — nothing published[/]")
+    if result.status not in ("accepted", "partial"):
+        console.print(f"[bold red]Swarm finished with status: {result.status}[/]")
+        sys.exit(1)
+    console.print(f"[bold green]Swarm finished with status: {result.status}[/]")
 
 
 @main.command()

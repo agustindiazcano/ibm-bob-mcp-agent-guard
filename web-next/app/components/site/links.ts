@@ -109,7 +109,7 @@ export const DEMO_SLIDES: SlideInfo[] = [
     label: "08",
     slideTitle: "Built With IBM Bob (Phases 0-8)",
     category: "Product",
-    description: "12 commits, 4 PRs, 1st of 6 on the team — Bob's real Bobalytics numbers, and the AI-assisted flow that took over from there.",
+    description: "12 commits, 4 PRs — Bob's real Bobalytics numbers, and the AI-assisted flow that took over from there.",
   },
   {
     slideNumber: 9,

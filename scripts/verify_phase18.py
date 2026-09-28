@@ -140,7 +140,7 @@ from repoguard_engine.swarm.blackboard import read_stage, run_dir
 from repoguard_engine.swarm.lane import owned_test_path, run_lane
 from repoguard_engine.swarm.plan import build_plan
 from repoguard_engine.swarm.sandbox import lane_sandbox as real_lane_sandbox
-from repoguard_engine.testing import ScriptedProvider, reference_writer
+from repoguard_engine.testing import ScriptedProvider, json_critic, reference_writer
 
 demo = Path('demo-repo').resolve()
 
@@ -193,9 +193,10 @@ with tempfile.TemporaryDirectory(prefix='repoguard-s4-') as tmp:
     assert set(modules) == {'shop/api.py', 'shop/cart.py', 'shop/inventory.py', 'shop/pricing.py'}, modules
     manifest_before = tests_manifest(work)
 
-    def provider_factory():
+    def provider_factory(_role):
         return ScriptedProvider(
-            {'writer': reference_writer('docs/expected-after-tests', target_for=lambda src: owned_test_path(src))}
+            {'writer': reference_writer('docs/expected-after-tests', target_for=lambda src: owned_test_path(src)),
+             'critic': json_critic('APPROVED')}
         )
 
     result4 = runner_mod.run_lanes(work, plan, provider_factory, run_id='verify-w4', workers=4, rounds=2, mutation_workers=4)
@@ -271,7 +272,7 @@ with tempfile.TemporaryDirectory(prefix='repoguard-s4-') as tmp:
 
     with ThreadPoolExecutor(max_workers=1) as pool, real_lane_sandbox(work, 'verify-fail-lane') as sandbox:
         outcome = run_lane(
-            sandbox, cart_plan, lambda: ScriptedProvider({'writer': failing_script}), rd_fail, Timeline(rd_fail),
+            sandbox, cart_plan, lambda _role: ScriptedProvider({'writer': failing_script}), rd_fail, Timeline(rd_fail),
             pool, rounds=2, mutation_workers=1, lane_index=0,
         )
     assert outcome.status == 'FAILED', outcome
@@ -285,7 +286,7 @@ with tempfile.TemporaryDirectory(prefix='repoguard-s4-') as tmp:
     rd_boom = run_dir(work, 'verify-boom')
     with ThreadPoolExecutor(max_workers=1) as pool, real_lane_sandbox(work, 'verify-boom-lane') as sandbox:
         outcome = run_lane(
-            sandbox, cart_plan, lambda: ScriptedProvider({'writer': raising_script}), rd_boom, Timeline(rd_boom),
+            sandbox, cart_plan, lambda _role: ScriptedProvider({'writer': raising_script}), rd_boom, Timeline(rd_boom),
             pool, rounds=2, mutation_workers=1, lane_index=0,
         )
     assert outcome.status == 'FAILED', outcome

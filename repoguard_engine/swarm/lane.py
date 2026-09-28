@@ -1,11 +1,20 @@
-"""The lane state machine (Phase 18 S4, docs/MULTI_AGENT_SWARM.md Section 14
-Step 4): WRITING(r) -> VERIFYING(r) -> ACCEPTED | NO_GAIN | FAILED, revising
-to WRITING(r+1) while rounds remain. No critic step here -- that's S5.
+"""The lane state machine (Phase 18 S4/S5, docs/MULTI_AGENT_SWARM.md Section
+14 Steps 4-5): WRITING(r) -> VERIFYING(r) -> CRITIQUING(r) -> ACCEPTED |
+NO_GAIN | FAILED, revising to WRITING(r+1) while rounds remain and either the
+suite is red or the critic said NEEDS_WORK. The critic is skipped on a red
+suite (the Verifier's pytest output is the feedback there) and is advisory
+only: the status always comes from the Verifier's measurement.
+
+Round r+1's writer prompt is rebuilt from round r's verify/critic files on
+the blackboard, not from in-memory state -- the file contract is the
+communication channel between the lane's agents (Section 6).
 
 "Best round wins": a lane may revise more than once trying to kill more
 mutants; if a later round regresses (breaks the suite, or otherwise scores
 worse), it must never replace an earlier, better round. Ranked by
 (suite green, most kills, lowest round number), in that priority order.
+The accepted content is the winning round's blackboard snapshot, never
+whatever a later, worse round left on disk.
 
 Any exception anywhere inside a lane is caught here and turned into a
 FAILED outcome -- one lane's bad day (a hallucinated tool call, a sandbox
@@ -18,14 +27,16 @@ here, not only in the caller).
 from __future__ import annotations
 
 import dataclasses
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..ai_providers import ChatProvider
 from ..watson_agent.orchestrator import _run_chat_stage
-from ..watson_agent.prompts import TEST_WRITER_PROMPT
+from ..watson_agent.prompts import SWARM_WRITER_ADDENDUM, TEST_WRITER_PROMPT
 from . import blackboard
+from .critic import run_critic
 from .guard import writer_toolset
 from .plan import LanePlan
 from .verify import VerifyResult, verify_lane
@@ -34,13 +45,17 @@ from .verify import VerifyResult, verify_lane
 @dataclass
 class LaneOutcome:
     module: str
-    status: str  # ACCEPTED | NO_GAIN | FAILED
+    status: str  # ACCEPTED | NO_GAIN | FAILED (REJECTED_AT_FANIN is set later, by fanin.py)
     round: int
     suite_passed: bool = False
     newly_killed: list[str] = field(default_factory=list)
     still_alive: list[str] = field(default_factory=list)
     test_sha256: str | None = None
     error: str | None = None
+    verdict: str | None = None  # the critic's verdict for the winning round (advisory)
+    rounds_run: int = 0
+    llm_calls: int = 0
+    wall_s: float = 0.0
 
 
 def owned_test_path(module: str) -> str:
@@ -69,8 +84,8 @@ def _classify(vr: VerifyResult) -> str:
     return "ACCEPTED" if gained else "NO_GAIN"
 
 
-def _should_revise(vr: VerifyResult, round_n: int, rounds: int) -> bool:
-    return round_n < rounds and (not vr.suite_passed or bool(vr.still_alive))
+def _should_revise(suite_passed: bool, verdict: str | None, round_n: int, rounds: int) -> bool:
+    return round_n < rounds and (not suite_passed or verdict == "NEEDS_WORK")
 
 
 def _describe_mutants(records: list[dict]) -> str:
@@ -80,28 +95,35 @@ def _describe_mutants(records: list[dict]) -> str:
     return "\n".join(lines) or "  (none)"
 
 
-def _writer_prompt(lane_plan: LanePlan, previous: LaneOutcome | None) -> str:
+def _writer_prompt(lane_plan: LanePlan, owned: str, rd: Path, previous_round: int) -> str:
     survivors = [r for r in lane_plan.baseline_mutants if r["outcome"] == "survived"]
     parts = [
         f"File: {lane_plan.module}",
+        f"Your test file (the only one you may write): {owned}",
         f"Coverage gaps (missing lines): {lane_plan.missing_lines}",
         "Surviving mutants in this file:",
         _describe_mutants(survivors),
     ]
-    if previous is not None and previous.still_alive:
-        still = [r for r in lane_plan.baseline_mutants if r["fingerprint"] in previous.still_alive]
-        parts += ["", "Still alive after your last attempt:", _describe_mutants(still)]
-    parts.append(
-        "\nRead this file, then write one pytest test file under tests/ that kills as "
-        "many of the surviving mutants as possible."
-    )
+    if previous_round:
+        verify = blackboard.read_stage(rd, lane_plan.module, "verify", previous_round) or {}
+        critic = blackboard.read_stage(rd, lane_plan.module, "critic", previous_round) or {}
+        if not verify.get("suite_passed", True):
+            parts += ["", "Your last attempt made the test suite fail. pytest output:", (verify.get("error") or "")[-3000:]]
+        still = [r for r in lane_plan.baseline_mutants if r["fingerprint"] in (verify.get("still_alive") or [])]
+        if still:
+            parts += ["", "Still alive after your last attempt:", _describe_mutants(still)]
+        weaknesses = critic.get("weaknesses") or []
+        if weaknesses:
+            parts += ["", "The critic's weaknesses in your last attempt:"]
+            parts += [f"  - {w.get('test', '?')}: {w.get('issue', '')}" for w in weaknesses]
+    parts.append(f"\nRead this file, then write {owned} so it kills as many of the surviving mutants as possible.")
     return "\n".join(parts)
 
 
 def run_lane(
     sandbox: Path,
     lane_plan: LanePlan,
-    provider_factory: Callable[[], ChatProvider],
+    provider_factory: Callable[[str], ChatProvider],
     rd: Path,
     timeline: blackboard.Timeline,
     mutation_pool,
@@ -110,6 +132,12 @@ def run_lane(
     mutation_workers: int = 1,
     lane_index: int = 0,
 ) -> LaneOutcome:
+    """Drive one lane to a final outcome inside its own sandbox.
+
+    provider_factory(role) is called once for "writer" and once for
+    "critic", so each lane (and each role) gets its own provider instance --
+    SDK clients' thread-safety across lanes isn't assumed (R14), and the two
+    roles may use different providers (S9, swarm/providers.py)."""
     module = lane_plan.module
     lane_id = f"lane-{lane_index}"
     owned = owned_test_path(module)
@@ -127,23 +155,28 @@ def run_lane(
             },
         )
         baseline_outcomes = {r["fingerprint"]: r["outcome"] for r in lane_plan.baseline_mutants}
-        provider = provider_factory()
+        records_by_fp = {r["fingerprint"]: r for r in lane_plan.baseline_mutants}
+        writer_provider = provider_factory("writer")
+        critic_provider = provider_factory("critic")
+        started = time.perf_counter()
+        llm_calls = 0
 
         best: LaneOutcome | None = None
         round_n = 1
         while True:
-            timeline.event(lane_id, "writer", "stage_start", round=round_n)
+            timeline.event(lane_id, "writer", "stage_start", round=round_n, module=module)
             schemas, registry = writer_toolset(sandbox, owned)
             stage = _run_chat_stage(
                 "writer",
                 module,
-                provider,
-                TEST_WRITER_PROMPT,
-                _writer_prompt(lane_plan, best),
+                writer_provider,
+                TEST_WRITER_PROMPT + SWARM_WRITER_ADDENDUM,
+                _writer_prompt(lane_plan, owned, rd, round_n - 1),
                 str(sandbox),
                 schemas=schemas,
                 registry=registry,
             )
+            llm_calls += stage.llm_calls
             blackboard.write_stage(
                 rd,
                 module,
@@ -156,9 +189,9 @@ def run_lane(
             written = owned_path.read_text(encoding="utf-8") if owned_path.is_file() else ""
             if written:
                 blackboard.write_test_snapshot(rd, module, round_n, written)
-            timeline.event(lane_id, "writer", "stage_end", round=round_n)
+            timeline.event(lane_id, "writer", "stage_end", round=round_n, module=module)
 
-            timeline.event(lane_id, "verify", "stage_start", round=round_n)
+            timeline.event(lane_id, "verify", "stage_start", round=round_n, module=module)
             vr = verify_lane(
                 sandbox,
                 module,
@@ -168,7 +201,19 @@ def run_lane(
                 executor=mutation_pool,
             )
             blackboard.write_stage(rd, module, "verify", round_n, dataclasses.asdict(vr))
-            timeline.event(lane_id, "verify", "stage_end", round=round_n, suite_passed=vr.suite_passed)
+            timeline.event(
+                lane_id, "verify", "stage_end", round=round_n, module=module, suite_passed=vr.suite_passed,
+                newly_killed=len(vr.newly_killed), still_alive=len(vr.still_alive),
+            )
+
+            verdict = None
+            if vr.suite_passed:
+                timeline.event(lane_id, "critic", "stage_start", round=round_n, module=module)
+                cv = run_critic(sandbox, module, owned, critic_provider, [records_by_fp[f] for f in vr.still_alive])
+                llm_calls += cv.llm_calls
+                verdict = cv.verdict
+                blackboard.write_stage(rd, module, "critic", round_n, dataclasses.asdict(cv))
+                timeline.event(lane_id, "critic", "stage_end", round=round_n, module=module, verdict=verdict)
 
             candidate = LaneOutcome(
                 module=module,
@@ -177,16 +222,22 @@ def run_lane(
                 suite_passed=vr.suite_passed,
                 newly_killed=vr.newly_killed,
                 still_alive=vr.still_alive,
+                verdict=verdict,
             )
             best = _better(best, candidate)
 
-            if not _should_revise(vr, round_n, rounds):
+            if not _should_revise(vr.suite_passed, verdict, round_n, rounds):
                 break
             round_n += 1
 
         assert best is not None
+        best.rounds_run = round_n
+        best.llm_calls = llm_calls
+        best.wall_s = time.perf_counter() - started
         if best.status == "ACCEPTED":
-            final_content = (sandbox / owned).read_text(encoding="utf-8")
+            final_content = blackboard.read_test_snapshot(rd, module, best.round)
+            if final_content is None:
+                raise RuntimeError(f"no test snapshot for {module} round {best.round}")
             best.test_sha256 = blackboard.write_final_test(rd, module, final_content)
 
         blackboard.write_lane_result(
@@ -199,9 +250,16 @@ def run_lane(
                 "still_alive": best.still_alive,
                 "test_sha256": best.test_sha256,
                 "owned_test_file": owned,
+                "verdict": best.verdict,
+                "rounds_run": best.rounds_run,
+                "llm_calls": best.llm_calls,
+                "wall_s": best.wall_s,
             },
         )
-        timeline.event(lane_id, "runner", "lane_end", module=module, status=best.status)
+        timeline.event(
+            lane_id, "runner", "lane_end", module=module, status=best.status, round=best.round,
+            newly_killed=len(best.newly_killed), verdict=best.verdict,
+        )
         return best
     except Exception as exc:  # a bad tool call, a sandbox hiccup, anything -- never crash the run
         error = f"{type(exc).__name__}: {exc}"
