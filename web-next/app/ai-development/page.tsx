@@ -80,7 +80,7 @@ export default function AiDevelopmentPage() {
               compact MCP responses, and a <code>.bob/</code> swarm of custom modes (Orchestrator, Test Writer, Critic,
               Gate, Publisher) with hooks that kept writes inside <code>tests/</code>.
             </p>
-            <p className={styles.eraFact}>12 Bob commits, ranked 1st by Bob commits in the hackathon.</p>
+            <p className={styles.eraFact}>12 Bob commits across 4 PRs.</p>
           </div>
           <div className={`${styles.era} ${styles.eraCurrent}`}>
             <div className={styles.eraHead}>
